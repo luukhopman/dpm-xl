@@ -9,8 +9,9 @@ column, and a scalar broadcasts to every record.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 from .provider import DataPoint
 from .values import Value
@@ -28,10 +29,15 @@ class UnsupportedError(EvaluationError):
 
 @dataclass(frozen=True, slots=True)
 class Record:
-    """One keyed value and the data points it was computed from."""
+    """One keyed value and the data points it was computed from.
+
+    ``points`` may nest the operands' point tuples instead of copying them:
+    joins over large open tables would otherwise copy every record's growing
+    point list at each operator. Use :func:`unique_points` to flatten.
+    """
 
     value: Value
-    points: tuple[DataPoint, ...] = ()
+    points: tuple[Any, ...] = ()
 
 
 @dataclass(slots=True)
@@ -121,6 +127,9 @@ def combine(
     Raises:
         EvaluationError: On incompatible key structures or oversized joins.
     """
+    fast = _combine_aligned(operands, function)
+    if fast is not None:
+        return fast
     keyed = [operand for operand in operands if operand.keys]
     for index, left in enumerate(keyed):
         for right in keyed[index + 1 :]:
@@ -132,7 +141,7 @@ def combine(
     keys: list[str] = []
     for operand in operands:
         keys.extend(key for key in operand.keys if key not in keys)
-    rows: list[tuple[dict[str, Hashable], list[Value], tuple[DataPoint, ...]]] = [
+    rows: list[tuple[dict[str, Hashable], list[Value], tuple[Any, ...]]] = [
         ({}, [], ())
     ]
     bound: list[str] = []
@@ -146,15 +155,13 @@ def combine(
             index.setdefault(tuple(key[position] for position in positions), []).append(
                 (key, record)
             )
-        next_rows: list[
-            tuple[dict[str, Hashable], list[Value], tuple[DataPoint, ...]]
-        ] = []
+        next_rows: list[tuple[dict[str, Hashable], list[Value], tuple[Any, ...]]] = []
         for binding, values, points in rows:
             for key, record in index.get(tuple(binding[name] for name in common), ()):
                 merged = dict(binding)
                 merged.update(zip(operand.keys, key, strict=True))
                 next_rows.append(
-                    (merged, [*values, record.value], points + record.points)
+                    (merged, [*values, record.value], (points, record.points))
                 )
                 if len(next_rows) > MAX_JOIN_RECORDS:
                     raise EvaluationError("join produces too many records")
@@ -163,20 +170,110 @@ def combine(
     result = Recordset(tuple(keys))
     for binding, values, points in rows:
         result.records[tuple(binding[key] for key in keys)] = Record(
-            function(values), unique_points(points)
+            function(values), points
         )
     return result
 
 
-def unique_points(points: Iterable[DataPoint]) -> tuple[DataPoint, ...]:
-    """Deduplicate data points by provider reference, keeping order.
+def _combine_aligned(
+    operands: Sequence[Recordset], function: Callable[[list[Value]], Value]
+) -> Recordset | None:
+    """Combine operands that share one key structure, or are scalars.
+
+    This covers nearly every rule operation (``{r0010} = {r0020} + {r0030}``
+    under a ``with`` context) without the general join's per-row merging.
+
+    Returns:
+        Recordset | None: The result, or ``None`` when the general join is needed.
+    """
+    keyed = [operand for operand in operands if operand.keys]
+    keys = keyed[0].keys if keyed else ()
+    if any(operand.keys != keys for operand in keyed):
+        return None
+    scalars = [
+        operand.records.get(()) if not operand.keys else None for operand in operands
+    ]
+    if any(
+        not operand.keys and record is None
+        for operand, record in zip(operands, scalars, strict=True)
+    ):
+        # An empty scalar operand: nothing to combine.
+        return Recordset(keys)
+    if not keyed:
+        records = [record for record in scalars if record is not None]
+        return Recordset.scalar(
+            function([record.value for record in records]),
+            unique_points(point for record in records for point in record.points),
+        )
+    driver = keyed[0]
+    result = Recordset(keys)
+    if len(operands) == 2:
+        # Most operators are binary; avoid the generic per-record loop.
+        left, right = operands
+        left_scalar, right_scalar = scalars
+        if left_scalar is not None:
+            for key, record in right.records.items():
+                result.records[key] = Record(
+                    function([left_scalar.value, record.value]),
+                    (left_scalar.points, record.points),
+                )
+        elif right_scalar is not None:
+            for key, record in left.records.items():
+                result.records[key] = Record(
+                    function([record.value, right_scalar.value]),
+                    (record.points, right_scalar.points),
+                )
+        else:
+            other = right.records
+            for key, record in left.records.items():
+                partner = other.get(key)
+                if partner is not None:
+                    result.records[key] = Record(
+                        function([record.value, partner.value]),
+                        (record.points, partner.points),
+                    )
+        return result
+    for key in driver.records:
+        values: list[Value] = []
+        parts: list[tuple[Any, ...]] = []
+        for operand, scalar in zip(operands, scalars, strict=True):
+            record = scalar if scalar is not None else operand.records.get(key)
+            if record is None:
+                break
+            values.append(record.value)
+            parts.append(record.points)
+        else:
+            # Link the operands' points; flattened and deduplicated on use.
+            result.records[key] = Record(function(values), tuple(parts))
+    return result
+
+
+def iter_points(points: Iterable[Any]) -> Iterator[DataPoint]:
+    """Flatten nested point tuples (see :class:`Record`) in order.
+
+    Yields:
+        DataPoint: Each point, duplicates included.
+    """
+    stack = [iter(points)]
+    while stack:
+        for item in stack[-1]:
+            if isinstance(item, tuple):
+                stack.append(iter(item))
+                break
+            yield item
+        else:
+            stack.pop()
+
+
+def unique_points(points: Iterable[Any]) -> tuple[DataPoint, ...]:
+    """Flatten and deduplicate data points by provider reference, keeping order.
 
     Returns:
         tuple[DataPoint, ...]: Distinct points.
     """
     seen: set[Hashable] = set()
     result: list[DataPoint] = []
-    for point in points:
+    for point in iter_points(points):
         identity = point.ref if point.ref is not None else id(point)
         if identity in seen:
             continue
@@ -211,6 +308,7 @@ __all__ = [
     "Recordset",
     "UnsupportedError",
     "combine",
+    "iter_points",
     "resolve_key",
     "unique_points",
 ]

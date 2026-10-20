@@ -26,6 +26,7 @@ from collections.abc import Callable, Hashable, Mapping
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from functools import lru_cache
 from typing import Any, Literal, cast
 
 from .ast import (
@@ -97,17 +98,39 @@ class Evaluation:
         return recordset.lookup(binding) if recordset is not None else []
 
 
+class SelectionCache:
+    """Selection results shared by every rule evaluated against one report.
+
+    Rules over the same report select the same cells again and again (every
+    sum rule on a table reads its columns); building each record set once
+    makes large open tables affordable. Record sets are never mutated by the
+    evaluator, so sharing them is safe. Use one cache per report.
+    """
+
+    def __init__(self) -> None:
+        """Create an empty cache."""
+        self.recordsets: dict[SelectionSpec, Recordset] = {}
+
+
 class Evaluator:
     """Evaluates one expression tree against one provider."""
 
-    def __init__(self, provider: DataProvider, *, trace: bool = True) -> None:
+    def __init__(
+        self,
+        provider: DataProvider,
+        *,
+        trace: bool = True,
+        cache: SelectionCache | None = None,
+    ) -> None:
         """Bind the provider.
 
         Args:
             provider: Report data access.
             trace: Keep intermediate record sets for explanations.
+            cache: Selection results shared across rules of one report.
         """
         self.provider = provider
+        self.cache = cache
         self.trace_enabled = trace
         self._trace: dict[int, Recordset] = {}
         self._notes: list[str] = []
@@ -228,6 +251,16 @@ class Evaluator:
     def _selection(self, spec: SelectionSpec) -> Recordset:
         if not spec.table:
             raise EvaluationError(f"selection {spec.text()} has no table")
+        if self.cache is not None:
+            cached = self.cache.recordsets.get(spec)
+            if cached is None:
+                cached = self._build_selection(spec)
+                self.cache.recordsets[spec] = cached
+            return cached
+        return self._build_selection(spec)
+
+    def _build_selection(self, spec: SelectionSpec) -> Recordset:
+        assert spec.table is not None
         cache_key = (spec.table, spec.rows, spec.columns, spec.sheets)
         points = self._selection_cache.get(cache_key)
         if points is None:
@@ -662,11 +695,20 @@ def _arity(node: Call, count: int) -> None:
 
 @dataclass(frozen=True, slots=True)
 class Outcome:
-    """One evaluated record of a rule."""
+    """One evaluated record of a rule.
+
+    ``points`` are flattened from the evaluation on first access: most
+    outcomes pass, and nobody reads their points.
+    """
 
     key: Mapping[str, Hashable]
     passed: bool | None
-    points: tuple[DataPoint, ...]
+    raw_points: tuple[Any, ...] = field(default=(), repr=False)
+
+    @property
+    def points(self) -> tuple[DataPoint, ...]:
+        """Distinct data points the record was computed from."""
+        return unique_points(self.raw_points)
 
 
 @dataclass
@@ -694,12 +736,20 @@ class RuleResult:
         }
 
 
+@lru_cache(maxsize=32_768)
+def _parse_cached(expression: str) -> Node:
+    # Trees are immutable and traces key nodes per evaluation, so one parsed
+    # tree can serve every report a rule is evaluated against.
+    return parse(expression)
+
+
 def evaluate_rule(
     expression: str | Node,
     provider: DataProvider,
     *,
     precondition: str | Node | None = None,
     trace: bool = True,
+    cache: SelectionCache | None = None,
 ) -> RuleResult:
     """Evaluate a validation rule, honouring its precondition.
 
@@ -709,6 +759,7 @@ def evaluate_rule(
         precondition: Optional precondition; the rule is not applicable
             unless it yields at least one true record.
         trace: Keep intermediate values for :func:`dpmxl.explain.explain`.
+        cache: Selections shared by the rules of one report.
 
     Returns:
         RuleResult: Status, per-record outcomes and the evaluation trace.
@@ -719,13 +770,15 @@ def evaluate_rule(
     try:
         if precondition is not None:
             pre_node = (
-                parse(precondition) if isinstance(precondition, str) else precondition
+                _parse_cached(precondition)
+                if isinstance(precondition, str)
+                else precondition
             )
-            pre = Evaluator(provider, trace=False).run(pre_node)
+            pre = Evaluator(provider, trace=False, cache=cache).run(pre_node)
             if not any(record.value is True for record in pre.result.records.values()):
                 return RuleResult("not_applicable", message="precondition not met")
-        node = parse(expression) if isinstance(expression, str) else expression
-        evaluation = Evaluator(provider, trace=trace).run(node)
+        node = _parse_cached(expression) if isinstance(expression, str) else expression
+        evaluation = Evaluator(provider, trace=trace, cache=cache).run(node)
     except UnsupportedError as error:
         return RuleResult("unsupported", message=str(error))
     except (EvaluationError, DpmXlSyntaxError) as error:
@@ -763,5 +816,6 @@ __all__ = [
     "Evaluator",
     "Outcome",
     "RuleResult",
+    "SelectionCache",
     "evaluate_rule",
 ]

@@ -10,7 +10,14 @@ Typical use::
 """
 
 from .ast import AxisSelector, Item, Node, SelectionSpec
-from .evaluator import Evaluation, Evaluator, Outcome, RuleResult, evaluate_rule
+from .evaluator import (
+    Evaluation,
+    Evaluator,
+    Outcome,
+    RuleResult,
+    SelectionCache,
+    evaluate_rule,
+)
 from .explain import Explanation, Operand, explain
 from .parser import DpmXlSyntaxError, parse, parse_selection
 from .provider import (
@@ -19,10 +26,17 @@ from .provider import (
     DataProvider,
     MemoryProvider,
     TableLayout,
+    axis_matcher,
     axis_matches,
     normalize_code,
 )
-from .recordset import EvaluationError, Recordset, UnsupportedError
+from .recordset import (
+    EvaluationError,
+    Recordset,
+    UnsupportedError,
+    iter_points,
+    unique_points,
+)
 from .references import Reference, references, reported_templates, tables
 from .values import Number, Value, compare, format_value
 
@@ -45,19 +59,23 @@ __all__ = [
     "Recordset",
     "Reference",
     "RuleResult",
+    "SelectionCache",
     "SelectionSpec",
     "TableLayout",
     "UnsupportedError",
     "Value",
+    "axis_matcher",
     "axis_matches",
     "compare",
     "evaluate_rule",
     "explain",
     "format_value",
+    "iter_points",
     "normalize_code",
     "parse",
     "parse_selection",
     "references",
     "reported_templates",
     "tables",
+    "unique_points",
 ]

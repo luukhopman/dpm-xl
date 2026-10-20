@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any, Protocol, TypeAlias, runtime_checkable
 
 from .ast import AxisSelector
@@ -99,11 +100,13 @@ class DataProvider(Protocol):
         ...
 
 
+@lru_cache(maxsize=65_536)
 def normalize_code(code: str) -> str:
     """Normalize an axis code for comparison.
 
     Numeric codes are compared as numbers padded to four digits, so ``r310``
-    in an older rule matches row ``0310``.
+    in an older rule matches row ``0310``. Results are memoized: a report's
+    rules normalize the same few thousand codes millions of times.
 
     Returns:
         str: A canonical code.
@@ -112,6 +115,69 @@ def normalize_code(code: str) -> str:
     if text.isdigit():
         return text.zfill(4) if len(text) < 4 else text
     return text.upper()
+
+
+@dataclass(frozen=True, slots=True)
+class AxisMatcher:
+    """A compiled axis selector: exact codes plus inclusive ranges."""
+
+    codes: frozenset[str]
+    numeric_ranges: tuple[tuple[int, int], ...]
+    text_ranges: tuple[tuple[str, str], ...]
+    wildcard: bool = False
+
+    def __call__(self, code: str | None) -> bool:
+        """Return whether a coordinate is selected.
+
+        Returns:
+            bool: Whether ``code`` is covered.
+        """
+        if self.wildcard:
+            return True
+        if code is None:
+            return False
+        value = normalize_code(code)
+        if value in self.codes:
+            return True
+        if self.numeric_ranges and value.isdigit():
+            number = int(value)
+            if any(low <= number <= high for low, high in self.numeric_ranges):
+                return True
+        return any(low <= value <= high for low, high in self.text_ranges)
+
+    @property
+    def single(self) -> str | None:
+        """The only selected code, when the selector names exactly one."""
+        if self.wildcard or self.numeric_ranges or self.text_ranges:
+            return None
+        return next(iter(self.codes)) if len(self.codes) == 1 else None
+
+
+_ALL = AxisMatcher(frozenset(), (), (), wildcard=True)
+
+
+@lru_cache(maxsize=16_384)
+def axis_matcher(selector: AxisSelector | None) -> AxisMatcher:
+    """Compile a selector once for repeated matching.
+
+    Returns:
+        AxisMatcher: A callable matcher; ``None`` and wildcards select all.
+    """
+    if selector is None or selector.wildcard:
+        return _ALL
+    codes: set[str] = set()
+    numeric: list[tuple[int, int]] = []
+    text: list[tuple[str, str]] = []
+    for part in selector.parts:
+        if isinstance(part, str):
+            codes.add(normalize_code(part))
+            continue
+        low, high = normalize_code(part[0]), normalize_code(part[1])
+        if low.isdigit() and high.isdigit():
+            numeric.append((int(low), int(high)))
+        else:
+            text.append((low, high))
+    return AxisMatcher(frozenset(codes), tuple(numeric), tuple(text))
 
 
 def axis_matches(code: str | None, selector: AxisSelector | None) -> bool:
@@ -123,23 +189,7 @@ def axis_matches(code: str | None, selector: AxisSelector | None) -> bool:
     Returns:
         bool: Whether ``code`` is covered by ``selector``.
     """
-    if selector is None or selector.wildcard:
-        return True
-    if code is None:
-        return False
-    value = normalize_code(code)
-    for part in selector.parts:
-        if isinstance(part, str):
-            if normalize_code(part) == value:
-                return True
-            continue
-        low, high = normalize_code(part[0]), normalize_code(part[1])
-        if value.isdigit() and low.isdigit() and high.isdigit():
-            if int(low) <= int(value) <= int(high):
-                return True
-        elif low <= value <= high:
-            return True
-    return False
+    return axis_matcher(selector)(code)
 
 
 CellKey: TypeAlias = tuple[str, str | None, str | None, str | None, tuple[Any, ...]]
@@ -265,11 +315,13 @@ class MemoryProvider:
 
 
 __all__ = [
+    "AxisMatcher",
     "CellQuery",
     "DataPoint",
     "DataProvider",
     "MemoryProvider",
     "TableLayout",
+    "axis_matcher",
     "axis_matches",
     "normalize_code",
 ]

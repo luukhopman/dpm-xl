@@ -44,6 +44,7 @@ from .ast import (
 )
 from .evaluator import AGGREGATES, Evaluation
 from .provider import DataPoint
+from .recordset import unique_points
 from .values import Number, Value, format_decimal, format_value
 
 MINUS = "\u2212"
@@ -312,7 +313,9 @@ class _Formatter:
         return records[0].value if len(records) == 1 else None
 
     def points(self, node: Node) -> tuple[DataPoint, ...]:
-        return tuple(point for record in self.records(node) for point in record.points)
+        return unique_points(
+            point for record in self.records(node) for point in record.points
+        )
 
     def side(self, node: Node) -> Side:
         records = self.records(node)
@@ -425,7 +428,7 @@ class _Formatter:
         records = self.records(node)
         if len(records) == 1:
             text = format_value(records[0].value)
-            points = records[0].points
+            points = unique_points(records[0].points)
         elif not records:
             text, points = "∅", ()
         else:

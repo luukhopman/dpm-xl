@@ -1,0 +1,289 @@
+"""Runtime values: numbers with interval tolerance, items, text, dates.
+
+A number carries a half-width ``tolerance``. Facts reported with XBRL
+``decimals`` get ``0.5 * 10**-decimals``; constants and defaults are exact.
+Selections evaluated with ``interval: false`` drop the tolerance, so their
+comparisons are exact.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal, InvalidOperation, localcontext
+from typing import Any, TypeAlias
+
+from .ast import Item
+
+ZERO = Decimal(0)
+
+
+@dataclass(frozen=True, slots=True)
+class Number:
+    """A decimal value with a symmetric tolerance for interval arithmetic."""
+
+    value: Decimal
+    tolerance: Decimal = ZERO
+
+    @classmethod
+    def of(cls, value: int | str | Decimal, decimals: int | None = None) -> Number:
+        """Build a number, deriving tolerance from XBRL ``decimals``.
+
+        Returns:
+            Number: The value with ``0.5 * 10**-decimals`` tolerance, or an
+            exact value when ``decimals`` is ``None``.
+        """
+        amount = value if isinstance(value, Decimal) else Decimal(value)
+        if decimals is None:
+            return cls(amount)
+        return cls(amount, Decimal(5).scaleb(-decimals - 1))
+
+    def exact(self) -> Number:
+        """Return the same value without tolerance.
+
+        Returns:
+            Number: An exact copy.
+        """
+        return self if not self.tolerance else Number(self.value)
+
+    @property
+    def low(self) -> Decimal:
+        """Lower interval bound."""
+        return self.value - self.tolerance
+
+    @property
+    def high(self) -> Decimal:
+        """Upper interval bound."""
+        return self.value + self.tolerance
+
+    def __add__(self, other: Number) -> Number:
+        """Add values and tolerances.
+
+        Returns:
+            Number: The result.
+        """
+        return Number(self.value + other.value, self.tolerance + other.tolerance)
+
+    def __sub__(self, other: Number) -> Number:
+        """Subtract values; tolerances add up.
+
+        Returns:
+            Number: The result.
+        """
+        return Number(self.value - other.value, self.tolerance + other.tolerance)
+
+    def __mul__(self, other: Number) -> Number:
+        """Multiply using interval bounds.
+
+        Returns:
+            Number: The result.
+        """
+        if not self.tolerance and not other.tolerance:
+            return Number(self.value * other.value)
+        bounds = _products(self, other)
+        return _from_bounds(self.value * other.value, min(bounds), max(bounds))
+
+    def __truediv__(self, other: Number) -> Number:
+        """Divide using interval bounds.
+
+        Returns:
+            Number: The quotient.
+
+        Raises:
+            ZeroDivisionError: If ``other`` is zero.
+        """
+        if other.value == 0:
+            raise ZeroDivisionError("division by zero")
+        with localcontext() as context:
+            context.prec = 34
+            value = self.value / other.value
+            if not self.tolerance and not other.tolerance:
+                return Number(value)
+            if other.low <= 0 <= other.high:
+                # The divisor interval contains zero; keep the point value and
+                # treat the result as exact rather than unbounded.
+                return Number(value)
+            inverse = (1 / other.high, 1 / other.low)
+            bounds = [a * b for a in (self.low, self.high) for b in inverse]
+            return _from_bounds(value, min(bounds), max(bounds))
+
+    def __neg__(self) -> Number:
+        """Negate the value.
+
+        Returns:
+            Number: The result.
+        """
+        return Number(-self.value, self.tolerance)
+
+    def __abs__(self) -> Number:
+        """Return the absolute value.
+
+        Returns:
+            Number: The result.
+        """
+        return Number(abs(self.value), self.tolerance)
+
+
+def _products(left: Number, right: Number) -> list[Decimal]:
+    return [a * b for a in (left.low, left.high) for b in (right.low, right.high)]
+
+
+def _from_bounds(value: Decimal, low: Decimal, high: Decimal) -> Number:
+    return Number(value, max(value - low, high - value))
+
+
+Value: TypeAlias = Number | Item | str | bool | date | None
+
+
+def compare(op: str, left: Value, right: Value) -> bool | None:
+    """Compare two scalar values with DPM-XL semantics.
+
+    Numbers use interval comparison: ``a = b`` holds when the tolerance
+    intervals overlap. Items compare by category and code, ignoring a missing
+    category. Null on either side yields null.
+
+    Returns:
+        bool | None: The comparison result, or ``None`` for null operands.
+
+    Raises:
+        TypeError: When the operands cannot be compared.
+        ValueError: When ``op`` is not a comparison operator.
+    """
+    if left is None or right is None:
+        return None
+    if isinstance(left, Number) and isinstance(right, Number):
+        difference = left.value - right.value
+        tolerance = left.tolerance + right.tolerance
+        match op:
+            case "=":
+                return abs(difference) <= tolerance
+            case "!=":
+                return abs(difference) > tolerance
+            case "<":
+                return difference < tolerance
+            case "<=":
+                return difference <= tolerance
+            case ">":
+                return difference > -tolerance
+            case ">=":
+                return difference >= -tolerance
+    if isinstance(left, Item) or isinstance(right, Item):
+        if op not in {"=", "!="}:
+            raise TypeError(f"items do not support {op!r}")
+        equal = _item_of(left).matches(_item_of(right))
+        return equal if op == "=" else not equal
+    if isinstance(left, bool) or isinstance(right, bool):
+        if not (isinstance(left, bool) and isinstance(right, bool)):
+            left, right = _as_bool(left), _as_bool(right)
+        if op == "=":
+            return left == right
+        if op == "!=":
+            return left != right
+        raise TypeError(f"booleans do not support {op!r}")
+    if isinstance(left, Number) or isinstance(right, Number):
+        raise TypeError(
+            f"cannot compare {type_name(left)} with {type_name(right)} using {op!r}"
+        )
+    ordered: Any = left
+    other: Any = right
+    if type(left) is not type(right):
+        ordered, other = str(left), str(right)
+    match op:
+        case "=":
+            return ordered == other
+        case "!=":
+            return ordered != other
+        case "<":
+            return ordered < other
+        case "<=":
+            return ordered <= other
+        case ">":
+            return ordered > other
+        case ">=":
+            return ordered >= other
+    raise ValueError(f"unknown comparison {op!r}")
+
+
+def _item_of(value: Value) -> Item:
+    if isinstance(value, Item):
+        return value
+    return Item.parse(str(value))
+
+
+def _as_bool(value: Value) -> Value:
+    if isinstance(value, str):
+        folded = value.strip().casefold()
+        if folded in {"true", "1"}:
+            return True
+        if folded in {"false", "0"}:
+            return False
+    return value
+
+
+def type_name(value: Value) -> str:
+    """Return a readable type name for error messages.
+
+    Returns:
+        str: For example ``number`` or ``item``.
+    """
+    match value:
+        case None:
+            return "null"
+        case Number():
+            return "number"
+        case Item():
+            return "item"
+        case bool():
+            return "boolean"
+        case date():
+            return "date"
+    return "string"
+
+
+_GROUPS = re.compile(r"(\d)(?=(\d{3})+(?!\d))")
+
+
+def format_value(value: Value) -> str:
+    """Format a value for an explanation.
+
+    Numbers use thousands separators and drop trailing zeros; items keep their
+    ``category:code`` form in brackets.
+
+    Returns:
+        str: Human-readable text.
+    """
+    match value:
+        case None:
+            return "null"
+        case Number():
+            return format_decimal(value.value)
+        case Item():
+            return f"[{value}]"
+        case bool():
+            return "true" if value else "false"
+        case date():
+            return value.isoformat()
+    return f'"{value}"'
+
+
+def format_decimal(value: Decimal) -> str:
+    """Format a decimal with thousands separators and no exponent.
+
+    Returns:
+        str: For example ``1,204`` or ``-0.075``.
+    """
+    try:
+        normalized = value.normalize()
+    except InvalidOperation:  # pragma: no cover - NaN guards
+        return str(value)
+    text = f"{normalized:f}"
+    sign = ""
+    if text.startswith("-"):
+        sign, text = "-", text[1:]
+    whole, _, fraction = text.partition(".")
+    whole = _GROUPS.sub(r"\1,", whole)
+    return sign + whole + (f".{fraction}" if fraction else "")
+
+
+__all__ = ["Number", "Value", "compare", "format_decimal", "format_value", "type_name"]

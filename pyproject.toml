@@ -1,0 +1,67 @@
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13"]
+build-backend = "uv_build"
+
+[project]
+name = "dpm-xl"
+version = "0.1.0"
+description = "Parser and evaluator for the EBA DPM-XL validation-rule language"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Luuk Hopman" }]
+keywords = ["DPM", "DPM-XL", "EBA", "XBRL", "validation rules"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Private :: Do Not Upload",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Office/Business :: Financial",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.scripts]
+dpm-xl = "dpmxl.cli:main"
+
+[dependency-groups]
+test = ["pytest", "pytest-cov>=7.1,<8"]
+lint = ["ruff", "ty"]
+dev = [{ include-group = "test" }, { include-group = "lint" }]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+preview = true
+select = [
+    "B", "C4", "D", "DOC", "E", "ERA", "F", "I", "PIE", "PTH", "RET", "RSE",
+    "RUF", "S", "SIM", "UP", "W",
+]
+ignore = [
+    "incorrect-blank-line-before-class",
+    "multi-line-summary-second-line",
+    "docstring-extraneous-exception",
+    "assert",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D", "S", "line-too-long"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ty.src]
+include = ["dpmxl", "tests"]
+
+[tool.uv.build-backend]
+module-name = "dpmxl"
+module-root = ""
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-config", "--strict-markers", "--import-mode=importlib"]
+
+[tool.coverage.run]
+source = ["dpmxl"]
+branch = true

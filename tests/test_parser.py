@@ -1,0 +1,135 @@
+from decimal import Decimal
+
+import pytest
+
+from dpmxl import DpmXlSyntaxError, parse, references, reported_templates, tables
+from dpmxl.ast import (
+    AxisSelector,
+    Binary,
+    Call,
+    If,
+    In,
+    Item,
+    Literal_,
+    Selection,
+    Sub,
+    TableReported,
+    Unary,
+    Where,
+    With,
+)
+
+
+def test_with_context_selection_and_ranges() -> None:
+    node = parse(
+        "with {tC_34.03, c0030-0050, s*, default: 0, interval: true}: {r0010} >= {r0020} + {r0030}"
+    )
+    assert isinstance(node, With)
+    assert node.context.table == "C_34.03"
+    assert node.context.columns == AxisSelector(parts=(("0030", "0050"),))
+    assert node.context.sheets == AxisSelector(wildcard=True)
+    assert node.context.interval is True
+    assert isinstance(node.context.default, Literal_)
+    assert node.context.default.value == Decimal(0)
+    assert isinstance(node.body, Binary)
+    assert node.body.op == ">="
+
+
+def test_axis_lists_and_references_inherit_context() -> None:
+    node = parse(
+        "with {tC_07.00.a, (c0010, c0030), default: 0, interval: true}: "
+        "sum({tF_31.01, r0100, c*}) <= {(r0020, r0030-0040)}"
+    )
+    found = references(node)
+    assert [reference.spec.table for reference in found] == ["F_31.01", "C_07.00.a"]
+    assert found[1].spec.rows == AxisSelector(parts=("0020", ("0030", "0040")))
+    assert found[1].spec.columns == AxisSelector(parts=("0010", "0030"))
+    assert tables(node) == ("F_31.01", "C_07.00.a")
+
+
+def test_clauses_sets_and_group_by() -> None:
+    node = parse(
+        "sum({tC_08.01.a, r0070} group by qEEA, OGR) = "
+        "{tC_07.00.a, r0130, c0220} [sub qEBB = [eba_qEC:qx0]] and "
+        "{r0015} [ where qEBB in {[eba_qEC:qx01], [eba_qEC:qx1]}] <= 1"
+    )
+    assert isinstance(node, Binary) and node.op == "and"
+    left = node.left
+    assert isinstance(left, Binary)
+    assert isinstance(left.left, Call)
+    assert left.left.group_by == ("qEEA", "OGR")
+    assert isinstance(left.right, Sub)
+    assert left.right.name == "qEBB"
+    assert isinstance(node.right, Binary)
+    where = node.right.left
+    assert isinstance(where, Where)
+    assert isinstance(where.condition, In)
+    assert where.condition.values.items[1] == Literal_(Item("qEC", "qx1"), "item")
+
+
+def test_if_else_not_and_preconditions() -> None:
+    node = parse(
+        "if ({c0010} < 0) then ({c0010} = - {c0090}) else (isnull({c0090})) endif"
+    )
+    assert isinstance(node, If)
+    assert node.otherwise is not None
+    precondition = parse("{v_F_18.00} and ( {v_F_04.09} or {v_F_04.10} )")
+    assert reported_templates(precondition) == ("F_18.00", "F_04.09", "F_04.10")
+    assert isinstance(parse("not ( isnull ({c0040}) )"), Unary)
+    assert isinstance(parse("{v_C_01.00}"), TableReported)
+
+
+def test_literals() -> None:
+    node = parse("{tW_07.01, c0010, r*} <= #2026-12-31#")
+    assert isinstance(node, Binary)
+    assert isinstance(node.right, Literal_)
+    assert str(node.right.value) == "2026-12-31"
+    percent = parse("{c0200} * 2%")
+    assert isinstance(percent, Binary) and isinstance(percent.right, Literal_)
+    assert percent.right.value == Decimal("0.02")
+    text = parse("{c0040} != 'Not Applicable'")
+    assert isinstance(text, Binary) and isinstance(text.right, Literal_)
+    assert text.right.value == "Not Applicable"
+
+
+def test_regex_with_braces_inside_strings() -> None:
+    node = parse('match({tB_01.02, c0060}, "^[A-Z0-9]{18}[0-9]{2}$")')
+    assert isinstance(node, Call)
+    assert isinstance(node.args[1], Literal_)
+    assert node.args[1].value == "^[A-Z0-9]{18}[0-9]{2}$"
+
+
+def test_with_where_context() -> None:
+    node = parse(
+        "with {tR_04.00.a, c*, default: 0} [ where qPYB = [eba_qIA:qx2090] ]: {r0100} >= 0"
+    )
+    assert isinstance(node, With)
+    assert node.condition is not None
+
+
+def test_spans_cover_source() -> None:
+    source = "with {c0010}: {tA, r0010} = ( {tA, r0020} + 1 )"
+    node = parse(source)
+    assert isinstance(node, With)
+    body = node.body
+    assert isinstance(body, Binary)
+    assert source[slice(*body.right.span)] == "( {tA, r0020} + 1 )"
+    assert isinstance(body.left, Selection)
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        ("", "empty expression"),
+        ("{r0010", "unterminated '{'"),
+        ("{tA, x0010}", "unknown selection component"),
+        ("if {tA} then 1", "expected 'endif'"),
+        ("{tA} = = 1", "unexpected"),
+        ("{tA, r0010, r0020}", "duplicate rows selector"),
+        ("{tA, interval: maybe}", "interval must be true or false"),
+    ],
+)
+def test_syntax_errors(source: str, message: str) -> None:
+    with pytest.raises(DpmXlSyntaxError) as error:
+        parse(source)
+    assert message in error.value.message

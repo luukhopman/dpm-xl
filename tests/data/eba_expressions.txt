@@ -1,0 +1,297 @@
+# Sample of EBA DPM 2.0 validation rule and precondition expressions
+# (releases 3.4-4.4), one per line. Every line must parse.
+( 1 >= {tW_07.01, c0030, r*, default: null, interval: false})
+( {v_C_95.00} or {v_C_95.00} ) and {v_C_97.00}
+( {v_F_04.01} or {v_F_04.06} ) and {v_F_20.04}
+[ei1002] in { [eba_ZZ:x773], [eba_ZZ:x774], [eba_ZZ:x775] }
+[ei1003] in { [eba_ZZ:x776], [eba_ZZ:x777], [eba_ZZ:x778] }
+[ei1004] in { [eba_ZZ:x744], [eba_ZZ:x745], [eba_ZZ:x746], [eba_ZZ:x747], [eba_ZZ:x748], [eba_ZZ:x749] }
+[ei107] in { [eba_AP:x38], [eba_AP:x76], [eba_AP:x183], [eba_AP:x184] }
+[ei406] in { [eba_ZZ:x39], [eba_ZZ:x40], [eba_ZZ:x41], [eba_ZZ:x42] }
+if ( ( sum ({tC_09.01.a, r0170, c*, default: 0, interval: true} group by c) - {tC_09.01.a, r0170, c*, default: 0, interval: true} [ where CEG = [eba_GA:qx2014] ] ) != 0 ) then ( ( sum ({tC_09.01.a, r0170, c*, default: 0, interval: true} group by c) - {tC_09.01.a, r0170, c*, default: 0, interval: true} [ where CEG = [eba_GA:qx2014] ] ) = {tC_09.01.a, r0170, c*, default: 0, interval: true} [ where CEG = [eba_GA:qx2014] ] ) endif
+if ( ( sum ({tC_09.01.a, r0170, c*, default: 0, interval: true} group by c) - {tC_09.01.a, r0170, c*, default: 0, interval: true} [ where CEG = [eba_GA:x1] ] ) != 0 ) then ( ( sum ({tC_09.01.a, r0170, c*, default: 0, interval: true} group by c) - {tC_09.01.a, r0170, c*, default: 0, interval: true} [ where CEG = [eba_GA:x1] ] ) = {tC_09.01.a, r0170, c*, default: 0, interval: true} [ where CEG = [eba_GA:x1] ] ) endif
+if ( ( sum ({tC_09.02, r0150, (c0010, c0030, c0040, c0050, c0055, c0060, c0070, c0105, c0110, c0120, c0125, c0130), default: 0, interval: true} group by c) - {tC_09.02, r0150, (c0010, c0030, c0040, c0050, c0055, c0060, c0070, c0105, c0110, c0120, c0125, c0130), default: 0, interval: true} [ where CEG = [eba_GA:qx2014] ] ) != 0 ) then ( ( sum ({tC_09.02, r0150, (c0010, c0030, c0040, c0050, c0055, c0060, c0070, c0105, c0110, c0120, c0125, c0130), default: 0, interval: true} group by c) - {tC_09.02, r0150, (c0010, c0030, c0040, c0050, c0055, c0060, c0070, c0105, c0110, c0120, c0125, c0130), default: 0, interval: true} [ where CEG = [eba_GA:qx2014] ] ) = {tC_09.02, r0150, (c0010, c0030, c0040, c0050, c0055, c0060, c0070, c0105, c0110, c0120, c0125, c0130), default: 0, interval: true} [ where CEG = [eba_GA:qx2014] ] ) endif
+if ( {vReportingLevel} = 'con' ) then ( isnull ({tF_32.01, (r0010, r0020, r0030, r0040, r0050, r0060, r0080, r0090, r0100, r0110, r0120), (c0020, c0070), default: null, interval: false}) ) endif
+if ( {vReportingLevel} = 'con' ) then ( isnull ({tF_32.02.a, (r0130, r0140, r0150, r0160, r0170, r0180, r0200, r0210, r0220, r0230), c0020, default: null, interval: false}) ) endif
+if ( {vReportingLevel} = 'con' ) then ( isnull ({tF_32.02.a, (r0130, r0140, r0150, r0160, r0170, r0180, r0200, r0210, r0220, r0230), c0050, default: null, interval: false}) ) endif
+isnull ({tC_07.00.a, r0061, (c0010, c0030, c0040, c0150, c0160, c0165, c0170, c0175, c0180, c0190, c0195, c0200, c0215, c0220), default: null, interval: false} [ where qEBB in {[eba_qEC:qx16], [eba_qEC:qx23], [eba_qEC:qx22], [eba_qEC:qx21], [eba_qEC:qx20], [eba_qEC:qx19], [eba_qEC:qx2043], [eba_qEC:qx2036], [eba_qEC:qx2060], [eba_qEC:qx2037], [eba_qEC:qx2062], [eba_qEC:qx2049], [eba_qEC:qx12], [eba_qEC:qx2050], [eba_qEC:qx13], [eba_qEC:qx18], [eba_qEC:qx14], [eba_qEC:qx1], [eba_qEC:qx25], [eba_qEC:qx26], [eba_qEC:qx2038], [eba_qEC:qx2039], [eba_qEC:qx2040], [eba_qEC:qx2041], [eba_qEC:qx2042]}])
+isnull ({tC_08.01.a, r0080, (c0020, c0090, c0110, c0260, c0280, c0290, c0300), default: null, interval: false} [ where qEEA in {[eba_qAE:qx2022], [eba_qAE:qx2021], [eba_qAE:qx2020], [eba_qAE:qx2071], [eba_qAE:qx2072], [eba_qAE:qx2073], [eba_qAE:qx2074], [eba_qAE:qx2018], [eba_qAE:qx2075], [eba_qAE:qx2076], [eba_qAE:qx2013], [eba_qAE:qx2012], [eba_qAE:qx2077], [eba_qAE:qx2078], [eba_qAE:qx2079], [eba_qAE:qx2080], [eba_qAE:qx2068], [eba_qAE:qx2009], [eba_qAE:qx2055], [eba_qAE:qx2081], [eba_qAE:qx2011], [eba_qAE:qx2010], [eba_qAE:qx2008], [eba_qAE:qx2007], [eba_qAE:qx2082]}])
+match({tB_01.01, c0020}[get ERI], "^[A-Z0-9]{18}[0-9]{2}$")
+match({tB_01.02, c0020}[get ESI], "^[A-Z0-9]{18}[0-9]{2}$")
+match({tB_01.02, c0060}, "^[A-Z0-9]{18}[0-9]{2}$")
+match({tB_01.03, c0030}[get LHH], "^[A-Z0-9]{18}[0-9]{2}$")
+with {c0010, default: 0, interval: true}: {tC_01.00, r0480} * ({tC_04.00, r0230} + {tC_04.00, r0300} + {tC_04.00, r0370}) = - ( max( {tC_04.00, r0230} + {tC_04.00, r0300} + {tC_04.00, r0370} - {tC_04.00, r0190}, 0 ) ) * {tC_04.00, r0230}
+with {c0010, default: 0, interval: true}: {tC_01.00, r0700} * ({tC_04.00, r0230} + {tC_04.00, r0300} + {tC_04.00, r0370}) = - ( max( {tC_04.00, r0230} + {tC_04.00, r0300} + {tC_04.00, r0370} - {tC_04.00, r0190}, 0 ) ) * {tC_04.00, r0300}
+with {c0010, default: 0, interval: true}: {tC_01.00, r0920} <= {tC_04.00, r0180} * 1.25%
+with {c0010, default: 0, interval: true}: {tC_01.00, r0940} * ({tC_04.00, r0230} + {tC_04.00, r0300} + {tC_04.00, r0370}) = - ( max( {tC_04.00, r0230} + {tC_04.00, r0300} + {tC_04.00, r0370} - {tC_04.00, r0190}, 0 ) ) * {tC_04.00, r0370}
+with {c0010, default: 0, interval: true}: {tC_03.00, r0020} = {tC_01.00, r0020} - ({tC_02.00, r0010} * 4.5% )
+with {c0010, default: 0, interval: true}: {tC_03.00, r0020} = {tC_01.00, r0020} - ({tC_02.00.a, r0010, c0010} * 4.5% )
+with {c0010, default: 0, interval: true}: {tC_84.00.x, r0010} = {tC_84.00.w, r0020} + {tC_84.00.w, r0030} + {tC_84.00.w, r0040} + {tC_84.00.w, r0050} + {tC_84.00.w, r0060} + {tC_84.00.w, r0070} + {tC_84.00.w, r0090} + {tC_84.00.w, r0100} + {tC_84.00.w, r0110} + {tC_84.00.y, r0080}
+with {c0010, default: 0, interval: true}: {tF_15.00.a, r0122} <= {tF_01.01, r0172}
+with {c0010, default: 0}: if ( {tC_04.00, r0100, interval: false} > 0 and {tC_04.00, r0145, interval: false} > 0 ) then ( {tC_01.00, r0910, interval: true} = min( {tC_04.00, r0100, interval: true} + {tC_04.00, r0145, interval: true}, {tC_04.00, r0160, interval: true} * 0.6% ) ) endif
+with {c0020, default: 0, interval: true}: {tR_01.00, r0010} >= {tR_04.00.a, r0040}
+with {c0030, default: 0, interval: true}: {tR_01.00, r0050} >= {tR_04.00.a, r0100}
+with {c0040, default: 0, interval: true}: {tR_01.00, r0020} >= {tR_04.00.a, r0040}
+with {c0070, default: 0, interval: true}: {tC_35.01, r0020} = {tC_35.02, r0010} + {tC_35.03, r0010}
+with {c0080, default: 0, interval: true}: {tC_35.01, r0050} = {tC_35.02, r0060} + {tC_35.03, r0050}
+with {c010, default: 0, interval: false}: if ( {tP_01.02, r193} != 0 ) then ( {tP_02.05, r140} != 0 ) endif
+with {c0100, default: 0, interval: true}: {tC_35.01, r0070} = sum ({tC_35.02, r0080-0120}) + {tC_35.03, r0070} + {tC_35.03, r0120}
+with {c0100, default: 0, interval: true}: {tC_82.00.c, r0010} = {tC_82.00.a, r0020} + {tC_82.00.a, r0050} + {tC_82.00.a, r0210} + {tC_82.00.a, r0240} + {tC_82.00.a, r0320} + {tC_82.00.a, r0330} + {tC_82.00.a, r0380} + {tC_82.00.a, r0390} + {tC_82.00.a, r0400} + {tC_82.00.b, r0340}
+with {c0110, default: 0, interval: true}: {tC_35.01, r0040} = sum ({tC_35.02, r0030-0045}) + sum ({tC_35.03, r0030-0040})
+with {default: 0, interval: false}: if ( {tP_01.01, r110, c030} != 0 ) then ( {tP_02.04, r060, c020} != 0 ) endif
+with {default: 0, interval: false}: if ( {tP_01.02, r111, c030} != 0 ) then ( {tP_02.05, r071, c020} != 0 ) endif
+with {default: 0, interval: false}: if ( {tP_01.02, r140, c030} != 0 ) then ( {tP_02.05, r084, c020} != 0 ) endif
+with {default: 0, interval: false}: if ( {tP_01.02, r191, c030} != 0 ) then ( {tP_02.05, r120, c020} != 0 ) endif
+with {default: 0, interval: false}: {tW_04.10, c0150, r0010} <= {tW_02.01, c0010, r0010}
+with {default: 0, interval: true}: ({tC_43.00.a, r0040, c0020}) = ({tC_07.00.a, r0130, c0220} [ sub qEBB = [eba_qEC:qx0]]) + ({tC_08.01.a, r0060, c0260} [ sub qEEA = [eba_qAE:qx2023]]) +  ({tC_08.01.a, r0060, c0260} [ sub qEEA = [eba_qAE:qx2022]])
+with {default: 0, interval: true}: ({tC_43.00.a, r0050, c0020}) = ({tC_07.00.a, r0110, c0220} [ sub qEBB = [eba_qEC:qx0]]) + ({tC_08.01.a, r0050, c0260} [ sub qEEA = [eba_qAE:qx2023]]) +  ({tC_08.01.a, r0050, c0260} [ sub qEEA = [eba_qAE:qx2022]])
+with {default: 0, interval: true}: ({tC_43.00.a, r0060, c0020}) =  ({tC_07.00.a, r0090, c0220} [ sub qEBB = [eba_qEC:qx0]])+ ({tC_08.01.a, r0040, c0260} [ sub qEEA = [eba_qAE:qx2023]]) +  ({tC_08.01.a, r0040, c0260} [ sub qEEA = [eba_qAE:qx2022]])
+with {default: 0, interval: true}: if ( ({tC_08.01.a, r0070, c0020, s0003} + {tC_08.01.a, r0070, c0020, s0004} = {tC_08.01.a, r0010, c0020, s0003} + {tC_08.01.a, r0010, c0020, s0004}) ) then ( ( sum ( filter ({tC_08.02, c0020, s0003}, {tC_08.02, c0010, s0003} < 1) ) + sum ( filter ({tC_08.02, c0020, s0004}, {tC_08.02, c0010, s0004} < 1) ) = {tC_09.02, r0010, c0010} [ where CEG = [eba_GA:x1] ] - {tC_09.02, r0010, c0030} [ where CEG = [eba_GA:x1] ] ) ) endif
+with {default: 0, interval: true}: if ( ({tC_08.01.a, r0070, c0020, s0003} + {tC_08.01.a, r0070, c0020, s0004} = {tC_08.01.a, r0010, c0020, s0003} + {tC_08.01.a, r0010, c0020, s0004}) ) then ( sum ( filter ({tC_08.02, c0020, s0003}, {tC_08.02, c0010, s0003} = 1) ) + sum ( filter ({tC_08.02, c0020, s0004}, {tC_08.02, c0010, s0004} = 1) ) = {tC_09.02, r0010, c0030} [ where CEG = [eba_GA:x1] ] ) endif
+with {default: 0, interval: true}: if ( ({tC_08.01.a, r0070, c0020, s0005} + {tC_08.01.a, r0070, c0020, s0006} = {tC_08.01.a, r0010, c0020, s0005} + {tC_08.01.a, r0010, c0020, s0006}) ) then ( ( sum ( filter ({tC_08.02, c0020, s0005}, {tC_08.02, c0010, s0005} < 1) ) + sum ( filter ({tC_08.02, c0020, s0006}, {tC_08.02, c0010, s0006} < 1) ) = {tC_09.02, r0020, c0010} [ where CEG = [eba_GA:x1] ] - {tC_09.02, r0020, c0030} [ where CEG = [eba_GA:x1] ] ) ) endif
+with {default: 0, interval: true}: if ( ({tC_08.01.a, r0070, c0255, s0003} + {tC_08.01.a, r0070, c0255, s0004} = {tC_08.01.a, r0010, c0255, s0003} + {tC_08.01.a, r0010, c0255, s0004}) ) then ( ( sum ( filter ({tC_08.02, c0255, s0003}, {tC_08.02, c0010, s0003} < 1) ) + sum ( filter ({tC_08.02, c0255, s0004}, {tC_08.02, c0010, s0004} < 1) ) = {tC_09.02, r0010, c0110} [ where CEG = [eba_GA:x1] ] - {tC_09.02, r0010, c0120} [ where CEG = [eba_GA:x1] ] ) ) endif
+with {default: 0, interval: true}: if ( {tC_08.01.a, r0070, c0255, s0014} = {tC_08.01.a, r0010, c0255, s0014} ) then ( sum ( filter ({tC_08.02, c0255, s0014}, {tC_08.02, c0010, s0014} = 1) ) = {tC_09.02, r0090, c0120} [ where CEG = [eba_GA:x1] ] ) endif
+with {default: 0, interval: true}: sum ({tC_08.01.a, r0010, c0300}) - sum ({tC_08.01.a, r0040-0060, c0300}) - {tC_08.01.a, r0080, c0110} = sum ({tC_08.03, r*, c0060})
+with {default: 0, interval: true}: sum ({tC_08.01.c, r0010, c0130}) = {tC_34.02, r0110, c0190, s0001}
+with {default: 0, interval: true}: sum ({tC_09.01.a, r0020, c0090} [ where CEG = [eba_GA:qx2014] ]) = sum ({tC_07.00.a, r0010, c0220} [ where qEBB in {[eba_qEC:qx23]}])
+with {default: 0, interval: true}: sum ({tC_09.01.a, r0040, c0075} [ where CEG = [eba_GA:x1] ]) = sum ({tC_07.00.a, r0010, c0200} [ where qEBB in {[eba_qEC:qx21]}])
+with {default: 0, interval: true}: sum ({tC_09.01.a, r0115, c0090} [ where CEG = [eba_GA:x1] ]) = sum ({tC_07.00.a, r0010, c0220} [ where qEBB in {[eba_qEC:qx25]}])
+with {default: 0, interval: true}: sum ({tC_09.01.a, r0170, c0090} [ where CEG = [eba_GA:qx2014] ]) = sum ({tC_07.00.a, r0010, c0220} [ where qEBB in {[eba_qEC:qx01]}])
+with {default: 0, interval: true}: sum ({tC_09.02, r0052, c0010} [ where CEG = [eba_GA:x1] ]) <= sum({tC_08.01.a, r0010, c0020} [where qEEA in {[eba_qAE:qx2015], [eba_qAE:qx2014]} ])
+with {default: 0, interval: true}: sum ({tC_09.02, r0070, c0010} [ where CEG = [eba_GA:x1] ]) = sum({tC_08.01.a, r0010, c0020} [where qEEA in {[eba_qAE:qx2011], [eba_qAE:qx2010]} ])
+with {default: 0, interval: true}: sum ({tC_103.00, c0040}) <= sum({tC_08.01.a, r0010, c0300} [where qEEA in {[eba_qAE:qx2023], [eba_qAE:qx2022]} ])
+with {default: 0, interval: true}: sum ({tF_13.01, r0010, c0010-0020}) <= sum ({tF_05.01, r0090, c0020-0060})
+with {default: 0, interval: true}: sum ({tF_14.00, r0200, c0010-0030}) = {tF_01.02, r0060, c0010}
+with {default: 0, interval: true}: sum ({tF_14.00, r0230, c0010-0030}) = {tF_01.02, r0090, c0010}
+with {default: 0, interval: true}: sum ({tF_18.00.a, (r0080, r0192, r0222), c0110}) = sum ({tF_20.04, r0150, c0026})
+with {default: 0, interval: true}: sum ({tF_18.00.b, r0480, (c0143, c0952)}) = {tF_09.01.1, r0170, c0065}
+with {default: 0, interval: true}: sum ({tF_19.00.a, (r0080, r0192, r0222), c0010}) = sum ({tF_20.04, r0150, c0022})
+with {default: 0, interval: true}: sum ({tF_20.03, r0070, c*}) = {tF_02.00, r0220, c0010}
+with {default: 0, interval: true}: sum ({tF_20.05.a, r0020, c0025}) = {tF_18.00.e, r0410, c0060}
+with {default: 0, interval: true}: {tC_02.00.a, c0010, r0010} = min(max({tC_02.00.a, c0010, r0036}, {tC_04.00, c0010, r0900} * {tC_02.00.b, c0020, r0010}), 125% * {tC_02.00.a, c0010, r0036})
+with {default: 0, interval: true}: {tC_02.00.a, c0010, r0010} = min(max({tC_02.00.b, c0010, r0036}, 50% * {tC_02.00.a, c0020, r0010}), 125% * {tC_02.00.b, c0010, r0036})
+with {default: 0, interval: true}: {tC_09.01.a, r0020, c0075} [ where CEG = [eba_GA:x1] ] = {tC_07.00.a, r0010, c0200, s0003}
+with {default: 0, interval: true}: {tC_21.00, r0010, c0070, s0001} = {tC_02.00, r0550, c0010}
+with {default: 0, interval: true}: {tC_25.01.a, r0010, c0270} * 12.5 = {tC_02.00.a, r0655, c0010}
+with {default: 0, interval: true}: {tC_29.00, c240} * {tC_01.00, r0015, c0010} = {tC_29.00, c220}
+with {default: 0, interval: true}: {tC_84.00.d, r0120, c0030} = {tC_84.00.c, r0010, c0020} * {tC_84.00.a, r0220, c0040}
+with {default: 0, interval: true}: {tC_84.00.e, r0160, c0010} = sum ({tC_83.00.a, r0070, c0010-0020})
+with {default: 0, interval: true}: {tC_84.00.v, r0170, c0010} = sum ({tC_81.00.w, r0220, c0010-0030} group by CUS)
+with {default: 0, interval: true}: {tD_02.00.a, r0050, c0020} + {tD_02.00.a, r0050, c0030} + {tD_02.00.a, r0100, c0020} + {tD_02.00.a, r0100, c0030} <= {tD_02.00.a, r0010, c0020} + {tD_02.00.a, r0010, c0030} + {tD_02.00.a, r0060, c0020} + {tD_02.00.a, r0060, c0030}
+with {default: 0, interval: true}: {tF_02.00, r0510, c0010} = + {tF_16.07.a, r0060, c0010} + {tF_16.07.a, r0060, c0020}
+with {default: 0, interval: true}: {tF_08.01.b, r0450, c0030} = + {tF_01.02, r0130, c0010} + {tF_01.02, r0120, c0010} + {tF_01.02, r0140, c0010}
+with {default: 0, interval: true}: {tF_18.00.a, r0213, c0010} = {tF_04.02.1, r0070, c0010} - {tF_04.02.1, r0070, c0020} + {tF_04.02.2, r0080, c0010} - {tF_04.02.2, r0080, c0020}
+with {default: 0, interval: true}: {tF_18.00.a, r0231, c0010} = {tF_04.07, r0190, c0010} - {tF_04.07, r0190, c0021} + {tF_04.08, r0190, c0010} - {tF_04.08, r0190, c0030} + sum ({tF_04.10, r0190, (c0016, c0025)})
+with {default: 0, interval: true}: {tF_18.00.b, r0191, c0130} = sum ({tF_04.08, r0120, c0060-0080})
+with {default: 0, interval: true}: {tF_18.00.b, r0216, c0130} = {tF_04.07, r0110, c0021} + {tF_04.08, r0110, c0030} + sum ({tF_04.10, r0110, c0090})
+with {default: 0, interval: true}: {tF_18.00.b, r0216, c0130} = {tF_04.07, r0110, c0021} + {tF_04.08, r0110, c0030} + {tF_04.10, r0110, c0090}
+with {default: 0, interval: true}: {tF_18.00.b, r0222, c0130} = {tF_04.02.1, r0120, c0020} + {tF_04.02.2, r0130, c0020}
+with {default: 0, interval: true}: {tF_18.00.b, r0225, c0130} = {tF_04.02.1, r0150, c0020} + {tF_04.02.2, r0160, c0020}
+with {default: 0, interval: true}: {tF_36.02.c, r0200, c0190} = sum ({tF_32.02.a, (r0130, r0240), c0030})
+with {default: 0, interval: true}: {tF_46.00, r0010, c0020} = time_shift({tF_01.03, r0040, c0010}, A, 1, refPeriod)
+with {default: 0, interval: true}: {tF_46.00, r0010, c0030} = time_shift({tF_01.03, r0050, c0010}, A, 1, refPeriod)
+with {default: 0, interval: true}: {tF_46.00, r0010, c0040} = time_shift({tF_01.03, r0080, c0010}, A, 1, refPeriod)
+with {default: 0, interval: true}: {tF_92.01, r0190, c0040} >= {tF_91.01.b, r0040, c0190} + {tF_91.02, r0030, c0150} + {tF_91.03.b, r0040, c0150} + {tF_91.04, r0030, c0110} + {tF_91.05.b, r0040, c0150}
+with {default: 0, interval: true}: {tP_01.02, r060, c010} = sum ({tF_08.01.a, r0270-0290, c0010-0035})
+with {default: 0, interval: true}: {tP_01.02, r220, c050} = {tP_01.02, r220, c040} - {tP_05.00, r0150, c0040} + {tP_05.00, r0160, c0040}
+with {default: 0, interval: true}:if    sum({tC_08.01.a, r0070, c0020} [where qEEA in {[eba_qAE:qx2075], [eba_qAE:qx2076]} ])       =    sum({tC_08.01.a, r0010, c0020} [where qEEA in {[eba_qAE:qx2075], [eba_qAE:qx2076]} ])then    sum       ( filter            ({tC_08.02, c0020} [where qEEA in {[eba_qAE:qx2075], [eba_qAE:qx2076]}],             {tC_08.02, c0010, interval:false} [where qEEA in {[eba_qAE:qx2075], [eba_qAE:qx2076]}] < 1) )            =sum({tC_09.02, r0050, c0010} [ where CEG = [eba_GA:qx2014]]) -sum({tC_09.02, r0057, c0030} [ where CEG = [eba_GA:qx2014]])endif
+with {default: 0, interval: true}:{tD_07.00.a, r0320, c0120} <= {tD_07.00.a, r0320, c0010}
+with {default: 0}: if ( {tF_01.02, r0070, c0010, interval: false} > 0 ) then ( sum ({tF_14.00, r0210, c0010-0030, interval: true}) > 0 ) endif
+with {default: null, interval: false}:    if ( {tV_00.02, r*, c0060} = [eba_GA:RO] ) then        ( {tV_00.02, r*, c0040} = [eba_qNT:x85] ) or        ( {tV_00.02, r*, c0040} = [eba_qNT:qx2042] ) or        ( {tV_00.02, r*, c0040} = [eba_qNT:x86] )    else if ( {tV_00.02, r*, c0060} = [eba_GA:SK] ) then        ( {tV_00.02, r*, c0040} = [eba_qNT:x90] ) or        ( {tV_00.02, r*, c0040} = [eba_qNT:qx2045] )    else if ( {tV_00.02, r*, c0060} = [eba_GA:SI] ) then        ( {tV_00.02, r*, c0040} = [eba_qNT:x88] ) or        ( {tV_00.02, r*, c0040} = [eba_qNT:x89] ) or        ( {tV_00.02, r*, c0040} = [eba_qNT:qx2043] ) or        ( {tV_00.02, r*, c0040} = [eba_qNT:qx2044] )    else if ( {tV_00.02, r*, c0060} = [eba_GA:ES] ) then        ( {tV_00.02, r*, c0040} = [eba_qNT:qx2028] ) or        ( {tV_00.02, r*, c0040} = [eba_qNT:qx2029] ) or        ( {tV_00.02, r*, c0040} = [eba_qNT:x64] ) or        ( {tV_00.02, r*, c0040} = [eba_qNT:x66] ) or        ( {tV_00.02, r*, c0040} = [eba_qNT:qx2030] )    else if ( {tV_00.02, r*, c0060} = [eba_GA:SE] ) then        ( {tV_00.02, r*, c0040} = [eba_qNT:x87] )    endif endif endif endif endif
+with {default: null, interval: false}: if ( ( {tV_00.01, c0120, r0010} != true ) or ( {tV_01.01, c0010, r0010} != true ) ) then ( isnull ({tV_02.01, c0010, r0010}) and isnull ({tV_02.01, c0020, r0010}) and isnull ({tV_02.01, c0030, r0010}) and isnull ({tV_02.01, c0040, r0010}) and isnull ({tV_02.01, c0050, r0010}) and isnull ({tV_02.01, c0060, r0010}) ) else true endif
+with {default: null, interval: true}: ({tG_01.00, r0110, c0010} >= {tF_14.00, r0010, c0030} + {tF_14.00, r0051, c0030} + {tF_14.00, r0056, c0030} + {tF_14.00, r0060, c0030} + {tF_14.00, r0101, c0030} + {tF_14.00, r0121, c0030} + {tF_14.00, r0125, c0030} + {tF_14.00, r0140, c0030})
+with {default: null, interval: true}: {tL_00.03, r0070, c0080} = sum ( filter ({tL_05.00, c0140}, {tL_05.00, c0040} = [eba_ZZ:x843] and {tL_05.00, c0070} = [eba_ZZ:x841] and {tL_05.00, c0100} = [eba_ZZ:x947]) )
+with {interval: false}: if ( (({tC_14.01, c0330, s0020, default: 0}) > 0 and ( not ( {tC_14.00, c0110, default: ""} in { [eba_qRP:qx2068], [eba_qRP:qx2082] } ) )) ) then ( ( not ( isnull ({tC_14.00, c0252, default: null}) ) ) ) endif
+with {r*, default: null, interval: true}: {tI_06.05, c0020} = ({tI_06.06, c0020} + {tI_06.06, c0030} + {tI_06.06, c0040} + {tI_06.06, c0050} + {tI_06.06, c0060} + {tI_06.06, c0070}) / 6
+with {r0010, default: 0, interval: true}: {tF_20.05.a, c0010} >= {tF_20.05.b, c0030}
+with {r0010, default: null, interval: true}: {tI_06.07, c0030} = ({tI_06.08, c0030} + {tI_06.08, c0040} + {tI_06.08, c0050}) / 3
+with {r0050, default: null, interval: true}: {tI_06.07, c0010} = ({tI_06.08, c0010} + {tI_06.08, c0020} + {tI_06.08, c0030}) / 3
+with {r0080, default: null, interval: true}: {tK_42.00.a, c0010} = ({tK_42.00.a, c0020} + {tK_42.00.a, c0030} + {tK_42.00.a, c0040} + {tK_42.00.a, c0050} + {tK_42.00.a, c0060} + {tK_42.00.a, c0070} + {tK_42.00.a, c0150}) * ( 1 - {tK_42.00.b, c0160})
+with {r0170, default: 0, interval: true}: {tF_19.00.e, c0170} + {tF_19.00.c, c0180} <= {tF_19.00.a, c0010} + {tF_19.00.b, c0120}
+with {r0201, default: 0, interval: true}: {tF_18.00.d, c0200} + {tF_18.00.c, c0210} <= {tF_18.00.a, c0060} + {tF_18.00.b, c0150}
+with {tB_06.01,  default:null, interval:false}: not ( isnull ({(c0020, c0030, c0050, c0070, c0080, c0090, c0100)}) )
+with {tC_01.00, c0010, default: 0, interval: true}: {r0010} = + {r0530} + {r0020} + {r0750}
+with {tC_01.00, c0010, default: 0, interval: true}: {r0800} = {r0810} + {r0840} + {r0841}
+with {tC_04.00, c0010, default: 0, interval: true}: {r0870} <= {r0890}
+with {tC_06.02, default: 0, interval: true}: {c0250} = {c0260} + {c0270} + {c0280} + {c0290}
+with {tC_07.00.a, (r0010, r0015, r0020, r0030, r0035, r0040, r0050, r0060, r0070, r0080, r0140, r0150, r0160, r0170, r0180, r0190, r0200, r0220, r0230, r0240, r0250, r0260, r0270, r0280, r0281, r0282, r0283), s*, default: 0, interval: true}: {c0040} = + {c0010} + {c0030}
+with {tC_07.00.a, c0010-0220, default: 0, interval: true}: abs({r0010}) >= + abs({r0020})
+with {tC_07.00.a, r0231, default: 0, interval: true}: {c0215} = {c0200} * 105%
+with {tC_08.02, default: 0, interval: true}: {c0260} = {c0255} + {c0256} + {c0257}
+with {tC_09.02, c0080-0090, default: null, interval: true}:    {r0150} >= sum ({(r0010, r0020, r0030, r0050, r0051, r0052, r0053, r0054, r0055, r0056, r0057, r0058,             r0060, r0070, r0080, r0090, r0095, r0100, r0105, r0110, r0120, r0130, r0140)} group by c)
+with {tC_116.00, default: 0, interval: false}: {c0110} <= {c0120}
+with {tC_117.00, default: 0, interval: false}: {c0150} <= {c0140}
+with {tC_13.01, (c0050, c0060, c0070, c0080, c0090, c0100, c0110, c0120, c0130, c0140, c0180, c0190, c0200, c0210, c0220, c0230, c0240, c0250, c0260, c0270, c0280, c0290, c0300, c0310, c0320, c0330, c0340, c0350, c0360, c0370, c0380, c0390, c0400, c0410, c0420, c0430, c0440, c0450, c0460, c0470, c0480, c0490, c0500, c0510, c0520, c0530, c0540, c0550, c0560, c0570, c0580, c0590, c0600, c0610, c0620, c0630, c0640, c0650, c0660, c0670, c0680, c0690, c0695, c0700, c0710, c0720, c0730, c0740, c0750, c0760, c0770, c0780, c0790, c0800, c0810, c0820, c0830, c0845, c0850, c0880, c0890, c0900, c0910, c0920, c0930), default: 0, interval: true}: {r0210} = {r0220} + {r0240}
+with {tC_13.01, r0010-0430, default: 0, interval: true}: {c0120} = {c0070} + {c0100} + {c0110}
+with {tC_14.00, interval: false}: if ( ({c0240, default: 0} > 0 and not ( {c0110, default: ""} in { [eba_qRP:qx2068], [eba_qRP:qx2082] } ) ) ) then ( ({c0231, default: 0} != {c0251, default: 0}) ) endif
+with {tC_14.00, interval: false}: if ( {c0110, default: ""} in { [eba_RS:x2], [eba_RS:x6] } and not ( {c0160, default: ""} in { [eba_UE:x3], [eba_UE:x9] } ) ) then ( not ( isnull ({c0051, default: null}) ) ) endif
+with {tC_16.00.a, r0010, default: 0}: if ( {c0010, interval: false} > 0 and {c0020, interval: false} <= 0 and {c0030, interval: false} > 0 ) then ( {c0070, interval: true} * 2 = ({c0010, interval: true} + {c0030, interval: true}) * 15% ) endif
+with {tC_22.00, c0090, default: 0, interval: true}: {r0010} = {r0020} + {r0030} + {r0040} + {r0050}
+with {tC_22.00, default: null, interval: false}: {r0010, c0100} >= 0
+with {tC_32.02.a, c0110, default: null, interval: false}: {(r0010, r0020, r0030, r0040, r0050, r0060, r0090, r0100, r0110, r0120, r0130, r0180, r0190, r0200, r0210)} >= 0
+with {tC_32.03, default: 0, interval: true}: {c0070} <= {c0050}
+with {tC_34.03, c0030-0050, s*, default: 0, interval: true}: {r0120} >= {r0130}
+with {tC_34.03, c0030-0070, s*, default: 0, interval: true}: {r0010} = + {r0190} + {r0050} + {r0270} + {r0230} + {r0120} + {r0340}
+with {tC_35.02, (r0060, r0070, r0080, r0090, r0120), default: 0, interval: true}: {c0110} = sum ({c0010-0100} group by r)
+with {tC_43.00.c, c*, default: 0, interval: true}: {r0230} = {r0240} + {r0250}
+with {tC_73.00.w, (c0010, c0060), default: 0, interval: true}: {r0240} = {r0250} + {r0260}
+with {tC_73.00.w, (c0010, c0060), default: 0, interval: true}: {r0270} = sum ({(r0280, r0290, r0300, r0310, r0340, r0350, r0380, r0390, r0400, r0410, r0450)} group by c, CUS)
+with {tC_74.00.a, (c0010, c0020, c0030, c0140, c0150, c0160), default: 0, interval: true}: {r0140} = {r0150} + {r0160}
+with {tC_74.00.a, default: null, interval: false}: {(r0267, r0269, r0271, r0273, r0275, r0277, r0279, r0281, r0283, r0285, r0287, r0289, r0291, r0293, r0295, r0307, r0309, r0311, r0313, r0315, r0317, r0319, r0321, r0323, r0325, r0327, r0329, r0331, r0333, r0335, r0490), c0040-0060} >= 0
+with {tC_75.01.w, (c0010, c0030), default: 0, interval: true}: {r0360} = {r0370} + {r0390} + {r0410} + {r0430} + {r0450} + {r0470} + {r0490} + {r0510}
+with {tC_75.01.w, (c0010, c0030), default: 0, interval: true}: {r1550} = {r1560} + {r1580} + {r1600} + {r1620} + {r1640} + {r1660} + {r1680} + {r1700}
+with {tC_80.00.a, (c0010, c0020, c0030, c0130), default: 0, interval: true}: {r0620} = {r0630} + {r0640} + {r0730} + {r0740} + {r0750} + {r0800} + {r0840}
+with {tC_81.00.a, c0070, default: null, interval: false}: {(r0080, r0090, r0110, r0140, r0160, r0170, r0180, r0190, r0200, r0210, r0220, r0240, r0280)} >= 0
+with {tC_82.00.b, c0020, default: null, interval: false}: {r0340} = {r0370}
+with {tC_83.00.c, r0010, default: null, interval: false}: {c0010-0020} >= 0
+with {tC_90.00, r*, default: 0, interval: true}: {c0040} * {c0080} = {c0030}
+with {tC_91.01, default: 0, interval: true}: if ( ({r0010, c0070} [ where OGS != [eba_RP:x106] ] + {r0010, c0110} [ where OGS != [eba_RP:x106] ] + {r0010, c0150} [ where OGS != [eba_RP:x106] ] > 0 and max( {r0010, c0070} [ where OGS != [eba_RP:x106] ] , {r0010, c0110} [ where OGS != [eba_RP:x106] ] , {r0010, c0150} [ where OGS != [eba_RP:x106] ] ) = {r0010, c0070} [ where OGS != [eba_RP:x106] ] ) ) then ( ({r0040, c0155} [ where OGS != [eba_RP:x106] ] = {r0040, c0040} [ where OGS != [eba_RP:x106] ] and {r0040, c0156} [ where OGS != [eba_RP:x106] ] = {r0040, c0050} [ where OGS != [eba_RP:x106] ] and {r0040, c0157} [ where OGS != [eba_RP:x106] ] = {r0040, c0060} [ where OGS != [eba_RP:x106] ] ) ) endif
+with {tC_91.01, r0010, default: 0, interval: true}: if ( ({c0070} [ where OGS != [eba_RP:x106] ] + {c0110} [ where OGS != [eba_RP:x106] ] + {c0150} [ where OGS != [eba_RP:x106] ] > 0 and max( {c0070} [ where OGS != [eba_RP:x106] ] , {c0110} [ where OGS != [eba_RP:x106] ] , {c0150} [ where OGS != [eba_RP:x106] ] ) = {c0070} [ where OGS != [eba_RP:x106] ] ) ) then ( ({c0155} [ where OGS != [eba_RP:x106] ] = {c0040} [ where OGS != [eba_RP:x106] ] and {c0156} [ where OGS != [eba_RP:x106] ] = {c0050} [ where OGS != [eba_RP:x106] ] and {c0157} [ where OGS != [eba_RP:x106] ] = {c0060} [ where OGS != [eba_RP:x106] ] ) ) endif
+with {tC_92.06, default: null, interval: false}: {r*, c1000-1080} >= 0
+with {tC_94.03, default: 0, interval: true}: {c0150} = {c0160} + {c0170} + {c0180} + {c0190} + {c0200} + {c0210} + {c0220} + {c0230} + {c0240}
+with {tC_96.05.1, default: null, interval: false}: {r*, c0010-0140} >= 0
+with {tD_01.00, r*, default: 0, interval: true}: {c0010} >= {c0020}
+with {tD_07.00.a, r0010-0320, default: 0, interval: true}: {c0010} >= {c0020}
+with {tE_01.02, c0010,  default:null, interval:false}: not ( isnull ({(r0010, r0180)}) )
+with {tE_05.02.b, (r0100), s*, default: null, interval: false}: if ( ( not ( isnull ({c0080}) ) or not ( isnull ({c0050}) ) ) ) then ( not ( isnull ({c0030}) ) ) endif
+with {tE_09.01.w, c0020, default: 0, interval: true}: {r0350} = min( {r0320}, 0.9 * max( ({r0300} - {r0310}), 0 ) )
+with {tF_01.01, c0010, default: 0, interval: true}: {r0096} = + {r0098} + {r0099} + {r0097}
+with {tF_01.03, c0010, default: 0, interval: true}: {r0090} = {r0095} + {r0128}
+with {tF_02.00, c0010, default: 0, interval: true}: {r0670} = + {r0630} + {r0640} + {r0632}
+with {tF_02.00, c0010, default: null, interval: false}: {(r0010, r0020, r0025, r0030, r0041, r0051, r0080, r0085, r0090, r0100, r0110, r0120, r0140, r0145, r0150, r0160, r0170, r0175, r0191, r0192, r0200, r0210, r0340, r0350, r0360, r0370, r0380, r0385, r0390, r0400, r0410, r0415, r0420, r0580)} >= 0
+with {tF_03.00, c0010, default: 0, interval: true}: {r0340} = + {r0350} + {r0360}
+with {tF_04.03.1, c*, default: 0, interval: true}: {r0110} = + {r0120} + {r0140} + {r0150} + {r0130} + {r0170} + {r0160}
+with {tF_04.05, c0010, default: null, interval: false}: {r*} >= 0
+with {tF_12.00, r0330-0530, default: 0, interval: true}: {c0070} = {c0010} + {c0020} + {c0030} + {c0040} + {c0050} + {c0060}
+with {tF_12.02, c*, default: 0, interval: true}: {r0070} = sum ({r0080-0130} group by c)
+with {tF_12.02, c*, default: 0, interval: true}: {r0140} = {r0010} + {r0070}
+with {tF_13.01, r0010-0015, default: 0, interval: true}: {c0050} >= {c0055}
+with {tF_13.02.1.a, c0030, default: null, interval: false}: {r*} <= 0
+with {tF_15.00.a, c0010-0030, default: 0, interval: true}: {r0041} = + {r0043} + {r0044} + {r0042}
+with {tF_15.00.b, c0040-0060, default: 0, interval: true}: {r0125} = sum ({r0126-0128} group by c)
+with {tF_16.07.a, c*, default: 0, interval: true}: {r0060} = sum ({r0070-0090} group by c)
+with {tF_17.03, c0010, default: 0, interval: true}: {r0141} = + {r0143} + {r0142} + {r0144}
+with {tF_18.00.b, (r0005, r0010, r0020, r0030, r0040, r0050, r0060, r0070, r0080, r0090, r0100, r0110, r0120, r0130, r0140, r0150, r0160, r0170, r0180, r0181, r0182, r0183, r0184, r0185, r0186, r0191, r0192, r0193, r0194, r0195, r0196, r0197, r0201, r0330, r0335, r0340, r0350, r0360, r0370, r0380, r0390, r0400, r0410, r0420, r0430, r0440, r0450, r0460, r0470, r0480, r0490, r0500, r0510, r0520, r0530, r0540, r0550, r0900, r0903, r0910, r0913), default: 0, interval: true}: {c0130} = + {c0150} + {c0140}
+with {tF_19.00.a, (c0010, c0020, c0030, c0040, c0050, c0060, c0070, c0080, c0090, c0110), default: 0, interval: true}: {r0221} = sum ({r0222-0227} group by c)
+with {tF_19.00.e, c*, default: 0, interval: true}: {r0201} = + {r0181} + {r0191}
+with {tF_20.04, c0010-0026, default: 0, interval: true}: {r0190} >= {r0210}
+with {tF_20.04, default: null, interval: false}: {r*, c0010-0012} >= 0
+with {tF_23.01, c*, default: 0, interval: true}: {r0010} >= {r0020} + {r0040} + {r0060}
+with {tF_23.02, r*, default: 0, interval: true}: {c0070} = {c0090} + {c0110}
+with {tF_23.03, (c0010, c0020, c0030, c0050, c0060, c0070, c0080, c0090, c0100, c0110), default: 0, interval: true}: {r0010} >= {r0130} + {r0170}
+with {tF_24.01, c*, default: 0, interval: true}: {r0100} >= {r0110}
+with {tF_25.02.a, r*, default: 0, interval: true}: {c0050} = {c0080} + {c0110} + {c0140}
+with {tF_34.00.b, c0020, default: 0, interval: true}: {r0080} <= {r0070}
+with {tF_34.00.b, c0020, default: 0, interval: true}: {r0100} <= {r0090}
+with {tF_43.00, (c0010, c0020, c0030, c0040, c0050, c0060), default: 0, interval: true}: {r0070} = {r0010} + {r0020} + {r0030} + {r0040} + {r0050} + {r0060}
+with {tF_46.00, r0050, default: 0, interval: true}: {c0140} = {c0010} + {c0020} + {c0060} + {c0070} + {c0075} + {c0080} + {c0130}
+with {tF_91.01.a, r*, default: 0, interval: true}: {c0060} >= {c0090}
+with {tF_91.04, r*, default: null, interval: false}: {(c0010, c0020, c0030, c0040, c0050, c0110, c0120)} >= 0
+with {tF_91.05.a, default: null, interval: false}: {r*, (c0010, c0020, c0050, c0160)} >= 0
+with {tH_01.00.a, c0060, default:0, interval:true}: {r0010} = {r0020} + {r0030} + {r0040}
+with {tH_01.00.a, c0060, default:0, interval:true}: {r0020-0040} <= {r0010}
+with {tH_02.00, default:0, interval:true}: {c0080} > 0 and {c0090} >= 0
+with {tJ_02.00, default: null, interval: true}:    {r0420, c0030} >= {r0430, c0030} and    {r0420, c0100} >= {r0430, c0100} and    abs({r0420, c0040-0090}) >= abs({r0430, c0040-0090}) and    abs({r0420, c0110-0120}) >= abs({r0430, c0110-0120})
+with {tJ_05.00.b, (c0010, c0070, c0080, c0090, c0100, c0110, c0120, c0130, c0140, c0150, c0160, c0170, c0180, c0190, c0200, c0210, c0220, c0230, c0240, c0250, c0260, c0320, c0330, c0340, c0350, c0360, c0370, c0380, c0390), default: null, interval: true}: {r0310} >= {r0330}
+with {tJ_06.00.b, (c0010, c0070, c0080, c0090, c0100, c0110, c0120, c0130, c0140, c0150, c0160, c0170, c0180, c0190, c0200, c0210, c0220, c0230, c0240, c0250, c0260, c0320, c0330, c0340, c0350, c0360, c0370, c0380, c0390), default: null, interval: true}: {r0470} = {r0490} + {r0500}
+with {tK_103.00, c0010, default: null, interval: false}: {r0020-0090} >= 0
+with {tK_30.04, default: null, interval: false}: {c0020} >= 0
+with {tK_45.00.a, r*, default: null, interval: false}: {c0010-0110} >= 0
+with {tK_47.00.a, c0010, default: 0, interval: true}: {r0370} = + {r0390} + {r0380} + {r0400}
+with {tK_47.00.a, default: null, interval: false}: {(r0010, r0020, r0030, r0040, r0050, r0070, r0090, r0100, r0120, r0130, r0140, r0160, r0170, r0180, r0200, r0210, r0220, r0240, r0250, r0260, r0270, r0280, r0290, r0310, r0320), (c0040, c0140)} >= 0
+with {tK_63.01.a, c0010, default: null, interval: false}: {(r0010, r0020, r0040, r0050, r0080)} >= 0
+with {tL_04.00, default: null, interval: false}: {c0150-0200} >= 0
+with {tM_02.00.a, c*, default: 0, interval: true}: abs ({r0162}) >= abs ({r0165})
+with {tM_02.00.a, c0010, default: null, interval: false}: {(r0010, r0020, r0030, r0040, r0050, r0060, r0070, r0080, r0090, r0100, r0110, r0120, r0130, r0140, r0400, r0460, r0470, r0480, r0490, r0600, r0610)} >= 0
+with {tM_02.00.c, c0030, default: 0, interval: true}: {r0140} = {r0150} + {r0160} + {r0162}
+with {tP_01.01, c*, default: 0, interval: false}: if ( {r167} > 0 ) then ( {r168} < 0 ) endif
+with {tP_01.02, c*, default: 0, interval: true}: {r180} = + {r190} + {r220}
+with {tP_02.03, r*, default: null, interval: false}: {c010-050} >= 0
+with {tP_02.07, c*, default: 0, interval: true}: {r080} = + {r090} + {r141} + {r145}
+with {tQ_03.03, c*, default:null , interval: true}: {r0020} = sum({r0030-0070} group by c)
+with {tQ_10.03, default: null, interval: false}: {r*, c*} >= 0
+with {tR_01.01, default: null, interval: false}: {(r0020, r0040, r0050, r0060), c0030-0080} >= 0
+with {tR_02.01, c*, default: 0, interval: true}: {r0110} >= {r0130} + {r0150} + {r0170} + {r0190} + {r0210} + {r0230} + {r0250}
+with {tR_04.00.a, c*, default: 0, interval: true}: {r0100} [ where PYB = [eba_IA:x28] ] + {r0060} [ where PYB = [eba_IA:x28] ] >= 1600000 * {r0040} [ where PYB = [eba_IA:x28] ] and {r0100} [ where PYB = [eba_IA:x28] ] + {r0060} [ where PYB = [eba_IA:x28] ] < 17000000 * {r0040} [ where PYB = [eba_IA:x28] ]
+with {tR_04.00.a, c*, default: 0, interval: true}: {r0100} [ where PYB = [eba_IA:x33] ] + {r0060} [ where PYB = [eba_IA:x33] ] >= 2100000 * {r0040} [ where PYB = [eba_IA:x33] ] and {r0100} [ where PYB = [eba_IA:x33] ] + {r0060} [ where PYB = [eba_IA:x33] ] < 22000000 * {r0040} [ where PYB = [eba_IA:x33] ]
+with {tR_04.00.a, c*, default: 0, interval: true}: {r0100} [ where PYB = [eba_IA:x63] ] + {r0060} [ where PYB = [eba_IA:x63] ] >= 5100000 * {r0040} [ where PYB = [eba_IA:x63] ] and {r0100} [ where PYB = [eba_IA:x63] ] + {r0060} [ where PYB = [eba_IA:x63] ] < 52000000 * {r0040} [ where PYB = [eba_IA:x63] ]
+with {tR_04.00.a, c*, default: 0, interval: true}: {r0100} [ where PYB = [eba_IA:x86] ] + {r0060} [ where PYB = [eba_IA:x86] ] >= 7400000 * {r0040} [ where PYB = [eba_IA:x86] ] and {r0100} [ where PYB = [eba_IA:x86] ] + {r0060} [ where PYB = [eba_IA:x86] ] < 75000000 * {r0040} [ where PYB = [eba_IA:x86] ]
+with {tR_04.00.a, c*, default: 0, interval: true}: {r0100} [ where qPYB = [eba_qIA:qx2031] ] + {r0060} [ where qPYB = [eba_qIA:qx2031] ] >= 6800000 * {r0040} [ where qPYB = [eba_qIA:qx2031] ] and {r0100} [ where qPYB = [eba_qIA:qx2031] ] + {r0060} [ where qPYB = [eba_qIA:qx2031] ] < 69000000 * {r0040} [ where qPYB = [eba_qIA:qx2031] ]
+with {tR_04.00.a, c*, default: 0, interval: true}: {r0100} [ where qPYB = [eba_qIA:qx2045] ] + {r0060} [ where qPYB = [eba_qIA:qx2045] ] >= 5400000 * {r0040} [ where qPYB = [eba_qIA:qx2045] ] and {r0100} [ where qPYB = [eba_qIA:qx2045] ] + {r0060} [ where qPYB = [eba_qIA:qx2045] ] < 55000000 * {r0040} [ where qPYB = [eba_qIA:qx2045] ]
+with {tR_04.00.a, c*, default: 0, interval: true}: {r0100} [ where qPYB = [eba_qIA:qx2077] ] + {r0060} [ where qPYB = [eba_qIA:qx2077] ] >= 2200000 * {r0040} [ where qPYB = [eba_qIA:qx2077] ] and {r0100} [ where qPYB = [eba_qIA:qx2077] ] + {r0060} [ where qPYB = [eba_qIA:qx2077] ] < 23000000 * {r0040} [ where qPYB = [eba_qIA:qx2077] ]
+with {tR_04.00.a, c*, default: 0, interval: true}: {r0120} + {r0122} + {r0130} >= 0.5 * ({r0100} - {r0182} - {r0201} - {r0250} - {r0260})
+with {tR_04.00.a, default: null, interval: false}: {r*, (c0030, c0040, c0050, c0070, c0080, c0090)} >= 0
+with {tR_04.00.b, default: null, interval: false}: {r0010, c*} >= 0
+with {tR_04.01.a, c*, default: 0, interval: true}: {r0140} [ where PYB = [eba_IA:x30] ] + {r0060} [ where PYB = [eba_IA:x30] ] >= 18000000 * {r0040} [ where PYB = [eba_IA:x30] ] and {r0140} [ where PYB = [eba_IA:x30] ] + {r0060} [ where PYB = [eba_IA:x30] ] < 19000000 * {r0040} [ where PYB = [eba_IA:x30] ]
+with {tR_04.01.a, c*, default: 0, interval: true}: {r0140} [ where PYB = [eba_IA:x89] ] + {r0060} [ where PYB = [eba_IA:x89] ] >= 77000000 * {r0040} [ where PYB = [eba_IA:x89] ] and {r0140} [ where PYB = [eba_IA:x89] ] + {r0060} [ where PYB = [eba_IA:x89] ] < 78000000 * {r0040} [ where PYB = [eba_IA:x89] ]
+with {tR_04.01.a, c*, default: 0, interval: true}: {r0140} [ where qPYB = [eba_qIA:qx2075] ] + {r0060} [ where qPYB = [eba_qIA:qx2075] ] >= 24000000 * {r0040} [ where qPYB = [eba_qIA:qx2075] ] and {r0140} [ where qPYB = [eba_qIA:qx2075] ] + {r0060} [ where qPYB = [eba_qIA:qx2075] ] < 25000000 * {r0040} [ where qPYB = [eba_qIA:qx2075] ]
+with {tR_08.00, c0010, default: 0, interval: true}: {r0090} <= {r0040}
+with {tR_10.00, c*, default: 0, interval: true}: if ( ({r0020} > 0 ) ) then ( ({r0010} > 0 ) ) endif
+with {tT_01.00.a, r0190, default: 0, interval: true}: {c0122} = {c0082}
+with {tT_01.00.b, c0011, default: null, interval: false}: {(r0100, r0110, r0120, r0130, r0140, r0161, r0170, r0180, r0200, r0300, r0310, r0311, r0312, r0313, r0314, r0320, r0321, r0322, r0323, r0324, r0330, r0340, r0341, r0342, r0343, r0344, r0350, r0351, r0352, r0353, r0354, r0360, r0361, r0362, r0363, r0364, r0365, r0366, r0367, r0368, r0369, r0370, r0371, r0372, r0373, r0374, r0380, r0381, r0382, r0390, r0400, r0511, r0512, r0521, r0531, r0700, r0750, r0760, r0770)} >= 0
+with {tT_01.00.b, default: null, interval: false}: {(r0100, r0110, r0120, r0130, r0140, r0150, r0161, r0180, r0200, r0210, r0300, r0310, r0311, r0312, r0313, r0314, r0320, r0321, r0322, r0323, r0324, r0330, r0340, r0341, r0342, r0343, r0344, r0350, r0351, r0352, r0353, r0354, r0360, r0361, r0362, r0363, r0364, r0365, r0366, r0367, r0368, r0369, r0370, r0371, r0372, r0373, r0374, r0380, r0381, r0382, r0390, r0400, r0511, r0512, r0521, r0531, r0700, r0750, r0760, r0770), c0051-0061} >= 0
+with {tT_05.01, default: null, interval: false}: if ( not ( isnull ({c0090}) ) ) then ( not ( isnull ({c0080}) ) ) endif
+with {tT_06.01, default: "", interval: false}: {c0140} <= {c0150}
+with {tT_20.03.w, default: null, interval: false}: {r0030, c0110} >= 0
+with {tT_20.04.w, r0140-0160, default: null, interval: false}: if ( not ( isnull ({c0020}) ) ) then ( not ( isnull ({c0010}) ) ) endif
+with {tV_00.01, (c0010, c0020, c0030, c0040, c0060, c0090, c0110), default: null, interval: false}:    len({r0010}) <= 1000
+with {tV_00.01, default: null, interval: false}: if ( isnull ({c0010,r0010}) ) then ( not ( isnull ( count ( {tV_00.04, c0060}[where qCJQ = [eba_ZZ:x1055] and ei614 = [eba_ZZ:x1021]] ) ) ) ) endif
+with {tV_00.01, default: null, interval: false}: if ( isnull ({c0020,r0010}) ) then ( not ( isnull ( count ( {tV_00.04, c0060}[where qCJQ = [eba_ZZ:x1055] and ei614 = [eba_ZZ:x1022]] ) ) ) ) endif
+with {tV_00.01, default: null, interval: false}: if ( isnull ({c0030,r0010}) ) then ( not ( isnull ( count ( {tV_00.04, c0060}[where qCJQ = [eba_ZZ:x1055] and ei614 = [eba_ZZ:x1023]] ) ) ) ) endif
+with {tV_00.02, (c0010, c0020, c0030, c0050), default: null, interval: false}:    len({r0010}) <= 1000
+with {tV_00.03, default: null, interval: false}:    len({c0060}) <= 1000
+with {tW_02.01, r*, default: 0, interval: false}: {c0010} = {c0020} + {c0030}
+with {tW_03.04, r0010, default: null, interval: false}: {c0090} <= {c0070}
+with {tW_04.05, default: null, interval: false}: {r0010, c*} >= 0
+with {tW_04.06, default: null, interval: false}: if ( isnull ({c0020,r0010}) ) then ( not ( isnull ( count ( {tW_01.03, c0040}[where qCJQ = [eba_ZZ:x1008] and ei614 = [eba_ZZ:x1022]] ) ) ) ) endif
+with {tW_05.01, default: null, interval: false}: if ( isnull ({c0080}) ) then ( count ( {tW_01.03, c0040}[where qCJQ = [eba_ZZ:x1017] and ei614 = [eba_ZZ:x1028]] group by qBBE ) = 1 ) endif
+with {tY_01.01, c0020, (s0020, s0040, s0060), default: 0, interval: true}: {r0260} + {r0270} + {r0280} = {r0240}
+with {tY_05.01, c0010, default: null, interval: false}: {r0010-0040, s*} >= 0
+with {tZ_02.00, c0110, default: 0, interval: true}: {r0100} = {r0110} + {r0120} + {r0130} + {r0140} + {r0150} + {r0161} + {r0170} + {r0180} + {r0200}
+with {tZ_02.00.b, (c0011, c0021, c0031, c0041, c0051, c0056, c0061, c0071, c0081, c0091, c0101, c0111), default: 0, interval: true}: {r0365} = {r0366} + {r0367} + {r0368} + {r0369}
+with {tZ_07.01.5.a, r*, default: null, interval: false}: {c0020}[where LCF != [eba_GA:qx2008]][get LCR] = 'N/A'
+with {tZ_14.00, default: "", interval: false}: {c0130} < {c0140}
+with {tZ_14.00, default: null, interval: false}: not ( isnull ({c0020}) ) and not ( isnull ({c0030}) ) and not ( isnull ({c0040}) ) and not ( isnull ({c0055}) ) and not ( isnull ({c0060}) ) and not ( isnull ({c0065}) ) and not ( isnull ({c0070}) ) and not ( isnull ({c0090}) ) and not ( isnull ({c0120}) ) and not ( isnull ({c0140}) )
+with{default: 0, interval: true}: {tF_02.00, r0580, c0010} = {tF_20.03, r0220, c0010} + {tF_20.03, r0220, c0020}
+with{default: 0, interval: true}: {tF_02.01.dp, r0330, c0010} = {tF_20.03.1, r0130, c0010} + {tF_20.03.1, r0130, c0020}
+with{default: 0, interval: true}: {tF_02.01.dp, r0355, c0010} = {tF_20.03.1, r0155, c0010} + {tF_20.03.1, r0155, c0020}
+with{default: 0, interval: true}: {tF_02.01.dp, r0620, c0010} = {tF_20.03.1, r0260, c0010} + {tF_20.03.1, r0260, c0020}
+with{default: 0, interval: true}: {tF_04.02.2, r0120, c0010} = {tF_20.01, r0130, c0010} + {tF_20.01, r0130, c0020}
+with{default: 0, interval: true}: {tF_04.06, r0120, c0010} = {tF_20.01, r0095, c0010} + {tF_20.01, r0095, c0020}
+with{default: 0, interval: true}: {tF_45.02, r0050, c0010} = {tF_20.03, r0130, c0010} + {tF_20.03, r0130, c0020}
+with{tC_08.01.a, (c0020, c0030, c0040, c0050, c0060, c0070, c0080, c0090, c0101, c0102, c0103, c0104, c0105, c0106, c0107, c0110, c0140, c0150, c0160, c0170, c0171, c0172, c0173, c0180, c0190, c0200, c0210, c0250, c0255, c0256, c0257, c0260, c0270, c0280, c0290, c0300), default: 0, interval: true}: abs({r0010}) >= abs({r0015}) + abs({r0016})
+with{tC_09.02, (c0010, c0030, c0040, c0050, c0055, c0060, c0070, c0105, c0110, c0120, c0121, c0122, c0125, c0130), default: 0, interval: true}: abs({r0110}) >= abs({r0120})
+with{tC_17.01.a, c*, default: 0, interval: true}: {r0970} = {r0070} + {r0170} + {r0270} + {r0370} + {r0470} + {r0570} + {r0670} + {r0770} + {r0870}
+with{tC_29.00, default: 0, interval: true}: abs({c100}) >= abs({c160})
+with{tD_01.00, (c0010, c0020, c0030, c0040, c0050, c0060, c0070, c0080, c0090, c0100, c0120, c0130, c0140, c0150, c0160), default: 0, interval: true}: {r0030} = {r0040} + {r0050} + {r0060} + {r0070} + {r0080}
+with{tF_02.00.dp, c0010, default: 0, interval: true}: {r0670} = {r0690} + {r0680}
+with{tF_11.04, c0010-0020, default: 0, interval: true}: {r0010} = {r0050} + {r0030} + {r0040} + {r0020} + {r0060} + {r0070}
+with{tF_19.00.c, c0185, default: 0, interval: true}: {r0231} = {r0211} + {r0221}
+with{tF_20.01, c0010, default: 0, interval: true}: {r0100} = {r0110} + {r0120} + {r0130}
+with{tK_21.01.f, c*, default: 0, interval: true}: abs({r0070}) >= abs({r0080})
+with{tK_41.00, (c0010, c0020, c0030, c0040, c0050, c0060, c0070, c0080, c0090, c0100, c0110, c0130, c0140, c0150, c0160, c0170), default: 0, interval: true}: abs({r0530}) >= abs({r0540}) + abs({r0560}) + abs({r0570}) + abs({r0580}) + abs({r0590})
+{tC_02.00.a, r0200, c0010, default: null, interval: true} = {tC_07.00.a, r0010, c0220, default: null, interval: true} [ where qEBB in {[eba_qEC:qx14]}]
+{tC_14.00, c0051} in { [eba_ZZ:x3], [eba_ZZ:x4], [eba_ZZ:x5], [eba_ZZ:x6] }
+{tC_67.00.w, r0020-0110, c0030} in { [eba_CT:x10], [eba_CT:x12], [eba_CT:x1], [eba_CT:x5], [eba_CT:x20], [eba_CT:x18], [eba_CT:x598], [eba_CT:x599] }
+{tJ_10.02, r0360, c0010} in { [eba_ZZ:x779], [eba_ZZ:x780], [eba_ZZ:x781] }
+{tL_02.00, c0040} in { [eba_ZZ:x840], [eba_ZZ:x841], [eba_ZZ:x842], [eba_ZZ:x843] }
+{tL_02.00, c0101} in { [eba_ZZ:x844], [eba_ZZ:x845], [eba_ZZ:x846], [eba_ZZ:x847], [eba_ZZ:x848], [eba_ZZ:x849], [eba_ZZ:x850], [eba_ZZ:x851], [eba_ZZ:x852], [eba_ZZ:x853] }
+{tT_20.01.a, r*, c0070} in { [eba_ZZ:x338], [eba_ZZ:x339], [eba_ZZ:x340], [eba_ZZ:x341] }
+{tT_20.05.a, r*, c0150} in { [eba_ZZ:x374], [eba_ZZ:x375], [eba_ZZ:x376], [eba_ZZ:x377] }
+{tW_07.01, c0010, r*, default: null, interval: false} <= #2026-12-31#
+{tW_07.02, c0110, r*, default: null, interval: false} <= #2026-12-31#
+{tW_07.02, c0120, r*, default: null, interval: false} <= #2026-12-31#
+{tW_07.02, c0170, r*, default: null, interval: false} <= #2026-12-31#
+{tZ_05.01, c0050} in { [eba_CT:x10], [eba_CT:x12], [eba_CT:x1], [eba_CT:x5], [eba_CT:x20], [eba_CT:x18], [eba_CT:x598], [eba_CT:x599] }
+{v_A_00.01}
+{v_E_07.02}
+{v_F_02.00.dp}
+{v_F_02.01} and {v_F_16.01.1}
+{v_F_05.01}
+{v_F_06.01} and {v_F_18.00}
+{v_F_18.00} and {v_F_00.01}
+{v_F_25.02}
+{v_J_10.01}
+{v_U_02.00}
+{v_V_01.01} and {v_V_02.02}
+{v_Z_07.01.3}

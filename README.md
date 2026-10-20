@@ -1,7 +1,9 @@
 # dpm-xl
 
-A dependency-free Python parser and evaluator for **DPM-XL**, the expression
-language of EBA validation rules and similar checks.
+A Python parser and evaluator for **DPM-XL**, the expression language of EBA
+validation rules and similar checks. The core has no dependencies; the
+optional `columnar` extra adds a polars evaluator for reports with millions of
+open-table rows.
 
 ```python
 from dpmxl import evaluate_rule, explain
@@ -12,7 +14,8 @@ expression = (
 result = evaluate_rule(expression, provider, precondition="{v_C_01.00}")
 for outcome in result.failures:
     print(explain(result.evaluation, expression, outcome.key).summary)
-# expected 1,204 = 1,180 + 31, off by 7 (tolerance ±1.5)
+# 1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the
+# reported precision
 ```
 
 The package does not read report files and knows nothing about a particular
@@ -31,6 +34,7 @@ same evaluator works against an xBRL-CSV upload, a database, or test fixtures.
 | `dpmxl.explain` | Fills a failing record's formula with operand values. |
 | `dpmxl.references` | Static selections (with `with` context applied) and `{v_…}` templates. |
 | `dpmxl.provider` | `DataProvider` protocol and the in-memory `MemoryProvider`. |
+| `dpmxl.columnar` | The same semantics on polars frames (optional `columnar` extra). |
 | `dpmxl.cli` | `dpm-xl check` and `dpm-xl eval`. |
 
 ## Supported language
@@ -77,9 +81,17 @@ same evaluator works against an xBRL-CSV upload, a database, or test fixtures.
   Explanations report each side's interval and the *gap*: how far apart the
   closest values within those intervals still are.
 - **Null.** Null propagates through arithmetic, comparisons and functions
-  (except `isnull` and `nvl`). `and`/`or` use three-valued logic. A record whose
-  result is null is "not evaluated", never a failure. Division by zero is null.
-- **Aggregates** over no records are null; `count` counts non-null values.
+  (except `isnull` and `nvl`). `and`/`or`/`not` use three-valued (Kleene)
+  logic. A record whose result is null is "not evaluated", never a failure.
+  Division by zero is a run-time error, as the specification requires.
+- **Conditionals.** `if` takes the `else` branch when the condition is null;
+  without `else`, a Boolean `then` yields true where the condition is false or
+  null. The result has the condition's record structure.
+- **Aggregates** over no records are null, except `count`, which is 0;
+  `count` counts non-null values.
+- **Clauses.** `[get key]` omits records whose fact is null; a `where` or
+  `sub` inside a `with` body overrides the context's clause on the same key.
+  Booleans order `false < true`.
 - **Key names** in `where`, `group by`, `sub` and `get` match with or without
   the DPM 2.0 `q` prefix and ignore case (`EBB` finds `qEBB`).
 - **Items** compare by code and category, ignoring the `eba_` prefix and a
@@ -91,10 +103,24 @@ A `RuleResult` has status `passed`, `failed`, `not_applicable`, `error`
 (syntax, unknown table, type mismatch) or `unsupported`, plus one `Outcome`
 per record with the data points it used.
 
-These semantics follow the EBA rule corpus and the published DPM-XL
-conventions as far as they could be verified offline; where the language
-specification is ambiguous (aggregates over empty sets, key-name aliases),
-the choice above is the conservative one that avoids false failures.
+These semantics follow the EBA *DPM-XL language specification v0.9*
+(operators and data model documents) and the Eurofiling interval arithmetic
+functions. Where the specification is ambiguous or contradicts itself (sum of
+no records, `count` over nulls, key-name aliases, the radius formulas for
+products and quotients), the choice above is the one that avoids false
+failures.
+
+## Columnar evaluation
+
+`dpmxl.columnar.evaluate_rule_columnar(expression, provider)` evaluates a rule
+on polars frames from a `FrameProvider` (`select_frame(query)` returns one row
+per data point with `k:<key>` columns and the `num`, `thr`, `txt`, `flag` value
+columns). Values are exact `Decimal(38, 12)`, keys are joined like
+`recordset.combine`, and a `FrameCache` shares selections across rules within
+a row budget. Anything the module does not implement, including arithmetic
+that would overflow, raises `ColumnarUnsupported` so the caller falls back to
+the reference evaluator. `tests/test_columnar.py` checks both evaluators agree
+case by case. `PointsFrameProvider` adapts any `DataProvider`.
 
 ## Provider contract
 

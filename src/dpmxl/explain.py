@@ -185,7 +185,7 @@ def _comparison(
                 f": {difference} {'too high' if direction == 'too_high' else 'too low'}"
             )
         width = left_value.tolerance + right_value.tolerance
-        tolerance = format_decimal(width) if width else None
+        tolerance = format_decimal(_round_tolerance(width)) if width else None
     return Explanation(
         formula=formula,
         filled=filled,
@@ -201,6 +201,19 @@ def _comparison(
         direction=direction,
         tolerance=tolerance,
     )
+
+
+def _round_tolerance(width: Decimal) -> Decimal:
+    """Round an interval width for display: 82.477425 reads 82.5, 0.0001 stays.
+
+    Returns:
+        Decimal: The width to two significant digits, at least one decimal.
+    """
+    if not width:
+        return width
+    exponent = width.adjusted()
+    places = max(1, 1 - exponent)
+    return round(width, places)
 
 
 def _direction(op: str, delta: Decimal) -> Direction | None:

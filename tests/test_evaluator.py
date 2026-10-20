@@ -52,6 +52,9 @@ def test_sum_rule_passes_and_fails_per_column() -> None:
     assert explanation.summary == (
         "expected 1,204 = 1,180 + 31, off by 7 (tolerance ±1.5)"
     )
+    assert [(point.row, point.column) for point in explanation.primary] == [
+        ("0010", "0020")
+    ]
     assert [operand.source for operand in explanation.operands] == [
         "{r0010}",
         "{r0020}",

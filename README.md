@@ -6,7 +6,9 @@ language of EBA validation rules and similar checks.
 ```python
 from dpmxl import evaluate_rule, explain
 
-expression = "with {tC_01.00, c*, default: 0, interval: true}: {r0010} = {r0020} + {r0030}"
+expression = (
+    "with {tC_01.00, c*, default: 0, interval: true}: {r0010} = {r0020} + {r0030}"
+)
 result = evaluate_rule(expression, provider, precondition="{v_C_01.00}")
 for outcome in result.failures:
     print(explain(result.evaluation, expression, outcome.key).summary)

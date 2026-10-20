@@ -58,6 +58,8 @@ class Explanation:
     summary: str
     operands: tuple[Operand, ...]
     difference: str | None = None
+    primary: tuple[DataPoint, ...] = ()
+    """Cells on the left of the failing comparison: the values that disagree."""
 
 
 def explain(
@@ -81,7 +83,13 @@ def explain(
     formula = _source(expression, body)
     comparison = renderer.failing_comparison(body)
     difference = None
+    primary: tuple[DataPoint, ...] = ()
     if comparison is not None:
+        primary = tuple(
+            point
+            for record in evaluation.value_at(comparison.left, key)
+            for point in record.points
+        )
         left = renderer.value(comparison.left)
         right = renderer.value(comparison.right)
         text = (
@@ -105,6 +113,7 @@ def explain(
         summary=summary,
         operands=tuple(renderer.operands),
         difference=difference,
+        primary=primary,
     )
 
 

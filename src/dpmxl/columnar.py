@@ -57,7 +57,13 @@ from .ast import (
     With,
 )
 from .evaluator import AGGREGATES, _parse_cached, is_boolean
-from .provider import CellQuery, DataPoint, axis_matcher, normalize_code
+from .provider import (
+    CellQuery,
+    DataPoint,
+    axis_matcher,
+    declared_open_keys,
+    normalize_code,
+)
 from .recordset import STANDARD_KEYS, EvaluationError, UnsupportedError, resolve_key
 from .values import Number, Value
 
@@ -173,13 +179,19 @@ def scalar_frame(value: Value) -> Frame:
 _VALUE_SCHEMA = {NUM: DEC, THR: DEC, TXT: pl.String, FLAG: pl.Boolean}
 
 
-def frame_from_points(points: Sequence[DataPoint]) -> pl.DataFrame:
+def frame_from_points(
+    points: Sequence[DataPoint], open_keys: Sequence[str] = ()
+) -> pl.DataFrame:
     """Adapt :class:`DataPoint` objects to the :class:`FrameProvider` layout.
+
+    Args:
+        points: Selected data points.
+        open_keys: The table's open key names, kept even without points.
 
     Returns:
         pl.DataFrame: One row per point.
     """
-    key_names: list[str] = []
+    key_names: list[str] = list(open_keys)
     for point in points:
         key_names.extend(name for name in point.keys if name not in key_names)
     rows = []
@@ -233,7 +245,10 @@ class PointsFrameProvider:
         Returns:
             pl.DataFrame: The selection.
         """
-        return frame_from_points(list(self.provider.select(query)))
+        return frame_from_points(
+            list(self.provider.select(query)),
+            declared_open_keys(self.provider, query.table),
+        )
 
     def table_reported(self, table: str) -> bool | None:
         """Delegate to the wrapped provider.

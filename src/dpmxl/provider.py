@@ -75,7 +75,13 @@ class DataPoint:
 
 @runtime_checkable
 class DataProvider(Protocol):
-    """Source of report data for one evaluation."""
+    """Source of report data for one evaluation.
+
+    A provider may also define ``open_keys(table) -> Sequence[str]``, the
+    open key names of a table. Without it, an open table with no reported
+    rows yields a selection without keys; with it, the selection keeps the
+    table's key structure and is empty, as the specification requires.
+    """
 
     def select(self, query: CellQuery) -> Sequence[DataPoint]:
         """Return the data points covered by a selection.
@@ -98,6 +104,17 @@ class DataProvider(Protocol):
         Returns ``None`` when the parameter is unknown.
         """
         ...
+
+
+def declared_open_keys(provider: object, table: str) -> tuple[str, ...]:
+    """Return the open key names a provider declares for a table.
+
+    Returns:
+        tuple[str, ...]: Key names, or ``()`` when the provider has no
+        ``open_keys`` method.
+    """
+    method = getattr(provider, "open_keys", None)
+    return tuple(method(table)) if callable(method) else ()
 
 
 @lru_cache(maxsize=65_536)
@@ -291,6 +308,15 @@ class MemoryProvider:
             for keys in key_sets
             for row, column, sheet in positions
         ]
+
+    def open_keys(self, table: str) -> tuple[str, ...]:
+        """Return a table's open key names.
+
+        Returns:
+            tuple[str, ...]: Key names; empty for closed or unknown tables.
+        """
+        layout = self.tables.get(table)
+        return layout.open_keys if layout is not None else ()
 
     def table_reported(self, table: str) -> bool | None:
         """Return whether a table or its template was reported.

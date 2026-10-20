@@ -52,7 +52,13 @@ from .ast import (
     With,
 )
 from .parser import parse
-from .provider import CellQuery, DataPoint, DataProvider, normalize_code
+from .provider import (
+    CellQuery,
+    DataPoint,
+    DataProvider,
+    declared_open_keys,
+    normalize_code,
+)
 from .recordset import (
     EvaluationError,
     Record,
@@ -299,7 +305,8 @@ class Evaluator:
             codes.discard(None)
             if len(codes) > 1:
                 axis_keys.append(key)
-        open_keys: list[str] = []
+        # An open table with no reported rows still has its key structure.
+        open_keys = list(declared_open_keys(self.provider, spec.table))
         for point in points:
             open_keys.extend(name for name in point.keys if name not in open_keys)
         keys = (*axis_keys, *open_keys)

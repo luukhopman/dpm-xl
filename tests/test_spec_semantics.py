@@ -119,3 +119,12 @@ def test_interval_equality_overlaps(left, right, expected) -> None:
     assert (
         status("with {tT, c0010, interval: true}: {r0010} = {r0020}", data) == expected
     )
+
+
+def test_open_table_without_rows_keeps_its_keys() -> None:
+    # 3.1.6: a selection's structure comes from the table, not from its data;
+    # an open table with no reported rows is an empty record set with keys.
+    data = provider({})
+    assert status("sum({tO, r0010, c0010} group by KEY) = 0", data) == "not_applicable"
+    rule = "if not isnull({tO, r0010, c0010}) then {tO, r0010, c0010} > 0 endif"
+    assert status(rule, data) == "not_applicable"

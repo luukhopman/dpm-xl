@@ -26,6 +26,8 @@ def data() -> MemoryProvider:
         TableLayout("T", rows=("0010", "0020", "0030"), columns=("0010", "0020")),
         TableLayout("ONE", rows=("0010",), columns=("0010",)),
         TableLayout("O", rows=("0010", "0020"), columns=("0010",), open_keys=("qKEY",)),
+        # An open table filed without rows.
+        TableLayout("E", rows=("0010", "0020"), columns=("0010",), open_keys=("qGCC",)),
     ]
     values: dict[CellKey, Value] = {
         ("T", "0010", "0010", None, ()): Number.of(100, 0),
@@ -62,6 +64,8 @@ EXPRESSIONS = [
     "not(isnull({tT, r0010, c0010})) and isnull({tT, r0010, c0020, default: null}) = false",
     "{tO, r0010, c0010} in {0, 10}",
     "true > false",
+    "with {tE, default: 0, interval: true}: {r0010, c0010} = sum({r0020, c0010} group by GCC)",
+    "if not isnull({tE, r0010, c0010}) then {tE, r0020, c0010} > 0 endif",
     "{tT, r0010, c0010} = time_shift({tT, r0010, c0010}, A, 1, refPeriod)",
 ]
 

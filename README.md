@@ -63,11 +63,19 @@ same evaluator works against an xBRL-CSV upload, a database, or test fixtures.
 - **Missing facts** take the selection's `default`; with no default they are
   null. Providers must therefore return every defined cell of a closed
   selection, reported or not.
-- **Interval arithmetic.** With `interval: true`, a fact reported with
-  `decimals = d` is the interval `value ± 0.5·10^-d`. Sums add tolerances,
-  products and quotients use interval bounds, and `a = b` holds when the
-  intervals overlap (`a <= b` when `a.low <= b.high`, and so on). With
-  `interval: false` facts are exact.
+- **Interval arithmetic.** With `interval: true`, numbers follow the Eurofiling
+  interval arithmetic functions (`iaf:*`, version 1.1.1) that EBA validation
+  rules are based on. A fact reported with `decimals = d` stands for
+  `value ± 0.5·10^-d` (`INF` is exact; constants and defaults are exact). Sums
+  and differences add thresholds; products use `|A·δB| + |B·δA| + δA·δB`;
+  quotients take the largest deviation of the four endpoint quotients
+  (skipping a zero divisor); `abs` and negation keep the threshold; `min` and
+  `max` keep the chosen value's threshold. `a = b` holds when
+  `|a − b| ≤ δa + δb` (the intervals overlap), `a ≤ b` when
+  `a − b ≤ δa + δb`, `a ≥ b` when `a ≥ b − (δa + δb)`, and likewise for the
+  strict comparisons. With `interval: false` facts are exact.
+  Explanations report each side's interval and the *gap*: how far apart the
+  closest values within those intervals still are.
 - **Null.** Null propagates through arithmetic, comparisons and functions
   (except `isnull` and `nvl`). `and`/`or` use three-valued logic. A record whose
   result is null is "not evaluated", never a failure. Division by zero is null.

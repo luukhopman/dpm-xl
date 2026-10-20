@@ -49,9 +49,11 @@ def test_sum_rule_passes_and_fails_per_column() -> None:
     assert {point.row for point in failure.points} == {"0010", "0020", "0030"}
     explanation = explain(_traced(result), expression, failure.key)
     assert explanation.filled == "1,204 = 1,180 + 31"
-    assert explanation.summary == (
-        "expected 1,204 = 1,180 + 31, off by 7 (tolerance ±1.5)"
-    )
+    assert explanation.summary == "1,204 should equal 1,211 (1,180 + 31): 7 too low"
+    assert explanation.direction == "too_low"
+    assert explanation.tolerance == "1.5"
+    assert explanation.left is not None and explanation.left.single_cell
+    assert explanation.right is not None and explanation.right.terms == 2
     assert [(point.row, point.column) for point in explanation.primary] == [
         ("0010", "0020")
     ]
@@ -122,7 +124,7 @@ def test_if_then_else_and_items() -> None:
     result = evaluate_rule(rule, provider)
     assert result.status == "failed"
     explanation = explain(_traced(result), rule, result.failures[0].key)
-    assert explanation.summary == "expected 10 = 9, off by 1"
+    assert explanation.summary == "10 should equal 9: 1 too high"
     other = rule.replace("[eba_AS:x2]", "[eba_AS:x1]")
     assert evaluate_rule(other, provider).status == "not_applicable"
 
@@ -266,3 +268,54 @@ def test_number_tolerance_from_decimals() -> None:
 def _traced(result):
     assert result.evaluation is not None
     return result.evaluation
+
+
+def test_explanations_read_as_sentences() -> None:
+    provider = closed(
+        {
+            ("0010", "0010"): 100,
+            ("0020", "0010"): 150,
+            ("0030", "0010"): -60,
+        }
+    )
+    rule = "with {tC_01.00, c0010, default: 0, interval: true}: {r0010} = {r0020} + {r0030}"
+    result = evaluate_rule(rule, provider)
+    explanation = explain(_traced(result), rule, result.failures[0].key)
+    assert explanation.filled == "100 = 150 \u2212 60"
+    assert explanation.formula == "{r0010} = {r0020} + {r0030}"
+    assert explanation.summary == "100 should equal 90 (150 \u2212 60): 10 too high"
+
+    ceiling = "with {tC_01.00, c0010, default: 0, interval: false}: {r0020} <= {r0010}"
+    result = evaluate_rule(ceiling, provider)
+    explanation = explain(_traced(result), ceiling, result.failures[0].key)
+    assert explanation.verb == "should not exceed"
+    assert explanation.summary == "150 should not exceed 100: 50 too high"
+
+
+def test_zero_runs_collapse_and_conditions_have_messages() -> None:
+    tables = [
+        TableLayout(
+            "T", rows=tuple(f"{n:04d}" for n in range(10, 80, 10)), columns=("0010",)
+        )
+    ]
+    values: dict[CellKey, Value] = {("T", "0010", "0010", None, ()): Number.of(17)}
+    provider = MemoryProvider(tables, values)
+    rule = "with {tT, c0010, default: 0}: {r0010} = {r0020} + {r0030} + {r0040} + {r0050} + {r0060}"
+    result = evaluate_rule(rule, provider)
+    explanation = explain(_traced(result), rule, result.failures[0].key)
+    assert explanation.filled == "17 = 0 + 0 (\u00d74)"
+
+    missing = "with {tT, c0010}: not(isnull({r0020}))"
+    result = evaluate_rule(missing, provider)
+    explanation = explain(_traced(result), missing, result.failures[0].key)
+    assert explanation.kind == "missing"
+    assert explanation.summary == "{r0020} must be reported"
+    assert [(point.row, point.column) for point in explanation.primary] == [
+        ("0020", "0010")
+    ]
+
+    member = "with {tT, c0010}: {r0010} in {1, 2}"
+    result = evaluate_rule(member, provider)
+    explanation = explain(_traced(result), member, result.failures[0].key)
+    assert explanation.kind == "membership"
+    assert explanation.summary == "17 is not one of 1, 2"

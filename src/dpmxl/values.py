@@ -183,11 +183,23 @@ def compare(op: str, left: Value, right: Value) -> bool | None:
     if isinstance(left, bool) or isinstance(right, bool):
         if not (isinstance(left, bool) and isinstance(right, bool)):
             left, right = _as_bool(left), _as_bool(right)
-        if op == "=":
-            return left == right
-        if op == "!=":
-            return left != right
-        raise TypeError(f"booleans do not support {op!r}")
+        if not (isinstance(left, bool) and isinstance(right, bool)):
+            raise TypeError(f"cannot compare {type_name(left)} with {type_name(right)}")
+        # DPM-XL orders Booleans with false before true.
+        match op:
+            case "=":
+                return left == right
+            case "!=":
+                return left != right
+            case "<":
+                return left < right
+            case "<=":
+                return left <= right
+            case ">":
+                return left > right
+            case ">=":
+                return left >= right
+        raise ValueError(f"unknown comparison {op!r}")
     if isinstance(left, Number) or isinstance(right, Number):
         raise TypeError(
             f"cannot compare {type_name(left)} with {type_name(right)} using {op!r}"

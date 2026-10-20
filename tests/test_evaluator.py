@@ -129,7 +129,9 @@ def test_if_then_else_and_items() -> None:
     explanation = explain(_traced(result), rule, result.failures[0].key)
     assert explanation.summary == "10 should equal 9: difference 1"
     other = rule.replace("[eba_AS:x2]", "[eba_AS:x1]")
-    assert evaluate_rule(other, provider).status == "not_applicable"
+    # DPM-XL 8.1.6: without else, a Boolean then yields true when the
+    # condition is false or null.
+    assert evaluate_rule(other, provider).status == "passed"
 
 
 def test_open_table_where_group_by_and_sub() -> None:

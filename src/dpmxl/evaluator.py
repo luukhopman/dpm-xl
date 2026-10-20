@@ -220,31 +220,48 @@ class Evaluator:
             case SetLiteral():
                 raise EvaluationError("a set can only follow 'in'")
             case If(condition=condition, then=then, otherwise=otherwise):
-                operands = [
+                return conditional(
                     self.evaluate(condition, context, bindings),
                     self.evaluate(then, context, bindings),
-                ]
-                if otherwise is not None:
-                    operands.append(self.evaluate(otherwise, context, bindings))
-                return combine(operands, _choose)
+                    self.evaluate(otherwise, context, bindings)
+                    if otherwise is not None
+                    else None,
+                    boolean_then=is_boolean(then),
+                )
             case Call():
                 return self._call(node, context, bindings)
             case Where(operand=operand, condition=condition):
                 return self._where(
-                    self.evaluate(operand, context, bindings), condition, context
+                    self._clause_operand(operand, context, bindings), condition, context
                 )
             case Get(operand=operand, name=name):
                 return self._get(self.evaluate(operand, context, bindings), name)
             case Sub(operand=operand, name=name, value=value):
                 fixed = self.evaluate(value, context, bindings).single()
                 return self._sub(
-                    self.evaluate(operand, context, bindings),
+                    self._clause_operand(operand, context, bindings),
                     name,
                     fixed.value if fixed else None,
                 )
             case Rename(operand=operand, pairs=pairs):
                 return self._rename(self.evaluate(operand, context, bindings), pairs)
         raise UnsupportedError(f"unsupported expression node {type(node).__name__}")
+
+    def _clause_operand(
+        self,
+        operand: Node,
+        context: SelectionSpec,
+        bindings: Mapping[str, Value] | None,
+    ) -> Recordset:
+        # DPM-XL 3.2: a where or sub clause on a selection overrides the
+        # with-level where instead of adding to it.
+        if not isinstance(operand, Selection) or not self._context_conditions:
+            return self.evaluate(operand, context, bindings)
+        saved, self._context_conditions = self._context_conditions, []
+        try:
+            return self.evaluate(operand, context, bindings)
+        finally:
+            self._context_conditions = saved
 
     # Selections ---------------------------------------------------------
 
@@ -274,15 +291,14 @@ class Evaluator:
                 raise EvaluationError(str(error)) from error
             self._selection_cache[cache_key] = points
         axis_keys: list[str] = []
-        for axis_name, key in AXIS_KEYS.items():
-            selector = spec.axis(axis_name)
-            if selector is not None and not selector.is_single:
+        for key in AXIS_KEYS.values():
+            # DPM-XL 3.1.6: r, c and s are keys only when more than one row,
+            # column or sheet is present in the selection.
+            codes = {point.coordinate(key) for point in points}
+            codes.discard("*")
+            codes.discard(None)
+            if len(codes) > 1:
                 axis_keys.append(key)
-            elif selector is None:
-                codes = {point.coordinate(key) for point in points}
-                codes.discard("*")
-                if len(codes) > 1:
-                    axis_keys.append(key)
         open_keys: list[str] = []
         for point in points:
             open_keys.extend(name for name in point.keys if name not in open_keys)
@@ -378,11 +394,13 @@ class Evaluator:
                 raise EvaluationError(f"unknown key component or parameter {name!r}")
             return data.map(lambda _value: value)
         position = data.keys.index(key)
+        # DPM-XL 11.3.6: records with a null fact value are omitted.
         return Recordset(
             data.keys,
             {
                 record_key: Record(_value_of_key(record_key[position]), record.points)
                 for record_key, record in data.records.items()
+                if record.value is not None
             },
         )
 
@@ -490,7 +508,8 @@ def _binary(op: str) -> Callable[[list[Value]], Value]:
             if op == "*":
                 return a * b
             if b.value == 0:
-                return None
+                # DPM-XL 4.3.4.6: a zero denominator is a run-time error.
+                raise EvaluationError("division by zero")
             return a / b
 
         return arithmetic
@@ -517,17 +536,97 @@ def _binary(op: str) -> Callable[[list[Value]], Value]:
     raise UnsupportedError(f"unknown operator {op!r}")
 
 
-def _choose(values: list[Value]) -> Value:
-    condition = values[0]
-    if condition is None:
-        return None
-    if not isinstance(condition, bool):
-        raise EvaluationError(
-            f"if needs a boolean condition, found {type_name(condition)}"
+def is_boolean(node: Node) -> bool:
+    """Whether an expression is statically of the Boolean data type.
+
+    Returns:
+        bool: True for comparisons, logical operators, ``in``, ``isnull``,
+        ``match``, Boolean literals and conditionals of those.
+    """
+    match node:
+        case Binary(op=op):
+            return op in _COMPARISONS or op in _BOOLEAN
+        case Unary(op="not") | In():
+            return True
+        case Call(name=name):
+            return name in {"isnull", "match"}
+        case Literal_(kind="boolean"):
+            return True
+        case If(then=then):
+            return is_boolean(then)
+        case With(body=body):
+            return is_boolean(body)
+    return False
+
+
+def conditional(
+    condition: Recordset,
+    then: Recordset,
+    otherwise: Recordset | None,
+    *,
+    boolean_then: bool,
+) -> Recordset:
+    """Evaluate ``if`` with the DPM-XL 8.1 semantics.
+
+    A key-less condition returns the whole ``then`` or ``else`` operand. A
+    keyed condition yields one record per condition record, taking the value
+    of the matching ``then`` or ``else`` record. A null condition takes the
+    ``else`` branch. Without ``else``, the result is ``true`` when ``then`` is
+    Boolean and null otherwise.
+
+    Returns:
+        Recordset: The result.
+
+    Raises:
+        EvaluationError: For a non-Boolean condition or branches whose keys
+            are not part of the condition's keys.
+    """
+    fallback: Value = True if boolean_then else None
+
+    def verdict(value: Value) -> Value:
+        if value is not None and not isinstance(value, bool):
+            raise EvaluationError(
+                f"if needs a boolean condition, found {type_name(value)}"
+            )
+        return value
+
+    if not condition.keys:
+        record = condition.single()
+        value = verdict(record.value if record else None)
+        if value is True:
+            return then
+        if otherwise is not None:
+            return otherwise
+        if then.keys:
+            return Recordset(
+                then.keys,
+                {
+                    key: Record(fallback, item.points)
+                    for key, item in then.records.items()
+                },
+            )
+        return Recordset.scalar(fallback, record.points if record else ())
+    for branch in (then, otherwise):
+        if branch is not None and not set(branch.keys) <= set(condition.keys):
+            raise EvaluationError(
+                "if branches must have the condition's keys or fewer, found "
+                f"({', '.join(branch.keys)}) for ({', '.join(condition.keys)})"
+            )
+    result = Recordset(condition.keys)
+    for key, record in condition.records.items():
+        value = verdict(record.value)
+        branch = then if value is True else otherwise
+        if branch is None:
+            result.records[key] = Record(fallback, record.points)
+            continue
+        binding = dict(zip(condition.keys, key, strict=True))
+        matches = branch.lookup(binding)
+        chosen = matches[0] if matches else None
+        result.records[key] = Record(
+            chosen.value if chosen else None,
+            (record.points, chosen.points) if chosen else record.points,
         )
-    if condition:
-        return values[1]
-    return values[2] if len(values) > 2 else None
+    return result
 
 
 def _membership(value: Value, members: list[Value]) -> Value:
@@ -565,13 +664,15 @@ def _aggregate(
         points = unique_points(point for record in records for point in record.points)
         result.records[key] = Record(_reduce(name, values, len(records)), points)
     if not group_keys and not groups:
-        result.records[()] = Record(None)
+        # DPM-XL 7.3: count is the number of records; other aggregates of
+        # nothing are null.
+        result.records[()] = Record(Number(Decimal(0)) if name == "count" else None)
     return result
 
 
 def _reduce(name: str, values: list[Value], record_count: int) -> Value:
     if name == "count":
-        return Number(Decimal(len(values))) if record_count else None
+        return Number(Decimal(len(values)))
     if not values:
         return None
     if name in {"max", "min"} and not all(

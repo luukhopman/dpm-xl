@@ -127,17 +127,10 @@ def combine(
     Raises:
         EvaluationError: On incompatible key structures or oversized joins.
     """
+    check_structure(operands)
     fast = _combine_aligned(operands, function)
     if fast is not None:
         return fast
-    keyed = [operand for operand in operands if operand.keys]
-    for index, left in enumerate(keyed):
-        for right in keyed[index + 1 :]:
-            if not set(left.keys) & set(right.keys):
-                raise EvaluationError(
-                    "operands have unrelated keys "
-                    f"({', '.join(left.keys)}) and ({', '.join(right.keys)})"
-                )
     keys: list[str] = []
     for operand in operands:
         keys.extend(key for key in operand.keys if key not in keys)
@@ -173,6 +166,47 @@ def combine(
             function(values), points
         )
     return result
+
+
+STANDARD_KEYS = frozenset({"r", "c", "s"})
+
+
+def check_structure(operands: Sequence[Recordset]) -> None:
+    """Enforce DPM-XL 2.2.3.1 for operators over several record sets.
+
+    Keyed operands must have exactly the same keys, or one operand's keys
+    (the reference) must be a superset of every other's. Standard keys
+    (``r``, ``c``, ``s``) shared with the reference must contain the same
+    values: ``{tT1, r010-020} + {tT1, r030-040}`` is an error, not empty.
+
+    Raises:
+        EvaluationError: When the structures are incompatible.
+    """
+    keyed = [operand for operand in operands if operand.keys]
+    if len(keyed) < 2:
+        return
+    reference = max(keyed, key=lambda operand: len(operand.keys))
+    reference_keys = set(reference.keys)
+    for operand in keyed:
+        if operand is reference:
+            continue
+        if not set(operand.keys) <= reference_keys:
+            raise EvaluationError(
+                "operands have incompatible keys "
+                f"({', '.join(operand.keys)}) and ({', '.join(reference.keys)})"
+            )
+        common = [key for key in operand.keys if key in STANDARD_KEYS]
+        if not common or not operand.records or not reference.records:
+            continue
+        if _projection(operand, common) != _projection(reference, common):
+            raise EvaluationError(
+                f"standard keys {', '.join(common)} do not contain the same values"
+            )
+
+
+def _projection(data: Recordset, keys: Sequence[str]) -> set[tuple[Hashable, ...]]:
+    positions = [data.keys.index(key) for key in keys]
+    return {tuple(key[position] for position in positions) for key in data.records}
 
 
 def _combine_aligned(
@@ -303,10 +337,12 @@ def resolve_key(name: str, keys: Iterable[str]) -> str | None:
 
 
 __all__ = [
+    "STANDARD_KEYS",
     "EvaluationError",
     "Record",
     "Recordset",
     "UnsupportedError",
+    "check_structure",
     "combine",
     "iter_points",
     "resolve_key",

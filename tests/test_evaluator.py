@@ -49,7 +49,10 @@ def test_sum_rule_passes_and_fails_per_column() -> None:
     assert {point.row for point in failure.points} == {"0010", "0020", "0030"}
     explanation = explain(_traced(result), expression, failure.key)
     assert explanation.filled == "1,204 = 1,180 + 31"
-    assert explanation.summary == "1,204 should equal 1,211 (1,180 + 31): difference 7"
+    assert (
+        explanation.summary
+        == "1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision"
+    )
     assert explanation.direction == "too_low"
     assert explanation.tolerance == "1.5"
     assert explanation.left is not None and explanation.left.single_cell
@@ -283,7 +286,10 @@ def test_explanations_read_as_sentences() -> None:
     explanation = explain(_traced(result), rule, result.failures[0].key)
     assert explanation.filled == "100 = 150 \u2212 60"
     assert explanation.formula == "{r0010} = {r0020} + {r0030}"
-    assert explanation.summary == "100 should equal 90 (150 \u2212 60): difference 10"
+    assert (
+        explanation.summary
+        == "100 should equal 90 (150 \u2212 60): difference 10, at least 8.5 given the reported precision"
+    )
 
     ceiling = "with {tC_01.00, c0010, default: 0, interval: false}: {r0020} <= {r0010}"
     result = evaluate_rule(ceiling, provider)
@@ -319,3 +325,39 @@ def test_zero_runs_collapse_and_conditions_have_messages() -> None:
     explanation = explain(_traced(result), member, result.failures[0].key)
     assert explanation.kind == "membership"
     assert explanation.summary == "17 is not one of 1, 2"
+
+
+def test_interval_arithmetic_follows_eurofiling() -> None:
+    # iaf:numeric-multiply: |A*dB| + |B*dA| + dA*dB
+    product = Number.of(1_635_500, 0) * Number.of("0.4048", 4)
+    assert product.value == Decimal("662050.4000")
+    assert product.tolerance == Decimal("0.5") * Decimal("0.4048") + Decimal(
+        "1635500"
+    ) * Decimal("0.00005") + Decimal("0.5") * Decimal("0.00005")
+    # iaf:numeric-divide: largest deviation of the four endpoint quotients
+    quotient = Number.of(100, 0) / Number.of(4, 0)
+    assert quotient.value == 25
+    assert round(quotient.tolerance, 20) == round(
+        abs(Decimal(25) - Decimal("100.5") / Decimal("3.5")), 20
+    )
+    # A divisor interval spanning zero skips the zero endpoint.
+    assert (Number.of(1, 0) / Number.of("0.5", 0)).tolerance == Decimal("1.5")
+
+
+def test_explanations_show_each_sides_interval() -> None:
+    provider = closed(
+        {
+            ("0010", "0010"): 1204,
+            ("0020", "0010"): 1180,
+            ("0030", "0010"): 31,
+        }
+    )
+    rule = "with {tC_01.00, c0010, default: 0, interval: true}: {r0010} = {r0020} + {r0030}"
+    result = evaluate_rule(rule, provider)
+    explanation = explain(_traced(result), rule, result.failures[0].key)
+    assert explanation.left is not None and explanation.right is not None
+    assert (explanation.left.low, explanation.left.high) == ("1,203.5", "1,204.5")
+    assert explanation.left.threshold == "0.5"
+    assert (explanation.right.low, explanation.right.high) == ("1,210", "1,212")
+    assert explanation.right.threshold == "1"
+    assert explanation.gap == "5.5"

@@ -99,6 +99,10 @@ class Side:
     points: tuple[DataPoint, ...]
     terms: int
     """Number of operands (cells, aggregates, parameters) on this side."""
+    threshold: str | None = None
+    """Half-width of the side's interval from reported precision; None if exact."""
+    low: str | None = None
+    high: str | None = None
 
     @property
     def single_cell(self) -> bool:
@@ -122,6 +126,9 @@ class Explanation:
     verb: str | None = None
     left: Side | None = None
     right: Side | None = None
+    gap: str | None = None
+    """How far apart the two sides' intervals are: the smallest difference
+    that remains when every value may vary within its reported precision."""
     direction: Direction | None = None
     """Which side is larger (``too_high``: left exceeds right), not a verdict
     on which value is wrong."""
@@ -177,16 +184,21 @@ def _comparison(
     summary = f"{left.value} {verb} {right.value}"
     if right.terms > 1 or (right.filled != right.value and right.terms):
         summary += f" ({right.filled})"
-    difference = direction = tolerance = None
+    difference = direction = tolerance = gap = None
     if isinstance(left_value, Number) and isinstance(right_value, Number):
         delta = left_value.value - right_value.value
         difference = format_decimal(abs(delta))
         direction = _direction(node.op, delta)
+        width = left_value.tolerance + right_value.tolerance
         if delta:
             # A failed rule shows the values disagree, not which one is wrong.
             summary += f": difference {difference}"
-        width = left_value.tolerance + right_value.tolerance
-        tolerance = format_decimal(_round_tolerance(width)) if width else None
+        if width:
+            tolerance = format_decimal(_round_threshold(width))
+            distance = _gap(node.op, left_value, right_value)
+            if distance is not None and distance > 0:
+                gap = format_decimal(_round_threshold(distance, at_least=distance))
+                summary += f", at least {gap} given the reported precision"
     return Explanation(
         formula=formula,
         filled=filled,
@@ -201,20 +213,45 @@ def _comparison(
         right=right,
         direction=direction,
         tolerance=tolerance,
+        gap=gap,
     )
 
 
-def _round_tolerance(width: Decimal) -> Decimal:
+def _round_threshold(width: Decimal, *, at_least: Decimal | None = None) -> Decimal:
     """Round an interval width for display: 82.477425 reads 82.5, 0.0001 stays.
+
+    Args:
+        width: The exact width.
+        at_least: Keep at least this value's integer part (for gaps).
 
     Returns:
         Decimal: The width to two significant digits, at least one decimal.
     """
     if not width:
         return width
+    if at_least is not None and abs(at_least) >= 1:
+        return round(width, 1).normalize()
     exponent = width.adjusted()
     places = max(1, 1 - exponent)
     return round(width, places)
+
+
+def _gap(op: str, left: Number, right: Number) -> Decimal | None:
+    """Distance between the sides' intervals in the direction the rule forbids.
+
+    Returns:
+        Decimal | None: Positive when no values within the reported precision
+        satisfy the rule.
+    """
+    width = left.tolerance + right.tolerance
+    match op:
+        case "=":
+            return abs(left.value - right.value) - width
+        case "<=" | "<":
+            return (left.value - right.value) - width
+        case ">=" | ">":
+            return (right.value - left.value) - width
+    return None
 
 
 def _direction(op: str, delta: Decimal) -> Direction | None:
@@ -279,13 +316,25 @@ class _Formatter:
 
     def side(self, node: Node) -> Side:
         records = self.records(node)
-        value = format_value(records[0].value) if len(records) == 1 else "∅"
+        value = format_value(records[0].value) if len(records) == 1 else "\u2205"
+        number = records[0].value if len(records) == 1 else None
+        threshold = low = high = None
+        if isinstance(number, Number) and number.tolerance:
+            shown = _round_threshold(number.tolerance)
+            threshold = format_decimal(shown)
+            exponent = shown.as_tuple().exponent
+            places = max(-exponent, 0) if isinstance(exponent, int) else 0
+            low = format_decimal(round(number.low, places))
+            high = format_decimal(round(number.high, places))
         return Side(
             formula=self.render(node, filled=False),
             filled=self.render(node, filled=True),
             value=value,
             points=self.points(node),
             terms=sum(1 for leaf in _leaves(node) if not isinstance(leaf, Literal_)),
+            threshold=threshold,
+            low=low,
+            high=high,
         )
 
     def failing(self, node: Node) -> Node | None:

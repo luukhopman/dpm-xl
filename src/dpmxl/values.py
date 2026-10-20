@@ -1,8 +1,15 @@
-"""Runtime values: numbers with interval tolerance, items, text, dates.
+"""Runtime values: numbers with interval thresholds, items, text, dates.
 
-A number carries a half-width ``tolerance``. Facts reported with XBRL
-``decimals`` get ``0.5 * 10**-decimals``; constants and defaults are exact.
-Selections evaluated with ``interval: false`` drop the tolerance, so their
+Numbers follow the Eurofiling interval arithmetic functions (``iaf:*``) that
+EBA validation rules are based on: a number is a value with a symmetric
+threshold, so it stands for the interval ``[value - t, value + t]``. Facts
+reported with XBRL ``decimals`` get ``t = 0.5 * 10**-decimals`` (``INF`` is
+exact); constants and defaults are exact. Sums and differences add
+thresholds, products use ``|A*dB| + |B*dA| + dA*dB``, quotients take the
+largest deviation of the endpoint quotients, ``abs`` and negation keep the
+threshold, and ``min``/``max`` keep the chosen value's threshold. Two numbers
+are equal when ``|a - b| <= ta + tb``, i.e. when their intervals overlap.
+Selections evaluated with ``interval: false`` drop the threshold, so their
 comparisons are exact.
 """
 
@@ -74,18 +81,26 @@ class Number:
         return Number(self.value - other.value, self.tolerance + other.tolerance)
 
     def __mul__(self, other: Number) -> Number:
-        """Multiply using interval bounds.
+        """Multiply as Eurofiling's ``iaf:numeric-multiply`` does.
+
+        The threshold is ``|A * dB| + |B * dA| + dA * dB``.
 
         Returns:
             Number: The result.
         """
-        if not self.tolerance and not other.tolerance:
-            return Number(self.value * other.value)
-        bounds = _products(self, other)
-        return _from_bounds(self.value * other.value, min(bounds), max(bounds))
+        threshold = (
+            abs(self.value * other.tolerance)
+            + abs(other.value * self.tolerance)
+            + self.tolerance * other.tolerance
+        )
+        return Number(self.value * other.value, threshold)
 
     def __truediv__(self, other: Number) -> Number:
-        """Divide using interval bounds.
+        """Divide as Eurofiling's ``iaf:numeric-divide`` does.
+
+        The threshold is the largest deviation of the four endpoint quotients
+        ``(A ± dA) / (B ± dB)`` from ``A / B``. An endpoint divisor of zero is
+        skipped rather than making the result unbounded.
 
         Returns:
             Number: The quotient.
@@ -100,13 +115,13 @@ class Number:
             value = self.value / other.value
             if not self.tolerance and not other.tolerance:
                 return Number(value)
-            if other.low <= 0 <= other.high:
-                # The divisor interval contains zero; keep the point value and
-                # treat the result as exact rather than unbounded.
-                return Number(value)
-            inverse = (1 / other.high, 1 / other.low)
-            bounds = [a * b for a in (self.low, self.high) for b in inverse]
-            return _from_bounds(value, min(bounds), max(bounds))
+            deviations = [
+                abs(value - numerator / denominator)
+                for numerator in (self.high, self.low)
+                for denominator in (other.high, other.low)
+                if denominator != 0
+            ]
+            return Number(value, max(deviations, default=ZERO))
 
     def __neg__(self) -> Number:
         """Negate the value.
@@ -123,14 +138,6 @@ class Number:
             Number: The result.
         """
         return Number(abs(self.value), self.tolerance)
-
-
-def _products(left: Number, right: Number) -> list[Decimal]:
-    return [a * b for a in (left.low, left.high) for b in (right.low, right.high)]
-
-
-def _from_bounds(value: Decimal, low: Decimal, high: Decimal) -> Number:
-    return Number(value, max(value - low, high - value))
 
 
 Value: TypeAlias = Number | Item | str | bool | date | None

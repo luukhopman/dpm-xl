@@ -24,10 +24,12 @@ overflow ``Decimal(38, 12)`` raises inside polars and falls back the same way.
 from __future__ import annotations
 
 import re
+from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from functools import cached_property
 from typing import Any, Literal, Protocol, cast
 
 import polars as pl
@@ -95,12 +97,26 @@ class FrameProvider(Protocol):
         ...
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Frame:
     """A record set: key names plus a frame of key and value columns."""
 
     keys: tuple[str, ...]
     df: pl.DataFrame
+
+    @cached_property
+    def kinds(self) -> frozenset[str]:
+        """Value columns holding at least one non-null value (one scan)."""
+        if not self.df.height:
+            return frozenset()
+        present = self.df.select(
+            [pl.col(column).is_not_null().any() for column in (NUM, TXT, FLAG)]
+        ).row(0)
+        return frozenset(
+            column
+            for column, found in zip((NUM, TXT, FLAG), present, strict=True)
+            if found
+        )
 
     @property
     def key_columns(self) -> list[str]:
@@ -237,12 +253,72 @@ class PointsFrameProvider:
 
 
 class FrameCache:
-    """Selection frames shared by every rule evaluated against one report."""
+    """Selection frames shared by every rule evaluated against one report.
 
-    def __init__(self) -> None:
-        """Create an empty cache."""
-        self.raw: dict[CellQuery, pl.DataFrame] = {}
-        self.frames: dict[SelectionSpec, Frame] = {}
+    Rules reuse the same selections, but on massive open tables a selection
+    can hold millions of rows, so the cache keeps at most ``max_rows`` rows
+    and evicts the least recently used selections beyond that.
+    """
+
+    def __init__(self, max_rows: int = 20_000_000) -> None:
+        """Create an empty cache.
+
+        Args:
+            max_rows: Total rows kept across cached selection frames.
+        """
+        self.max_rows = max_rows
+        self.raw: OrderedDict[CellQuery, pl.DataFrame] = OrderedDict()
+        self.frames: OrderedDict[SelectionSpec, Frame] = OrderedDict()
+        self._rows = 0
+
+    def get_raw(self, query: CellQuery) -> pl.DataFrame | None:
+        """Return a cached provider frame.
+
+        Returns:
+            pl.DataFrame | None: The frame, or ``None``.
+        """
+        frame = self.raw.get(query)
+        if frame is not None:
+            self.raw.move_to_end(query)
+        return frame
+
+    def get_frame(self, spec: SelectionSpec) -> Frame | None:
+        """Return a cached selection record set.
+
+        Returns:
+            Frame | None: The frame, or ``None``.
+        """
+        frame = self.frames.get(spec)
+        if frame is not None:
+            self.frames.move_to_end(spec)
+        return frame
+
+    def put_raw(self, query: CellQuery, frame: pl.DataFrame) -> None:
+        """Cache a provider frame within the row budget."""
+        self.raw[query] = frame
+        self._rows += frame.height
+        self._evict()
+
+    def put_frame(self, spec: SelectionSpec, frame: Frame) -> None:
+        """Cache a selection record set within the row budget."""
+        self.frames[spec] = frame
+        self._rows += frame.df.height
+        self._evict()
+
+    def _evict(self) -> None:
+        while self._rows > self.max_rows and (self.raw or self.frames):
+            store: OrderedDict[Any, Any] = (
+                self.raw if len(self.raw) >= len(self.frames) else self.frames
+            )
+            if not store:
+                store = self.frames if self.frames else self.raw
+            _key, evicted = store.popitem(last=False)
+            height = (
+                evicted.height
+                if isinstance(evicted, pl.DataFrame)
+                else evicted.df.height
+            )
+            self._rows -= height
 
 
 # Evaluation ------------------------------------------------------------------
@@ -346,19 +422,19 @@ class ColumnarEvaluator:
     def _selection(self, spec: SelectionSpec) -> Frame:
         if not spec.table:
             raise EvaluationError(f"selection {spec.text()} has no table")
-        cached = self.cache.frames.get(spec)
+        cached = self.cache.get_frame(spec)
         if cached is not None:
             return cached
         query = CellQuery(spec.table, spec.rows, spec.columns, spec.sheets)
-        raw = self.cache.raw.get(query)
+        raw = self.cache.get_raw(query)
         if raw is None:
             try:
                 raw = self.provider.select_frame(query)
             except LookupError as error:
                 raise EvaluationError(str(error)) from error
-            self.cache.raw[query] = raw
+            self.cache.put_raw(query, raw)
         frame = _build_selection(raw, spec)
-        self.cache.frames[spec] = frame
+        self.cache.put_frame(spec, frame)
         return frame
 
     # Calls ------------------------------------------------------------------
@@ -429,7 +505,7 @@ class ColumnarEvaluator:
             frame.df.filter(~_is_null()).with_columns(
                 pl.lit(None, DEC).alias(NUM),
                 pl.lit(None, DEC).alias(THR),
-                pl.col(_key(key)).alias(TXT),
+                _key_text_column(key).alias(TXT),
                 pl.lit(None, pl.Boolean).alias(FLAG),
             ),
         )
@@ -439,7 +515,7 @@ class ColumnarEvaluator:
         if key is None:
             raise EvaluationError(f"unknown key component {name!r}")
         fixed = _literal_key(value, self.provider)
-        df = frame.df.filter(_key_equals(pl.col(_key(key)), fixed)).drop(_key(key))
+        df = frame.df.filter(_key_equals(_key_text_column(key), fixed)).drop(_key(key))
         return Frame(tuple(item for item in frame.keys if item != key), df)
 
     def _rename(self, frame: Frame, pairs: tuple[tuple[str, str], ...]) -> Frame:
@@ -564,6 +640,60 @@ def _check_structure(frames: Sequence[Frame]) -> None:
             )
 
 
+def _aligned(frames: Sequence[Frame]) -> tuple[tuple[str, ...], pl.DataFrame] | None:
+    """Combine operands column-wise when their rows already line up.
+
+    Selections from one open table come back in the same key order, so an
+    operator over them needs no join. Operands qualify when every keyed
+    operand has the same keys, the same height and equal key columns
+    (checked, not assumed); scalars broadcast. Otherwise ``None``.
+
+    Returns:
+        tuple[tuple[str, ...], pl.DataFrame] | None: Keys and the frame.
+    """
+    keyed = [frame for frame in frames if frame.keys]
+    if len(keyed) < 2:
+        return None
+    first = keyed[0]
+    columns = first.key_columns
+    for frame in keyed[1:]:
+        if frame.keys != first.keys or frame.df.height != first.df.height:
+            return None
+    reference = first.df.select(columns)
+    for frame in keyed[1:]:
+        if frame.df is first.df:
+            continue
+        if not frame.df.select(columns).equals(reference):
+            return None
+    parts: list[pl.Series | pl.Expr] = list(reference.get_columns())
+    for index, frame in enumerate(frames):
+        if frame.keys:
+            parts.extend(
+                frame.df.get_column(column).alias(f"{column}_{index}")
+                for column in VALUE_COLUMNS
+            )
+        else:
+            row = (
+                frame.df.row(0, named=True)
+                if frame.df.height
+                else dict.fromkeys(VALUE_COLUMNS)
+            )
+            parts.extend(
+                pl.repeat(
+                    row[column],
+                    first.df.height,
+                    dtype=_VALUE_SCHEMA[column],
+                    eager=True,
+                ).alias(f"{column}_{index}")
+                for column in VALUE_COLUMNS
+            )
+    for frame in frames:
+        if not frame.keys and not frame.df.height:
+            # An empty scalar operand: nothing to combine.
+            return first.keys, pl.DataFrame(parts).head(0)
+    return first.keys, pl.DataFrame(parts)
+
+
 def _joined(frames: Sequence[Frame]) -> tuple[tuple[str, ...], pl.DataFrame]:
     """Natural-join frames; value columns are suffixed with ``_<index>``.
 
@@ -574,6 +704,9 @@ def _joined(frames: Sequence[Frame]) -> tuple[tuple[str, ...], pl.DataFrame]:
         EvaluationError: On operands with unrelated keys.
     """
     _check_structure(frames)
+    aligned = _aligned(frames)
+    if aligned is not None:
+        return aligned
     keys: list[str] = []
     result: pl.DataFrame | None = None
     for index, frame in enumerate(frames):
@@ -627,10 +760,7 @@ def _with_values(frame: Frame, **values: pl.Expr) -> Frame:
 
 def _require_numeric(frames: Sequence[Frame], operation: str) -> None:
     for frame in frames:
-        if frame.df.height and (
-            frame.df.get_column(TXT).is_not_null().any()
-            or frame.df.get_column(FLAG).is_not_null().any()
-        ):
+        if frame.kinds & {TXT, FLAG}:
             raise EvaluationError(f"{operation} needs numbers")
 
 
@@ -639,10 +769,7 @@ def _require_numeric(frames: Sequence[Frame], operation: str) -> None:
 
 def _unary(op: str, frame: Frame) -> Frame:
     if op == "not":
-        if frame.df.height and (
-            frame.df.get_column(NUM).is_not_null().any()
-            or frame.df.get_column(TXT).is_not_null().any()
-        ):
+        if frame.kinds & {NUM, TXT}:
             raise EvaluationError("not needs a boolean")
         return _with_values(frame, flag=~pl.col(FLAG))
     _require_numeric([frame], f"unary {op}")
@@ -668,10 +795,7 @@ def _binary(op: str, left: Frame, right: Frame) -> Frame:
         return _divide(frames)
     if op in {"and", "or", "xor"}:
         for frame in frames:
-            if frame.df.height and (
-                frame.df.get_column(NUM).is_not_null().any()
-                or frame.df.get_column(TXT).is_not_null().any()
-            ):
+            if frame.kinds & {NUM, TXT}:
                 raise EvaluationError(f"{op} needs booleans")
         a, b = _c(FLAG, 0), _c(FLAG, 1)
         if op == "and":
@@ -820,9 +944,7 @@ def _conditional(
         EvaluationError: For non-Boolean conditions or incompatible branches.
     """
     df = condition.df
-    if df.height and (
-        df.get_column(NUM).is_not_null().any() or df.get_column(TXT).is_not_null().any()
-    ):
+    if condition.kinds & {NUM, TXT}:
         raise EvaluationError("if needs a boolean condition")
     fallback = {NUM: None, THR: None, TXT: None, FLAG: True if boolean_then else None}
     if not condition.keys:
@@ -906,7 +1028,7 @@ def _membership(
         frame.df.height
         and members
         and any(m[NUM] is not None for m in members)
-        and frame.df.get_column(TXT).is_not_null().any()
+        and TXT in frame.kinds
     ):
         raise EvaluationError("cannot compare values of different types")
     found = pl.any_horizontal(tests) if tests else pl.lit(False)
@@ -942,7 +1064,7 @@ def _match(frame: Frame, pattern: Frame) -> Frame:
         re.compile(text)
     except re.error as error:
         raise EvaluationError(f"invalid match pattern: {error}") from error
-    if frame.df.height and frame.df.get_column(NUM).is_not_null().any():
+    if NUM in frame.kinds:
         raise ColumnarUnsupported("match on numbers")
     try:
         anchored = f"^(?:{text})$"
@@ -955,7 +1077,7 @@ def _match(frame: Frame, pattern: Frame) -> Frame:
 
 
 def _length(frame: Frame) -> Frame:
-    if frame.df.height and frame.df.get_column(NUM).is_not_null().any():
+    if NUM in frame.kinds:
         raise ColumnarUnsupported("len of numbers")
     return _with_values(
         frame,
@@ -1009,14 +1131,7 @@ def _aggregate(name: str, frame: Frame, group_by: tuple[str, ...] | None) -> Fra
             )
         group_keys.append(key)
     df = frame.df
-    if (
-        name != "count"
-        and df.height
-        and (
-            df.get_column(TXT).is_not_null().any()
-            or df.get_column(FLAG).is_not_null().any()
-        )
-    ):
+    if name != "count" and frame.kinds & {TXT, FLAG}:
         if name in {"max", "min"}:
             raise ColumnarUnsupported("max/min of text")
         raise EvaluationError(f"{name} needs numbers")
@@ -1123,7 +1238,12 @@ def _key_column(name: str, keys: Sequence[str]) -> pl.Expr:
     key = resolve_key(name, keys)
     if key is None:
         raise EvaluationError(f"unknown key component or parameter {name!r}")
-    return pl.col(_key(key))
+    return _key_text_column(key)
+
+
+def _key_text_column(key: str) -> pl.Expr:
+    # Providers may store key columns as categoricals; string matching needs text.
+    return pl.col(_key(key)).cast(pl.String)
 
 
 # Rule evaluation -----------------------------------------------------------------
@@ -1179,9 +1299,7 @@ def evaluate_rule_columnar(
     except pl.exceptions.ComputeError as error:
         raise ColumnarUnsupported(f"polars: {error}") from error
     df = frame.df
-    if df.height and (
-        df.get_column(NUM).is_not_null().any() or df.get_column(TXT).is_not_null().any()
-    ):
+    if frame.kinds & {NUM, TXT}:
         return ColumnarResult("error", message="rule yields values, not booleans")
     flags = df.get_column(FLAG) if df.height else pl.Series(FLAG, [], dtype=pl.Boolean)
     passed = int(flags.fill_null(False).sum())

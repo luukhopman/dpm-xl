@@ -52,11 +52,11 @@ ignore = [
 convention = "google"
 
 [tool.ty.src]
-include = ["dpmxl", "tests"]
+include = ["src", "tests"]
 
 [tool.uv.build-backend]
 module-name = "dpmxl"
-module-root = ""
+module-root = "src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

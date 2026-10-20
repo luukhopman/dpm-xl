@@ -49,7 +49,7 @@ def test_sum_rule_passes_and_fails_per_column() -> None:
     assert {point.row for point in failure.points} == {"0010", "0020", "0030"}
     explanation = explain(_traced(result), expression, failure.key)
     assert explanation.filled == "1,204 = 1,180 + 31"
-    assert explanation.summary == "1,204 should equal 1,211 (1,180 + 31): 7 too low"
+    assert explanation.summary == "1,204 should equal 1,211 (1,180 + 31): difference 7"
     assert explanation.direction == "too_low"
     assert explanation.tolerance == "1.5"
     assert explanation.left is not None and explanation.left.single_cell
@@ -124,7 +124,7 @@ def test_if_then_else_and_items() -> None:
     result = evaluate_rule(rule, provider)
     assert result.status == "failed"
     explanation = explain(_traced(result), rule, result.failures[0].key)
-    assert explanation.summary == "10 should equal 9: 1 too high"
+    assert explanation.summary == "10 should equal 9: difference 1"
     other = rule.replace("[eba_AS:x2]", "[eba_AS:x1]")
     assert evaluate_rule(other, provider).status == "not_applicable"
 
@@ -283,13 +283,13 @@ def test_explanations_read_as_sentences() -> None:
     explanation = explain(_traced(result), rule, result.failures[0].key)
     assert explanation.filled == "100 = 150 \u2212 60"
     assert explanation.formula == "{r0010} = {r0020} + {r0030}"
-    assert explanation.summary == "100 should equal 90 (150 \u2212 60): 10 too high"
+    assert explanation.summary == "100 should equal 90 (150 \u2212 60): difference 10"
 
     ceiling = "with {tC_01.00, c0010, default: 0, interval: false}: {r0020} <= {r0010}"
     result = evaluate_rule(ceiling, provider)
     explanation = explain(_traced(result), ceiling, result.failures[0].key)
     assert explanation.verb == "should not exceed"
-    assert explanation.summary == "150 should not exceed 100: 50 too high"
+    assert explanation.summary == "150 should not exceed 100: difference 50"
 
 
 def test_zero_runs_collapse_and_conditions_have_messages() -> None:

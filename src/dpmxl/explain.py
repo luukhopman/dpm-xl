@@ -2,7 +2,7 @@
 
 For ``{r0010} = {r0020} + {r0030}`` failing at column ``0010``:
 
-* ``summary``: ``1,204 should equal 1,197 (1,180 + 17): 7 too high``;
+* ``summary``: ``1,204 should equal 1,197 (1,180 + 17): difference 7``;
 * ``filled``: ``1,204 = 1,180 + 17``;
 * ``left`` and ``right``: each side's formula, value, filled text and cells.
 
@@ -123,6 +123,8 @@ class Explanation:
     left: Side | None = None
     right: Side | None = None
     direction: Direction | None = None
+    """Which side is larger (``too_high``: left exceeds right), not a verdict
+    on which value is wrong."""
     tolerance: str | None = None
 
 
@@ -180,10 +182,9 @@ def _comparison(
         delta = left_value.value - right_value.value
         difference = format_decimal(abs(delta))
         direction = _direction(node.op, delta)
-        if direction is not None and delta:
-            summary += (
-                f": {difference} {'too high' if direction == 'too_high' else 'too low'}"
-            )
+        if delta:
+            # A failed rule shows the values disagree, not which one is wrong.
+            summary += f": difference {difference}"
         width = left_value.tolerance + right_value.tolerance
         tolerance = format_decimal(_round_tolerance(width)) if width else None
     return Explanation(

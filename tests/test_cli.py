@@ -61,4 +61,4 @@ def test_eval_explains_failures(tmp_path, capsys) -> None:
     output = capsys.readouterr().out
     assert code == 1
     assert "status: failed" in output
-    assert "1,204 should equal 1,197 (1,180 + 17): 7 too high" in output
+    assert "1,204 should equal 1,197 (1,180 + 17): difference 7" in output

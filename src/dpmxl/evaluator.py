@@ -838,10 +838,19 @@ class RuleResult:
 
 
 @lru_cache(maxsize=32_768)
-def _parse_cached(expression: str) -> Node:
-    # Trees are immutable and traces key nodes per evaluation, so one parsed
-    # tree can serve every report a rule is evaluated against.
+def parse_cached(expression: str) -> Node:
+    """Parse an expression once and reuse the tree.
+
+    Trees are immutable and traces key nodes per evaluation, so one parsed
+    tree can serve every report a rule is evaluated against.
+
+    Returns:
+        Node: The expression tree.
+    """
     return parse(expression)
+
+
+_parse_cached = parse_cached
 
 
 def evaluate_rule(
@@ -919,4 +928,5 @@ __all__ = [
     "RuleResult",
     "SelectionCache",
     "evaluate_rule",
+    "parse_cached",
 ]

@@ -17,6 +17,7 @@ from .evaluator import (
     RuleResult,
     SelectionCache,
     evaluate_rule,
+    parse_cached,
 )
 from .explain import Explanation, Operand, explain
 from .parser import DpmXlSyntaxError, parse, parse_selection
@@ -73,6 +74,7 @@ __all__ = [
     "iter_points",
     "normalize_code",
     "parse",
+    "parse_cached",
     "parse_selection",
     "references",
     "reported_templates",

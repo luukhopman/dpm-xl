@@ -97,3 +97,33 @@ def test_columnar_agrees_with_reference(expression: str) -> None:
             for key in columnar.failing_frame.iter_rows(named=True)
         )
         assert every == expected
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "with {tT, c*, default: 0, interval: true}: {r0010} = {r0020} + {r0030}",
+        "with {tT, c*}: {r0020} < {r0030}",
+        "{tT, r*, c0010} < {tONE, r*, c0010} * 10",
+        "{tT, r*, c0010} + {tT, r*, c0020} > 200",
+        "with {tT, r0010, default: 0}: if {c*} > 200 then {c*} > 1000 else {c*} < 0 endif",
+    ],
+)
+def test_only_keys_keeps_the_failing_records_unchanged(expression: str) -> None:
+    provider = data()
+    full = evaluate_rule(expression, provider)
+    assert full.failures, "the case must fail to be meaningful"
+    only = {
+        axis: {
+            code
+            for o in full.failures
+            if (code := canonical_key(o.key)[axis]) is not None
+        }
+        for axis in ("r", "c", "s")
+        if all(axis in o.key for o in full.failures)
+    }
+    restricted = evaluate_rule(expression, provider, only_keys=only)
+    assert [(o.key, o.points) for o in restricted.failures] == [
+        (o.key, o.points) for o in full.failures
+    ]
+    assert len(restricted.outcomes) <= len(full.outcomes)

@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 import re
 import statistics
-from collections.abc import Callable, Hashable, Mapping
+from collections.abc import Callable, Collection, Hashable, Mapping
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -127,6 +127,7 @@ class Evaluator:
         *,
         trace: bool = True,
         cache: SelectionCache | None = None,
+        only_keys: Mapping[str, Collection[str]] | None = None,
     ) -> None:
         """Bind the provider.
 
@@ -134,9 +135,14 @@ class Evaluator:
             provider: Report data access.
             trace: Keep intermediate record sets for explanations.
             cache: Selection results shared across rules of one report.
+            only_keys: Closed-axis key (``r``, ``c``, ``s``) to the normalized
+                codes whose records selections keep, applied once a
+                selection's keys are decided; used to explain a few known
+                failing records of a large selection.
         """
         self.provider = provider
         self.cache = cache
+        self.only_keys = only_keys
         self.trace_enabled = trace
         self._trace: dict[int, Recordset] = {}
         self._notes: list[str] = []
@@ -274,7 +280,8 @@ class Evaluator:
     def _selection(self, spec: SelectionSpec) -> Recordset:
         if not spec.table:
             raise EvaluationError(f"selection {spec.text()} has no table")
-        if self.cache is not None:
+        # Restricted selections are partial and must not be shared.
+        if self.cache is not None and not self.only_keys:
             cached = self.cache.recordsets.get(spec)
             if cached is None:
                 cached = self._build_selection(spec)
@@ -315,7 +322,18 @@ class Evaluator:
         )
         interval = bool(spec.interval)
         result = Recordset(keys)
+        kept = [
+            (position, self.only_keys[name])
+            for position, name in enumerate(axis_keys)
+            if self.only_keys and name in self.only_keys
+        ]
         for point in points:
+            if kept and any(
+                normalize_code(point.coordinate(axis_keys[position]) or "")
+                not in allowed
+                for position, allowed in kept
+            ):
+                continue
             value = point.value
             if value is None:
                 value = default
@@ -867,6 +885,7 @@ def evaluate_rule(
     precondition: str | Node | None = None,
     trace: bool = True,
     cache: SelectionCache | None = None,
+    only_keys: Mapping[str, Collection[str]] | None = None,
 ) -> RuleResult:
     """Evaluate a validation rule, honouring its precondition.
 
@@ -877,6 +896,10 @@ def evaluate_rule(
             unless it yields at least one true record.
         trace: Keep intermediate values for :func:`dpmxl.explain.explain`.
         cache: Selections shared by the rules of one report.
+        only_keys: Keep only records with these closed-axis key codes in
+            every selection (see :class:`Evaluator`); the precondition is
+            evaluated on all records. Not meaningful with aggregates, whose
+            totals would cover only the kept records.
 
     Returns:
         RuleResult: Status, per-record outcomes and the evaluation trace.
@@ -895,7 +918,9 @@ def evaluate_rule(
             if not any(record.value is True for record in pre.result.records.values()):
                 return RuleResult("not_applicable", message="precondition not met")
         node = _parse_cached(expression) if isinstance(expression, str) else expression
-        evaluation = Evaluator(provider, trace=trace, cache=cache).run(node)
+        evaluation = Evaluator(
+            provider, trace=trace, cache=cache, only_keys=only_keys
+        ).run(node)
     except UnsupportedError as error:
         return RuleResult("unsupported", message=str(error))
     except (EvaluationError, DpmXlSyntaxError) as error:

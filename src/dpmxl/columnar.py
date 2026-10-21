@@ -87,7 +87,10 @@ class FrameProvider(Protocol):
     times reported open key combinations) with columns ``cell`` (an opaque
     cell reference), ``r``, ``c``, ``s`` (raw coordinates or null),
     ``k:<code>`` for each open key, and the value columns ``num``, ``thr``,
-    ``txt``, ``flag`` (all null when the cell was not reported).
+    ``txt``, ``flag`` (all null when the cell was not reported). A cell and
+    open key combination appears at most once, and a cell's coordinates are
+    the same on every row. String columns may be categorical, which keeps
+    large selections compact.
     """
 
     def select_frame(self, query: CellQuery) -> pl.DataFrame:
@@ -574,21 +577,45 @@ def normalize_code_expr(column: pl.Expr) -> pl.Expr:
 
 
 def _build_selection(raw: pl.DataFrame, spec: SelectionSpec) -> Frame:
+    axes = list(AXIS_KEYS.values())
+    # Coordinates belong to cells, and a selection repeats each cell once per
+    # open key combination; decide axis keys, normalize codes and look for
+    # repeated keys on the distinct cells, not on every data point.
+    cells = (
+        raw.select(CELL, *axes).unique(subset=[CELL])
+        if CELL in raw.columns
+        else raw.select(*axes).unique()
+    )
     axis_keys: list[str] = []
-    for key in AXIS_KEYS.values():
+    for key in axes:
         # DPM-XL 3.1.6: a key only when more than one coordinate is present.
-        codes = raw.get_column(key).drop_nulls().unique().to_list()
+        codes = cells.get_column(key).drop_nulls().cast(pl.String).unique().to_list()
         if len([code for code in codes if code != "*"]) > 1:
             axis_keys.append(key)
     open_keys = [column[2:] for column in raw.columns if column.startswith("k:")]
     keys = (*axis_keys, *open_keys)
     missing = pl.all_horizontal(pl.col(column).is_null() for column in VALUE_COLUMNS)
-    key_exprs: list[pl.Expr] = [
-        normalize_code_expr(pl.col(key)).alias(_key(key)) for key in axis_keys
-    ]
-    key_exprs.extend(pl.col(_key(key)) for key in open_keys)
-    df = raw.select([*key_exprs, *VALUE_COLUMNS])
-    if df.height > 1:
+    df = raw
+    for key in axis_keys:
+        codes = cells.select(pl.col(key).unique()).with_columns(
+            normalize_code_expr(pl.col(key).cast(pl.String)).alias(_key(key))
+        )
+        df = df.join(codes, on=key, how="left", maintain_order="left")
+        cells = cells.join(codes, on=key, how="left", maintain_order="left")
+    df = df.select(
+        *[_key(key) for key in axis_keys],
+        *[_key(key) for key in open_keys],
+        *VALUE_COLUMNS,
+    )
+    # Records are unique per cell and open key combination, so keys repeat
+    # only when two cells share their key coordinates.
+    repeats = (
+        cells.height > 1
+        and cells.select([_key(key) for key in axis_keys]).is_duplicated().any()
+        if axis_keys
+        else cells.height > 1
+    )
+    if df.height > 1 and repeats:
         # Keep one record per key, preferring a reported value (as the
         # reference evaluator does when a key repeats).
         subset = [_key(key) for key in keys]

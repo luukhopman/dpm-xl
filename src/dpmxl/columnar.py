@@ -1274,6 +1274,10 @@ class ColumnarResult:
     failed: int = 0
     null: int = 0
     failing_keys: list[dict[str, str | None]] | None = None
+    """Keys of the first failing records, up to ``max_failing_keys``."""
+    failing_frame: pl.DataFrame | None = None
+    """Keys of every failing record, one string column per key name; ``None``
+    when the result has no keys."""
 
 
 def evaluate_rule_columnar(
@@ -1321,18 +1325,16 @@ def evaluate_rule_columnar(
     failed = int((~flags).fill_null(False).sum())
     null = int(flags.is_null().sum())
     failing = None
-    if failed:
-        rows = df.filter(~pl.col(FLAG).fill_null(True)).head(max_failing_keys)
-        failing = (
-            [
-                {name: row[_key(name)] for name in frame.keys}
-                for row in rows.select(frame.key_columns).iter_rows(named=True)
-            ]
-            if frame.keys
-            else [{}]
+    failing_frame = None
+    if failed and frame.keys:
+        failing_frame = df.filter(~pl.col(FLAG).fill_null(True)).select(
+            _key_text_column(name).alias(name) for name in frame.keys
         )
+        failing = list(failing_frame.head(max_failing_keys).iter_rows(named=True))
+    elif failed:
+        failing = [{}]
     status: Status = "failed" if failed else "passed" if passed else "not_applicable"
-    return ColumnarResult(status, None, passed, failed, null, failing)
+    return ColumnarResult(status, None, passed, failed, null, failing, failing_frame)
 
 
 def canonical_key(key: Mapping[str, Any]) -> dict[str, str | None]:

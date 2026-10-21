@@ -90,3 +90,10 @@ def test_columnar_agrees_with_reference(expression: str) -> None:
     )
     actual = sorted(str(sorted(key.items())) for key in columnar.failing_keys or [])
     assert actual == expected
+    if columnar.failing_frame is not None:
+        assert columnar.failing_frame.height == columnar.failed
+        every = sorted(
+            str(sorted(key.items()))
+            for key in columnar.failing_frame.iter_rows(named=True)
+        )
+        assert every == expected

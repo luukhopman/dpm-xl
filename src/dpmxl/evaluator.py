@@ -75,7 +75,10 @@ _COMPARISONS = frozenset({"=", "!=", "<", "<=", ">", ">="})
 _ARITHMETIC = frozenset({"+", "-", "*", "/"})
 _BOOLEAN = frozenset({"and", "or", "xor"})
 _UNSUPPORTED_FUNCTIONS = {
-    "time_shift": "time_shift needs the previous reporting period",
+    "time_shift": (
+        "The rule compares with the previous reporting period (time_shift), "
+        "which a single report does not include"
+    ),
 }
 
 # Marks records removed by filter(); never escapes the evaluator.

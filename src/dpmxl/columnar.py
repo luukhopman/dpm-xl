@@ -56,7 +56,7 @@ from .ast import (
     Where,
     With,
 )
-from .evaluator import AGGREGATES, _parse_cached, is_boolean
+from .evaluator import _UNSUPPORTED_FUNCTIONS, AGGREGATES, _parse_cached, is_boolean
 from .provider import (
     CellQuery,
     DataPoint,
@@ -460,7 +460,7 @@ class ColumnarEvaluator:
     def _call(self, node: Call, context: SelectionSpec) -> Frame:
         name = node.name
         if name == "time_shift":
-            raise UnsupportedError("time_shift needs the previous reporting period")
+            raise UnsupportedError(_UNSUPPORTED_FUNCTIONS["time_shift"])
         if name in AGGREGATES and (len(node.args) == 1 or node.group_by is not None):
             if len(node.args) != 1:
                 raise EvaluationError(f"{name} with group by takes one operand")

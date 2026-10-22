@@ -20,6 +20,7 @@ from __future__ import annotations
 from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
+from functools import lru_cache
 from typing import Literal, cast
 
 from .ast import (
@@ -302,11 +303,18 @@ class _Formatter:
         self.key = key
         self.operands: list[Operand] = []
         self._seen: set[int] = set()
+        # An explanation renders and reads the same nodes several times (the
+        # whole formula, filled and plain, then each side); each once here.
+        self._records: dict[int, list] = {}
+        self._rendered: dict[tuple[int, bool], str] = {}
 
     # Values -------------------------------------------------------------
 
     def records(self, node: Node) -> list:
-        return self.evaluation.value_at(node, self.key)
+        records = self._records.get(id(node))
+        if records is None:
+            records = self._records[id(node)] = self.evaluation.value_at(node, self.key)
+        return records
 
     def value(self, node: Node) -> Value | None:
         records = self.records(node)
@@ -368,9 +376,12 @@ class _Formatter:
     # Rendering -----------------------------------------------------------
 
     def render(self, node: Node, *, filled: bool) -> str:
-        text = self._render(node, filled=filled)
-        if self._parenthesized(node) and not _is_leaf(node):
-            return f"({text})"
+        text = self._rendered.get((id(node), filled))
+        if text is None:
+            text = self._render(node, filled=filled)
+            if self._parenthesized(node) and not _is_leaf(node):
+                text = f"({text})"
+            self._rendered[id(node), filled] = text
         return text
 
     def _render(self, node: Node, *, filled: bool) -> str:
@@ -420,11 +431,13 @@ class _Formatter:
         return _source(self.expression, node)
 
     def _leaf(self, node: Node, *, filled: bool) -> str:
-        source = _compact(_source(self.expression, node))
+        source = _leaf_source(self.expression, *node.span)
         if isinstance(node, Literal_):
             if node.kind == "number" and source.endswith("%"):
                 return source
             return format_value(_literal_value(node)) if filled else source
+        if not filled and id(node) in self._seen:
+            return source
         records = self.records(node)
         if len(records) == 1:
             text = format_value(records[0].value)
@@ -512,6 +525,16 @@ def _is_leaf(node: Node) -> bool:
 def _source(expression: str, node: Node) -> str:
     start, end = node.span
     return " ".join(expression[start:end].split())
+
+
+@lru_cache(maxsize=4096)
+def _leaf_source(expression: str, start: int, end: int) -> str:
+    """Return a leaf's compacted source; rules repeat it for every failure.
+
+    Returns:
+        str: The leaf as written, with normalized spacing.
+    """
+    return _compact(" ".join(expression[start:end].split()))
 
 
 def _compact(text: str) -> str:

@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 import re
 import statistics
-from collections.abc import Callable, Collection, Hashable, Mapping
+from collections.abc import Callable, Collection, Hashable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -598,7 +598,9 @@ def conditional(
 
     A key-less condition returns the whole ``then`` or ``else`` operand. A
     keyed condition yields one record per condition record, taking the value
-    of the matching ``then`` or ``else`` record. A null condition takes the
+    of the matching ``then`` or ``else`` record; when a branch has keys the
+    condition lacks, the condition record applies to each branch record that
+    shares its keys, one result record each. A null condition takes the
     ``else`` branch. Without ``else``, the result is ``true`` when ``then`` is
     Boolean and null otherwise.
 
@@ -606,8 +608,7 @@ def conditional(
         Recordset: The result.
 
     Raises:
-        EvaluationError: For a non-Boolean condition or branches whose keys
-            are not part of the condition's keys.
+        EvaluationError: For a non-Boolean condition.
     """
     fallback: Value = True if boolean_then else None
 
@@ -634,27 +635,60 @@ def conditional(
                 },
             )
         return Recordset.scalar(fallback, record.points if record else ())
-    for branch in (then, otherwise):
-        if branch is not None and not set(branch.keys) <= set(condition.keys):
-            raise EvaluationError(
-                "if branches must have the condition's keys or fewer, found "
-                f"({', '.join(branch.keys)}) for ({', '.join(condition.keys)})"
-            )
-    result = Recordset(condition.keys)
+    # Branch keys the condition lacks widen the result, as in a join: each
+    # condition record applies to every branch record that shares its keys.
+    extra = tuple(
+        dict.fromkeys(
+            name
+            for branch in (then, otherwise)
+            if branch is not None
+            for name in branch.keys
+            if name not in condition.keys
+        )
+    )
+    result = Recordset(condition.keys + extra)
     for key, record in condition.records.items():
         value = verdict(record.value)
         branch = then if value is True else otherwise
-        if branch is None:
-            result.records[key] = Record(fallback, record.points)
-            continue
         binding = dict(zip(condition.keys, key, strict=True))
-        matches = branch.lookup(binding)
-        chosen = matches[0] if matches else None
-        result.records[key] = Record(
-            chosen.value if chosen else None,
-            (record.points, chosen.points) if chosen else record.points,
-        )
+        widenings: Collection[tuple[Hashable, ...]] = [()]
+        if extra:
+            widenings = dict.fromkeys(
+                tuple(keys.get(name) for name in extra)
+                for candidate in (then, otherwise)
+                if candidate is not None
+                for keys in _matching_keys(candidate, binding)
+            ).keys()
+        for widening in widenings:
+            if branch is None:
+                result.records[key + widening] = Record(fallback, record.points)
+                continue
+            full = binding | {
+                name: part
+                for name, part in zip(extra, widening, strict=True)
+                if part is not None
+            }
+            matches = branch.lookup(full)
+            chosen = matches[0] if matches else None
+            result.records[key + widening] = Record(
+                chosen.value if chosen else None,
+                (record.points, chosen.points) if chosen else record.points,
+            )
     return result
+
+
+def _matching_keys(
+    records: Recordset, binding: Mapping[str, Hashable]
+) -> Iterator[dict[str, Hashable]]:
+    """Yield the keys of records consistent with a partial binding."""
+    bound = [
+        (position, binding[name])
+        for position, name in enumerate(records.keys)
+        if name in binding
+    ]
+    for key in records.records:
+        if all(key[position] == part for position, part in bound):
+            yield dict(zip(records.keys, key, strict=True))
 
 
 def _membership(value: Value, members: list[Value]) -> Value:

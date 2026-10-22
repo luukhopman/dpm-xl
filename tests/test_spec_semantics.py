@@ -53,6 +53,39 @@ def test_if_result_follows_the_condition_records() -> None:
     assert len(result.outcomes) == 2
 
 
+def test_if_branch_keys_widen_the_condition_records() -> None:
+    # As in an EBA RESOL2 rule on Z_09.01: a per-row condition on c0040 constrains
+    # several columns of its row, one record per column.
+    data = provider({("0010", "0010"): 1, ("0020", "0010"): 0, ("0010", "0020"): 5})
+    rule = (
+        "with {tT, default: 0}: if {r0010, c0010} > 0 then "
+        "{r0010-0020, (c0010, c0020)} >= 0 endif"
+    )
+    result = evaluate_rule(rule, data)
+    assert result.status == "passed"
+    assert sorted(str(outcome.key["r"]) for outcome in result.outcomes) == [
+        "0010",
+        "0010",
+        "0020",
+        "0020",
+    ]
+    failing = evaluate_rule(rule.replace(">= 0 endif", "> 0 endif"), data)
+    assert [(o.key["r"], o.key["c"]) for o in failing.failures] == [
+        ("0020", "0010"),
+        ("0020", "0020"),
+    ]
+
+
+def test_max_aggr_and_min_aggr_are_the_aggregate_forms() -> None:
+    # EBA writes the aggregate max and min as max_aggr and min_aggr.
+    data = provider({("0010", "0010"): 9, ("0020", "0010"): 4, ("0030", "0010"): 7})
+    assert status("{tT, r0010, c0010} >= max_aggr({tT, r*, c0010})", data) == "passed"
+    assert status("{tT, r0020, c0010} <= min_aggr({tT, r*, c0010})", data) == "passed"
+    grouped = "with {tT, default: 0}: {r0010} >= max_aggr({(r0020, r0030)} group by c)"
+    assert status(grouped, data) == "passed"
+    assert status("max_aggr({tT, r0010, c0010}, 1) > 0", data) == "error"
+
+
 def test_count_of_no_records_is_zero() -> None:
     # 7.3.4: count returns the number of records.
     data = provider({})

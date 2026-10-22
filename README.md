@@ -47,7 +47,8 @@ same evaluator works against an xBRL-CSV upload, a database, or test fixtures.
   `null`, items `[eba_qEC:qx01]`.
 - Operators `+ - * /`, `= != <> < <= > >=`, `in {…}`, `not`, `and`, `or`, `xor`,
   `if … then … [else …] endif`.
-- Aggregates `sum`, `count`, `avg`, `min`, `max`, `median` with `group by`;
+- Aggregates `sum`, `count`, `avg`, `min`, `max`, `median` (and the
+  specification's `min_aggr`/`max_aggr` spellings) with `group by`;
   scalar `abs`, `isnull`, `nvl`, `len`, `match`, `min`/`max` with several
   operands, `exp`, `ln`, `sqrt`, `power`; `filter(data, condition)`.
 - Clauses `[where …]`, `[get key]`, `[sub key = value]`, `[rename a to b]`.
@@ -86,7 +87,10 @@ same evaluator works against an xBRL-CSV upload, a database, or test fixtures.
   Division by zero is a run-time error, as the specification requires.
 - **Conditionals.** `if` takes the `else` branch when the condition is null;
   without `else`, a Boolean `then` yields true where the condition is false or
-  null. The result has the condition's record structure.
+  null. The result has the condition's record structure; branch keys the
+  condition lacks widen it, so each condition record applies to every branch
+  record sharing its keys (the columnar evaluator hands that case to the
+  reference evaluator).
 - **Aggregates** over no records are null, except `count`, which is 0;
   `count` counts non-null values.
 - **Clauses.** `[get key]` omits records whose fact is null; a `where` or

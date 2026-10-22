@@ -983,7 +983,8 @@ def _conditional(
         Frame: One record per condition record (or the chosen branch).
 
     Raises:
-        EvaluationError: For non-Boolean conditions or incompatible branches.
+        EvaluationError: For non-Boolean conditions.
+        ColumnarUnsupported: When a branch has keys the condition lacks.
     """
     df = condition.df
     if condition.kinds & {NUM, TXT}:
@@ -1000,10 +1001,8 @@ def _conditional(
         return scalar_frame(fallback[FLAG])
     for branch in (then, otherwise):
         if branch is not None and not set(branch.keys) <= set(condition.keys):
-            raise EvaluationError(
-                "if branches must have the condition's keys or fewer, found "
-                f"({', '.join(branch.keys)}) for ({', '.join(condition.keys)})"
-            )
+            # Rare in EBA rules; the reference evaluator widens the result.
+            raise ColumnarUnsupported("if branches with keys the condition lacks")
     result = condition.df.select([*condition.key_columns, pl.col(FLAG).alias("_cond")])
     for index, branch in ((1, then), (2, otherwise)):
         if branch is None:

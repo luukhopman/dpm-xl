@@ -99,6 +99,7 @@ _KEYWORDS = frozenset(
     }
 )
 _CLAUSES = ("where", "get", "sub", "rename")
+_AGGREGATE_ALIASES = {"max_aggr": "max", "min_aggr": "min"}
 _NUMBER = re.compile(r"\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|\.\d+")
 _IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_.]*")
 _OPERATORS = ("<>", "!=", "<=", ">=", "=", "<", ">", "+", "-", "*", "/", "%")
@@ -584,9 +585,14 @@ class _Parser:
                 if not self.accept(","):
                     break
         end = self.expect(")")
-        return Call(
-            name.text.casefold(), tuple(args), group_by, span=self.span(name.start, end)
-        )
+        function = name.text.casefold()
+        if function in _AGGREGATE_ALIASES:
+            # max_aggr/min_aggr are the aggregate forms of max/min, which the
+            # evaluators recognise by their single operand.
+            if len(args) != 1:
+                raise self.error(f"{function} takes one operand")
+            function = _AGGREGATE_ALIASES[function]
+        return Call(function, tuple(args), group_by, span=self.span(name.start, end))
 
     def parse_brace(self, token: Token) -> Node:
         body = token.text.strip()

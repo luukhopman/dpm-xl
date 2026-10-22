@@ -35,7 +35,7 @@ CASES = 400
 def _number(rng: random.Random) -> Value | None:
     if rng.random() < 0.15:
         return None
-    value = rng.choice((0, 0, 1, -3, 7, 15, 60, 100, 1180, 1204, 2.5, -0.25))
+    value = rng.choice((0, 0, 1, -3, 7, 15, 60, 100, 1180, 1204, "2.5", "-0.25"))
     return Number.of(value, rng.choice((0, 0, 1, 2, -3)))
 
 

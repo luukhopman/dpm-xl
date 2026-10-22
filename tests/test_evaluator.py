@@ -363,3 +363,26 @@ def test_explanations_show_each_sides_interval() -> None:
     assert (explanation.right.low, explanation.right.high) == ("1,210", "1,212")
     assert explanation.right.threshold == "1"
     assert explanation.gap == "5.5"
+
+
+def test_computed_numbers_are_rounded_and_reported_values_are_exact() -> None:
+    provider = closed(
+        {("0010", "0010"): 1, ("0020", "0010"): 3, ("0030", "0010"): 7},
+        decimals=8,
+    )
+    rule = "with {tC_01.00, c0010, interval: false}: {r0010} = {r0020} / {r0030}"
+    result = evaluate_rule(rule, provider)
+    explanation = explain(_traced(result), rule, result.failures[0].key)
+
+    assert (
+        explanation.summary
+        == "1 should equal 0.428571 (3 \u00f7 7): difference 0.571429"
+    )
+    assert explanation.right is not None and explanation.right.value == "0.428571"
+    assert explanation.filled == "1 = 3 \u00f7 7"
+
+    reported = closed({("0010", "0010"): Decimal("0.123456789")}, decimals=9)
+    rule = "with {tC_01.00, c0010, interval: false}: {r0010} = 0"
+    result = evaluate_rule(rule, reported)
+    explanation = explain(_traced(result), rule, result.failures[0].key)
+    assert explanation.summary == "0.123456789 should equal 0: difference 0.123456789"

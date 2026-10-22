@@ -46,7 +46,7 @@ from .ast import (
 from .evaluator import AGGREGATES, Evaluation
 from .provider import DataPoint
 from .recordset import unique_points
-from .values import Number, Value, format_decimal, format_value
+from .values import Number, Value, format_computed, format_decimal, format_value
 
 MINUS = "\u2212"
 TIMES = "\u00d7"
@@ -189,7 +189,7 @@ def _comparison(
     difference = direction = tolerance = gap = None
     if isinstance(left_value, Number) and isinstance(right_value, Number):
         delta = left_value.value - right_value.value
-        difference = format_decimal(abs(delta))
+        difference = format_computed(abs(delta))
         direction = _direction(node.op, delta)
         width = left_value.tolerance + right_value.tolerance
         if delta:
@@ -327,7 +327,7 @@ class _Formatter:
 
     def side(self, node: Node) -> Side:
         records = self.records(node)
-        value = format_value(records[0].value) if len(records) == 1 else "\u2205"
+        value = _shown(node, records[0].value) if len(records) == 1 else "\u2205"
         number = records[0].value if len(records) == 1 else None
         threshold = low = high = None
         if isinstance(number, Number) and number.tolerance:
@@ -440,7 +440,7 @@ class _Formatter:
             return source
         records = self.records(node)
         if len(records) == 1:
-            text = format_value(records[0].value)
+            text = _shown(node, records[0].value)
             points = unique_points(records[0].points)
         elif not records:
             text, points = "∅", ()
@@ -508,6 +508,19 @@ def _literal_value(node: Literal_) -> Value:
     if node.kind == "number" and isinstance(node.value, Decimal):
         return Number(node.value)
     return cast(Value, node.value)
+
+
+def _shown(node: Node, value: Value) -> str:
+    """Show a reported value exactly and a computed number rounded.
+
+    Returns:
+        str: The value as text.
+    """
+    if isinstance(value, Number) and not isinstance(
+        node, Selection | Where | Get | Sub | Literal_ | Parameter
+    ):
+        return format_computed(value.value)
+    return format_value(value)
 
 
 def _is_leaf(node: Node) -> bool:

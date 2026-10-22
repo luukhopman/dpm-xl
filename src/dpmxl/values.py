@@ -305,4 +305,41 @@ def format_decimal(value: Decimal) -> str:
     return sign + whole + (f".{fraction}" if fraction else "")
 
 
-__all__ = ["Number", "Value", "compare", "format_decimal", "format_value", "type_name"]
+# A computed number with more decimals than any reported value shows this
+# many significant digits.
+_LONG_FRACTION = 10
+_COMPUTED_DIGITS = 6
+
+
+def format_computed(value: Decimal) -> str:
+    """Format a computed decimal, rounding a long fraction for display.
+
+    A division yields up to 28 decimals. Beyond ten, the number shows six
+    significant digits, but keeps every integer digit and two decimals:
+    ``1.852935352358765...`` reads ``1.85294`` and ``12345.678901234``
+    ``12,345.68``. Shorter fractions, such as the exact difference of two
+    reported values, are shown in full, as reported values always are.
+
+    Returns:
+        str: The formatted number.
+    """
+    try:
+        normalized = value.normalize()
+    except InvalidOperation:  # pragma: no cover - NaN guards
+        return str(value)
+    exponent = normalized.as_tuple().exponent
+    if isinstance(exponent, int) and exponent < -_LONG_FRACTION:
+        places = max(_COMPUTED_DIGITS - 1 - normalized.adjusted(), 2)
+        normalized = round(normalized, places)
+    return format_decimal(normalized)
+
+
+__all__ = [
+    "Number",
+    "Value",
+    "compare",
+    "format_computed",
+    "format_decimal",
+    "format_value",
+    "type_name",
+]

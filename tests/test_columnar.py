@@ -1,5 +1,7 @@
 """The columnar engine must agree with the reference evaluator."""
 
+from datetime import date
+
 import pytest
 
 pytest.importorskip("polars")
@@ -100,6 +102,56 @@ def test_columnar_agrees_with_reference(expression: str) -> None:
             for key in columnar.failing_frame.iter_rows(named=True)
         )
         assert every == expected
+
+
+# One open row per group: Item, text, date, Boolean and mixed columns.
+def mixed_values() -> MemoryProvider:
+    table = TableLayout(
+        "X",
+        rows=("0010",),
+        columns=("0010", "0020", "0030", "0040", "0050"),
+        open_keys=("qGCC",),
+    )
+    rows = {
+        Item("qG", "g1"): (
+            Item("qT", "b"),
+            "beta",
+            date(2024, 12, 31),
+            True,
+            Number.of(5, 0),
+        ),
+        Item("qG", "g2"): (Item("qT", "a"), "alpha", date(2025, 3, 31), False, "x"),
+    }
+    values: dict[CellKey, Value] = {}
+    for key, row in rows.items():
+        for column, value in zip(table.columns, row, strict=True):
+            values["X", "0010", column, None, (("qGCC", key),)] = value
+    return MemoryProvider([table], values)
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        # Some checks test for presence with max_aggr over item columns.
+        ("not(isnull(max_aggr({tX, r0010, c0010} group by qGCC)))", "passed"),
+        ("max_aggr({tX, r0010, c0010}) = [qT:b]", "passed"),
+        ("min_aggr({tX, r0010, c0010}) = [qT:a]", "passed"),
+        ("not(isnull(min_aggr({tX, r0010, c0020})))", "passed"),
+        ("not(isnull(max_aggr({tX, r0010, c0030} group by qGCC)))", "passed"),
+        ("not(isnull(max_aggr({tX, r0010, c0040})))", "error"),
+        # Numbers and text may not meet in one group.
+        ("not(isnull(max_aggr({tX, r0010, c0050} group by qGCC)))", "passed"),
+        ("not(isnull(max_aggr({tX, r0010, c0050})))", "error"),
+    ],
+)
+def test_max_and_min_order_dates_text_and_items(expression: str, expected: str) -> None:
+    provider = mixed_values()
+    reference = evaluate_rule(expression, provider)
+    columnar = evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    assert reference.status == expected, reference.message
+    assert columnar.status == expected, columnar.message
+    if expected == "passed":
+        assert columnar.passed == reference.counts["passed"]
 
 
 @pytest.mark.parametrize(

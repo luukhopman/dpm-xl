@@ -740,12 +740,17 @@ def _reduce(name: str, values: list[Value], record_count: int) -> Value:
     if name in {"max", "min"} and not all(
         isinstance(value, Number) for value in values
     ):
-        comparable: list[Any] = [
-            value for value in values if not isinstance(value, Number | Item | bool)
-        ]
-        if len(comparable) != len(values):
-            raise EvaluationError(f"{name} needs numbers, dates or text")
-        return max(comparable) if name == "max" else min(comparable)
+        if any(isinstance(value, bool) for value in values):
+            raise EvaluationError(f"{name} needs numbers, dates, text or items")
+        if any(isinstance(value, Number) for value in values):
+            raise EvaluationError(
+                f"{name} cannot compare numbers with dates, text or items"
+            )
+        # Dates, text and items order by their text, as in the columnar
+        # engine: ISO dates in date order, items by category and code.
+        # Some checks use max_aggr over item columns to test for presence.
+        pick = max if name == "max" else min
+        return pick(values, key=_ordering_text)
     numbers = [_require_number(value, name) for value in values]
     if name == "sum":
         total = numbers[0]
@@ -762,6 +767,10 @@ def _reduce(name: str, values: list[Value], record_count: int) -> Value:
     if name == "max":
         return max(numbers, key=lambda number: number.value)
     return min(numbers, key=lambda number: number.value)
+
+
+def _ordering_text(value: Value) -> str:
+    return value.isoformat() if isinstance(value, date) else str(value)
 
 
 def _elementwise_extreme(name: str) -> Callable[[list[Value]], Value]:

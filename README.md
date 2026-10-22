@@ -92,7 +92,10 @@ same evaluator works against an xBRL-CSV upload, a database, or test fixtures.
   record sharing its keys (the columnar evaluator hands that case to the
   reference evaluator).
 - **Aggregates** over no records are null, except `count`, which is 0;
-  `count` counts non-null values.
+  `count` counts non-null values. `max` and `min` also order dates, text and
+  items by their text (ISO dates in date order, items by category and code),
+  as presence checks expect; Booleans, and numbers mixed with other
+  values in one group, are an error.
 - **Clauses.** `[get key]` omits records whose fact is null; a `where` or
   `sub` inside a `with` body overrides the context's clause on the same key.
   Booleans order `false < true`.

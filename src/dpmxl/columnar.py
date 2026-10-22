@@ -1172,10 +1172,26 @@ def _aggregate(name: str, frame: Frame, group_by: tuple[str, ...] | None) -> Fra
             )
         group_keys.append(key)
     df = frame.df
+    text = False
     if name != "count" and frame.kinds & {TXT, FLAG}:
-        if name in {"max", "min"}:
-            raise ColumnarUnsupported("max/min of text")
-        raise EvaluationError(f"{name} needs numbers")
+        if name not in {"max", "min"}:
+            raise EvaluationError(f"{name} needs numbers")
+        if FLAG in frame.kinds:
+            raise EvaluationError(f"{name} needs numbers, dates, text or items")
+        # Dates, text and items order by their text (ISO dates in date
+        # order); a group may not mix them with numbers.
+        text = True
+        if NUM in frame.kinds:
+            both = pl.col(NUM).is_not_null().any() & pl.col(TXT).is_not_null().any()
+            mixed = (
+                df.group_by([_key(key) for key in group_keys]).agg(both)
+                if group_keys
+                else df.select(both)
+            )
+            if mixed.get_column(NUM).any():
+                raise EvaluationError(
+                    f"{name} cannot compare numbers with dates, text or items"
+                )
     present = pl.col(NUM).is_not_null()
     non_null = pl.any_horizontal(
         pl.col(column).is_not_null() for column in VALUE_COLUMNS
@@ -1201,10 +1217,11 @@ def _aggregate(name: str, frame: Frame, group_by: tuple[str, ...] | None) -> Fra
         raise ColumnarUnsupported("median")
     else:  # pragma: no cover
         raise ColumnarUnsupported(name)
+    extreme = pl.col(TXT).max() if name == "max" else pl.col(TXT).min()
     aggregations = [
         num.cast(DEC).alias(NUM),
         thr.cast(DEC).alias(THR),
-        pl.lit(None, pl.String).alias(TXT),
+        (extreme if text else pl.lit(None, pl.String)).alias(TXT),
         pl.lit(None, pl.Boolean).alias(FLAG),
     ]
     if not group_keys:

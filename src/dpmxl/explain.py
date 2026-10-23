@@ -556,7 +556,7 @@ def _compact(text: str) -> str:
     Returns:
         str: The compacted text.
     """
-    for name in ("sum", "count", "avg", "max", "min", "median"):
+    for name in ("sum", "count", "avg", "max", "min", "median", "max_aggr", "min_aggr"):
         text = text.replace(f"{name} (", f"{name}(")
     text = text.replace("( ", "(").replace(" )", ")")
     if text.startswith("(") and text.endswith(")") and text.count("(") == 1:

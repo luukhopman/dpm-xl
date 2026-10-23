@@ -83,14 +83,15 @@ class Recordset:
         Returns:
             list[Record]: Matching records (one when all keys are bound).
         """
+        if all(key in binding for key in self.keys):
+            # Every key bound (the usual lookup): one record at most.
+            record = self.records.get(tuple([binding[key] for key in self.keys]))
+            return [record] if record is not None else []
         bound = [
             (index, binding[key])
             for index, key in enumerate(self.keys)
             if key in binding
         ]
-        if len(bound) == len(self.keys):
-            record = self.records.get(tuple(value for _, value in bound))
-            return [record] if record is not None else []
         return [
             record
             for key, record in self.records.items()

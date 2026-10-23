@@ -306,6 +306,7 @@ class _Formatter:
         # An explanation renders and reads the same nodes several times (the
         # whole formula, filled and plain, then each side); each once here.
         self._records: dict[int, list] = {}
+        self._points: dict[int, tuple[DataPoint, ...]] = {}
         self._rendered: dict[tuple[int, bool], str] = {}
         # What follows from the tree alone, shared by the rule's failures.
         self._shapes = evaluation.shapes
@@ -323,10 +324,21 @@ class _Formatter:
         return records[0].value if len(records) == 1 else None
 
     def points(self, node: Node) -> tuple[DataPoint, ...]:
-        records = self.records(node)
-        if len(records) == 1:
-            return unique_points(records[0].points)
-        return unique_points(tuple(record.points for record in records))
+        points = self._points.get(id(node))
+        if points is None:
+            records = self.records(node)
+            points = self._points[id(node)] = (
+                unique_points(records[0].points)
+                if len(records) == 1
+                else unique_points(tuple(record.points for record in records))
+            )
+        return points
+
+    def is_leaf(self, node: Node) -> bool:
+        leaf = self._shapes.get(("leaf", id(node)))
+        if leaf is None:
+            leaf = self._shapes["leaf", id(node)] = _is_leaf(node)
+        return leaf
 
     def side(self, node: Node) -> Side:
         records = self.records(node)
@@ -365,7 +377,7 @@ class _Formatter:
                     isinstance(current, Unary) and isinstance(current.operand, Call)
                 ):
                     fallback = fallback or current
-            if _is_leaf(current):
+            if self.is_leaf(current):
                 continue
             if isinstance(current, If):
                 condition = self.value(current.condition)
@@ -397,7 +409,7 @@ class _Formatter:
 
     def _bracketed(self, node: Node, *, filled: bool) -> str:
         text = self._render(node, filled=filled)
-        if self._parenthesized(node) and not _is_leaf(node):
+        if self._parenthesized(node) and not self.is_leaf(node):
             text = f"({text})"
         return text
 
@@ -411,7 +423,7 @@ class _Formatter:
         return terms
 
     def _render(self, node: Node, *, filled: bool) -> str:
-        if _is_leaf(node):
+        if self.is_leaf(node):
             return self._leaf(node, filled=filled)
         match node:
             case Binary(op="+" | "-"):
@@ -467,7 +479,7 @@ class _Formatter:
         records = self.records(node)
         if len(records) == 1:
             text = _shown(node, records[0].value)
-            points = unique_points(records[0].points)
+            points = self.points(node)
         elif not records:
             text, points = "∅", ()
         else:
@@ -544,15 +556,17 @@ def _literal_value(node: Literal_) -> Value:
     return cast(Value, node.value)
 
 
+# Nodes whose number is a reported (or literal) value, shown exactly.
+_REPORTED = (Selection, Where, Get, Sub, Literal_, Parameter)
+
+
 def _shown(node: Node, value: Value) -> str:
     """Show a reported value exactly and a computed number rounded.
 
     Returns:
         str: The value as text.
     """
-    if isinstance(value, Number) and not isinstance(
-        node, Selection | Where | Get | Sub | Literal_ | Parameter
-    ):
+    if isinstance(value, Number) and not isinstance(node, _REPORTED):
         return format_computed(value.value)
     return format_value(value)
 

@@ -15,7 +15,6 @@ comparisons are exact.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation, localcontext
@@ -260,9 +259,6 @@ def type_name(value: Value) -> str:
     return "string"
 
 
-_GROUPS = re.compile(r"(\d)(?=(\d{3})+(?!\d))")
-
-
 def format_value(value: Value) -> str:
     """Format a value for an explanation.
 
@@ -296,13 +292,7 @@ def format_decimal(value: Decimal) -> str:
         normalized = value.normalize()
     except InvalidOperation:  # pragma: no cover - NaN guards
         return str(value)
-    text = f"{normalized:f}"
-    sign = ""
-    if text.startswith("-"):
-        sign, text = "-", text[1:]
-    whole, _, fraction = text.partition(".")
-    whole = _GROUPS.sub(r"\1,", whole)
-    return sign + whole + (f".{fraction}" if fraction else "")
+    return format(normalized, ",f")
 
 
 # A computed number with more decimals than any reported value shows this

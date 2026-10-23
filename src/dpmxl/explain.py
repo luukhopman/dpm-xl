@@ -307,6 +307,8 @@ class _Formatter:
         # whole formula, filled and plain, then each side); each once here.
         self._records: dict[int, list] = {}
         self._rendered: dict[tuple[int, bool], str] = {}
+        # What follows from the tree alone, shared by the rule's failures.
+        self._shapes = evaluation.shapes
 
     # Values -------------------------------------------------------------
 
@@ -321,9 +323,10 @@ class _Formatter:
         return records[0].value if len(records) == 1 else None
 
     def points(self, node: Node) -> tuple[DataPoint, ...]:
-        return unique_points(
-            point for record in self.records(node) for point in record.points
-        )
+        records = self.records(node)
+        if len(records) == 1:
+            return unique_points(records[0].points)
+        return unique_points(tuple(record.points for record in records))
 
     def side(self, node: Node) -> Side:
         records = self.records(node)
@@ -342,7 +345,7 @@ class _Formatter:
             filled=self.render(node, filled=True),
             value=value,
             points=self.points(node),
-            terms=sum(1 for leaf in _leaves(node) if not isinstance(leaf, Literal_)),
+            terms=self._terms(node),
             threshold=threshold,
             low=low,
             high=high,
@@ -376,13 +379,36 @@ class _Formatter:
     # Rendering -----------------------------------------------------------
 
     def render(self, node: Node, *, filled: bool) -> str:
+        if not filled:
+            # Plain text depends on the tree alone, as the filled text, which
+            # is rendered first, has seen every operand; failures share it.
+            text = self._shapes.get(("plain", id(node)))
+            if text is None:
+                text = self._shapes["plain", id(node)] = self._bracketed(
+                    node, filled=False
+                )
+            return text
         text = self._rendered.get((id(node), filled))
         if text is None:
-            text = self._render(node, filled=filled)
-            if self._parenthesized(node) and not _is_leaf(node):
-                text = f"({text})"
-            self._rendered[id(node), filled] = text
+            text = self._rendered[id(node), filled] = self._bracketed(
+                node, filled=filled
+            )
         return text
+
+    def _bracketed(self, node: Node, *, filled: bool) -> str:
+        text = self._render(node, filled=filled)
+        if self._parenthesized(node) and not _is_leaf(node):
+            text = f"({text})"
+        return text
+
+    def _terms(self, node: Node) -> int:
+        # A side's operands: cells, aggregates and parameters.
+        terms = self._shapes.get(("terms", id(node)))
+        if terms is None:
+            terms = self._shapes["terms", id(node)] = sum(
+                1 for leaf in _leaves(node) if not isinstance(leaf, Literal_)
+            )
+        return terms
 
     def _render(self, node: Node, *, filled: bool) -> str:
         if _is_leaf(node):
@@ -453,7 +479,9 @@ class _Formatter:
         return text if filled else source
 
     def _additive(self, node: Node, *, filled: bool) -> str:
-        terms = _flatten_additive(node)
+        terms = self._shapes.get(("additive", id(node)))
+        if terms is None:
+            terms = self._shapes["additive", id(node)] = _flatten_additive(node)
         rendered: list[tuple[int, str, bool]] = []
         for sign, term in terms:
             text = self.render(term, filled=filled)
@@ -480,9 +508,15 @@ class _Formatter:
         return " ".join(parts) + suffix
 
     def _parenthesized(self, node: Node) -> bool:
-        start, end = node.span
-        text = self.expression[start:end].strip()
-        return text.startswith("(") and text.endswith(")") and isinstance(node, Binary)
+        if not isinstance(node, Binary):
+            return False
+        parenthesized = self._shapes.get(("parenthesized", id(node)))
+        if parenthesized is None:
+            start, end = node.span
+            text = self.expression[start:end].strip()
+            parenthesized = text.startswith("(") and text.endswith(")")
+            self._shapes["parenthesized", id(node)] = parenthesized
+        return parenthesized
 
 
 def _flatten_additive(node: Node, sign: int = 1) -> list[tuple[int, Node]]:

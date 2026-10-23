@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 
 from dpmxl import (
+    DataPoint,
     Item,
     MemoryProvider,
     Number,
@@ -13,6 +14,8 @@ from dpmxl import (
     explain,
 )
 from dpmxl.provider import CellKey
+from dpmxl.recordset import unique_points
+from dpmxl.values import format_decimal
 
 ROWS = ("0010", "0020", "0030")
 COLUMNS = ("0010", "0020")
@@ -386,3 +389,46 @@ def test_computed_numbers_are_rounded_and_reported_values_are_exact() -> None:
     result = evaluate_rule(rule, reported)
     explanation = explain(_traced(result), rule, result.failures[0].key)
     assert explanation.summary == "0.123456789 should equal 0: difference 0.123456789"
+
+
+def test_failures_of_one_rule_share_what_the_tree_alone_decides() -> None:
+    provider = closed(
+        {
+            ("0010", "0010"): 100,
+            ("0020", "0010"): 60,
+            ("0030", "0010"): -50,
+            ("0010", "0020"): 1204,
+            ("0020", "0020"): 1180,
+            ("0030", "0020"): 31,
+        }
+    )
+    rule = "with {tC_01.00, c*, default: 0}: {r0010} = ({r0020} + {r0030})"
+    result = evaluate_rule(rule, provider)
+    first, second = (
+        explain(_traced(result), rule, failure.key) for failure in result.failures
+    )
+
+    assert _traced(result).shapes, "plain formulas are kept for later failures"
+    assert first.formula == second.formula == "{r0010} = ({r0020} + {r0030})"
+    assert (first.filled, second.filled) == (
+        "100 = (60 \u2212 50)",
+        "1,204 = (1,180 + 31)",
+    )
+    alone = evaluate_rule(rule, provider)
+    assert second == explain(_traced(alone), rule, result.failures[1].key)
+
+
+def test_decimals_format_with_thousands_separators() -> None:
+    assert format_decimal(Decimal("-1234567.8900")) == "-1,234,567.89"
+    assert format_decimal(Decimal("1E+6")) == "1,000,000"
+    assert format_decimal(Decimal("0.0001250")) == "0.000125"
+    assert format_decimal(Decimal("999")) == "999"
+
+
+def test_unique_points_flatten_nested_points_in_order() -> None:
+    a, b, c = (DataPoint("T", row, ref=row) for row in ("0010", "0020", "0030"))
+
+    assert unique_points((a,)) == (a,)
+    assert unique_points((a, b, a)) == (a, b)
+    assert unique_points(((a, (b,)), c, (b, a))) == (a, b, c)
+    assert unique_points(point for point in (c, c)) == (c,)

@@ -305,9 +305,19 @@ def unique_points(points: Iterable[Any]) -> tuple[DataPoint, ...]:
     Returns:
         tuple[DataPoint, ...]: Distinct points.
     """
+    if isinstance(points, tuple):
+        if len(points) == 1 and not isinstance(points[0], tuple):
+            return points
+        if not any(isinstance(item, tuple) for item in points):
+            # Already flat: skip the generator.
+            flat: Iterable[Any] = points
+        else:
+            flat = iter_points(points)
+    else:
+        flat = iter_points(points)
     seen: set[Hashable] = set()
     result: list[DataPoint] = []
-    for point in iter_points(points):
+    for point in flat:
         identity = point.ref if point.ref is not None else id(point)
         if identity in seen:
             continue

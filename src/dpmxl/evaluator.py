@@ -95,6 +95,11 @@ class Evaluation:
     result: Recordset
     trace: dict[int, Recordset] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
+    shapes: dict[tuple[str, int], Any] = field(
+        default_factory=dict, repr=False, compare=False
+    )
+    """What explanations derive from the tree alone (plain formulas, term
+    counts), by kind and node id; shared by every failure explained."""
 
     def value_at(self, node: Node, binding: Mapping[str, Hashable]) -> list[Record]:
         """Return the records a node produced for a key binding.

@@ -1,3 +1,4 @@
+import gc
 from decimal import Decimal
 
 import pytest
@@ -45,6 +46,23 @@ def test_axis_lists_and_references_inherit_context() -> None:
     assert found[1].spec.rows == AxisSelector(parts=("0020", ("0030", "0040")))
     assert found[1].spec.columns == AxisSelector(parts=("0010", "0030"))
     assert tables(node) == ("F_31.01", "C_07.00.a")
+
+
+def test_references_leave_no_garbage_cycles() -> None:
+    node = parse("with {tC_07.00.a, c0010}: {r0010} = {r0020} + sum({r0030-0050})")
+    gc.collect()
+    enabled = gc.isenabled()
+    gc.disable()
+    try:
+        found = references(node)
+        assert [reference.span for reference in found] == sorted(
+            reference.span for reference in found
+        )
+        del found
+        assert gc.collect() == 0, "references are freed when no longer used"
+    finally:
+        if enabled:
+            gc.enable()
 
 
 def test_clauses_sets_and_group_by() -> None:

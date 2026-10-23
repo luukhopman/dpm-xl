@@ -29,18 +29,19 @@ def references(node: Node) -> tuple[Reference, ...]:
         tuple[Reference, ...]: Selections in source order.
     """
     found: list[Reference] = []
-
-    def visit(current: Node, context: SelectionSpec) -> None:
+    # An explicit stack, not a recursive closure: a closure that refers to
+    # itself is a reference cycle, which would leave every Reference it
+    # found for the cyclic garbage collector instead of freeing it at once.
+    pending: list[tuple[Node, SelectionSpec]] = [(node, SelectionSpec())]
+    while pending:
+        current, context = pending.pop()
         if isinstance(current, With):
-            visit(current.body, current.context.merged_into(context))
-            return
-        if isinstance(current, Selection):
+            pending.append((current.body, current.context.merged_into(context)))
+        elif isinstance(current, Selection):
             found.append(Reference(current.spec.merged_into(context), current.span))
-            return
-        for child in children(current):
-            visit(child, context)
-
-    visit(node, SelectionSpec())
+        else:
+            # Reversed, so children are visited in source order.
+            pending.extend((child, context) for child in reversed(children(current)))
     return tuple(sorted(found, key=lambda reference: reference.span))
 
 

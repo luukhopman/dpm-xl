@@ -157,6 +157,23 @@ def test_max_and_min_order_dates_text_and_items(expression: str, expected: str) 
 @pytest.mark.parametrize(
     "expression",
     [
+        'not(isnull(max({tX, r0010, c0020}, "alpha")))',
+        "not(isnull(min({tX, r0010, c0030}, #2025-01-01#)))",
+        "not(isnull(max({tX, r0010, c0010}, [qT:a])))",
+    ],
+)
+def test_elementwise_max_and_min_of_text_go_to_the_reference_engine(
+    expression: str,
+) -> None:
+    provider = mixed_values()
+    assert evaluate_rule(expression, provider).status == "passed"
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
         "with {tT, c*, default: 0, interval: true}: {r0010} = {r0020} + {r0030}",
         "with {tT, c*}: {r0020} < {r0030}",
         "{tT, r*, c0010} < {tONE, r*, c0010} * 10",

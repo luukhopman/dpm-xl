@@ -1128,6 +1128,11 @@ def _length(frame: Frame) -> Frame:
 
 
 def _extreme(name: str, frames: Sequence[Frame]) -> Frame:
+    if any(TXT in frame.kinds for frame in frames) and not any(
+        FLAG in frame.kinds for frame in frames
+    ):
+        # The reference evaluator orders dates, text and items.
+        raise ColumnarUnsupported(f"elementwise {name} of dates, text or items")
     _require_numeric(frames, name)
     keys, df = _joined(frames)
     count = len(frames)

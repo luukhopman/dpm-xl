@@ -9,7 +9,15 @@ column, and a scalar broadcasts to every record.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import (
+    Callable,
+    Hashable,
+    Iterable,
+    Iterator,
+    Mapping,
+    Sequence,
+)
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -205,8 +213,11 @@ def check_structure(operands: Sequence[Recordset]) -> None:
             )
 
 
-def _projection(data: Recordset, keys: Sequence[str]) -> set[tuple[Hashable, ...]]:
+def _projection(data: Recordset, keys: Sequence[str]) -> AbstractSet[Any]:
     positions = [data.keys.index(key) for key in keys]
+    if positions == list(range(len(data.keys))):
+        # Every key, in order: the record keys themselves.
+        return data.records.keys()
     return {tuple(key[position] for position in positions) for key in data.records}
 
 

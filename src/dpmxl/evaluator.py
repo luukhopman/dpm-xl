@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
+from operator import attrgetter
 from typing import Any, Literal, cast
 
 from .ast import (
@@ -315,15 +316,19 @@ class Evaluator:
         for key in AXIS_KEYS.values():
             # DPM-XL 3.1.6: r, c and s are keys only when more than one row,
             # column or sheet is present in the selection.
-            codes = {point.coordinate(key) for point in points}
+            codes = set(map(_COORDINATES[key], points))
             codes.discard("*")
             codes.discard(None)
             if len(codes) > 1:
                 axis_keys.append(key)
+        coordinates = [_COORDINATES[key] for key in axis_keys]
         # An open table with no reported rows still has its key structure.
         open_keys = list(declared_open_keys(self.provider, spec.table))
         for point in points:
-            open_keys.extend(name for name in point.keys if name not in open_keys)
+            if point.keys:
+                for name in point.keys:
+                    if name not in open_keys:
+                        open_keys.append(name)
         keys = (*axis_keys, *open_keys)
         default = (
             _literal_value(spec.default) if isinstance(spec.default, Literal_) else None
@@ -337,8 +342,7 @@ class Evaluator:
         ]
         for point in points:
             if kept and any(
-                normalize_code(point.coordinate(axis_keys[position]) or "")
-                not in allowed
+                normalize_code(coordinates[position](point) or "") not in allowed
                 for position, allowed in kept
             ):
                 continue
@@ -347,9 +351,13 @@ class Evaluator:
                 value = default
             elif isinstance(value, Number) and not interval:
                 value = value.exact()
-            key = tuple(
-                normalize_code(point.coordinate(name) or "") for name in axis_keys
-            ) + tuple(_key_value(point.keys.get(name)) for name in open_keys)
+            parts: list[Hashable] = [
+                normalize_code(coordinate(point) or "") for coordinate in coordinates
+            ]
+            if open_keys:
+                values = point.keys
+                parts += [_key_value(values.get(name)) for name in open_keys]
+            key = tuple(parts)
             existing = result.records.get(key)
             if existing is not None and existing.value is not None and value is None:
                 continue
@@ -478,6 +486,14 @@ def _literal_value(node: Literal_) -> Value:
         assert isinstance(node.value, Decimal)
         return Number(node.value)
     return cast(Value, node.value)
+
+
+# A data point's closed coordinate by axis key, as DataPoint.coordinate.
+_COORDINATES = {
+    "r": attrgetter("row"),
+    "c": attrgetter("column"),
+    "s": attrgetter("sheet"),
+}
 
 
 def _key_value(value: Value) -> Hashable:

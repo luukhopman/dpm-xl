@@ -56,8 +56,17 @@ class DataPoint:
 
         Returns:
             str | None: The coordinate code, or ``None`` when absent.
+
+        Raises:
+            KeyError: For another axis.
         """
-        return {"r": self.row, "c": self.column, "s": self.sheet}[axis]
+        if axis == "r":
+            return self.row
+        if axis == "c":
+            return self.column
+        if axis == "s":
+            return self.sheet
+        raise KeyError(axis)
 
     def label(self) -> str:
         """Render a compact DPM-XL style location.

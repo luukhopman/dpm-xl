@@ -127,7 +127,7 @@ on polars frames from a `FrameProvider` (`select_frame(query)` returns one row
 per data point with `k:<key>` columns and the `num`, `thr`, `txt`, `flag` value
 columns). Values are exact `Decimal(38, 12)`, keys are joined like
 `recordset.combine`, and a `FrameCache` shares selections across rules within
-a row budget. Anything the module does not implement, including arithmetic
+a row budget; rules evaluated on several threads build each selection once. Anything the module does not implement, including arithmetic
 that would overflow, raises `ColumnarUnsupported` so the caller falls back to
 the reference evaluator. `tests/test_columnar.py` checks both evaluators agree
 case by case. `PointsFrameProvider` adapts any `DataProvider`.

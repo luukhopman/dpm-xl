@@ -199,3 +199,41 @@ def test_only_keys_keeps_the_failing_records_unchanged(expression: str) -> None:
         (o.key, o.points) for o in full.failures
     ]
     assert len(restricted.outcomes) <= len(full.outcomes)
+
+
+def test_rules_evaluated_concurrently_build_each_selection_once() -> None:
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    from dpmxl.columnar import FrameCache
+
+    points = PointsFrameProvider(data())
+    started = threading.Barrier(4)
+    calls: list[object] = []
+
+    class Slow:
+        def select_frame(self, query):
+            calls.append(query)
+            return points.select_frame(query)
+
+        def table_reported(self, table):
+            return points.table_reported(table)
+
+        def parameter(self, name):
+            return points.parameter(name)
+
+    cache = FrameCache()
+    expression = (
+        "with {tT, c*, default: 0, interval: true}: {r0010} = {r0020} + {r0030}"
+    )
+
+    def evaluate(_: int):
+        started.wait()
+        return evaluate_rule_columnar(expression, Slow(), cache=cache)
+
+    with ThreadPoolExecutor(4) as pool:
+        results = list(pool.map(evaluate, range(4)))
+
+    assert {(result.status, result.failed) for result in results} == {("failed", 1)}
+    # One provider query per distinct selection, however many rules ask.
+    assert len(calls) == len(set(calls)) == 3

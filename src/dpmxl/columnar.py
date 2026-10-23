@@ -24,8 +24,10 @@ overflow ``Decimal(38, 12)`` raises inside polars and falls back the same way.
 from __future__ import annotations
 
 import re
+import threading
 from collections import OrderedDict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -276,6 +278,11 @@ class FrameCache:
     Rules reuse the same selections, but on massive open tables a selection
     can hold millions of rows, so the cache keeps at most ``max_rows`` rows
     and evicts the least recently used selections beyond that.
+
+    Rules may be evaluated concurrently from several threads (polars releases
+    the GIL): the cache is thread-safe, and :meth:`raw_frame` and
+    :meth:`selection` build each missing entry once while other threads
+    asking for it wait for that build.
     """
 
     def __init__(self, max_rows: int = 20_000_000) -> None:
@@ -288,6 +295,8 @@ class FrameCache:
         self.raw: OrderedDict[CellQuery, pl.DataFrame] = OrderedDict()
         self.frames: OrderedDict[SelectionSpec, Frame] = OrderedDict()
         self._rows = 0
+        self._lock = threading.Lock()
+        self._building: dict[CellQuery | SelectionSpec, Future[Any]] = {}
 
     def get_raw(self, query: CellQuery) -> pl.DataFrame | None:
         """Return a cached provider frame.
@@ -295,10 +304,11 @@ class FrameCache:
         Returns:
             pl.DataFrame | None: The frame, or ``None``.
         """
-        frame = self.raw.get(query)
-        if frame is not None:
-            self.raw.move_to_end(query)
-        return frame
+        with self._lock:
+            frame = self.raw.get(query)
+            if frame is not None:
+                self.raw.move_to_end(query)
+            return frame
 
     def get_frame(self, spec: SelectionSpec) -> Frame | None:
         """Return a cached selection record set.
@@ -306,21 +316,84 @@ class FrameCache:
         Returns:
             Frame | None: The frame, or ``None``.
         """
-        frame = self.frames.get(spec)
-        if frame is not None:
-            self.frames.move_to_end(spec)
-        return frame
+        with self._lock:
+            frame = self.frames.get(spec)
+            if frame is not None:
+                self.frames.move_to_end(spec)
+            return frame
 
     def put_raw(self, query: CellQuery, frame: pl.DataFrame) -> None:
         """Cache a provider frame within the row budget."""
-        self.raw[query] = frame
-        self._rows += frame.height
-        self._evict()
+        with self._lock:
+            self._put(self.raw, query, frame.height, frame)
 
     def put_frame(self, spec: SelectionSpec, frame: Frame) -> None:
         """Cache a selection record set within the row budget."""
-        self.frames[spec] = frame
-        self._rows += frame.df.height
+        with self._lock:
+            self._put(self.frames, spec, frame.df.height, frame)
+
+    def raw_frame(
+        self, query: CellQuery, build: Callable[[], pl.DataFrame]
+    ) -> pl.DataFrame:
+        """Return a provider frame, building and caching it once.
+
+        Returns:
+            pl.DataFrame: The cached or newly built frame.
+        """
+        return self._once(self.raw, query, build, lambda frame: frame.height)
+
+    def selection(self, spec: SelectionSpec, build: Callable[[], Frame]) -> Frame:
+        """Return a selection record set, building and caching it once.
+
+        Returns:
+            Frame: The cached or newly built record set.
+        """
+        return self._once(self.frames, spec, build, lambda frame: frame.df.height)
+
+    def _once(
+        self,
+        store: OrderedDict[Any, Any],
+        key: CellQuery | SelectionSpec,
+        build: Callable[[], Any],
+        height: Callable[[Any], int],
+    ) -> Any:
+        with self._lock:
+            cached = store.get(key)
+            if cached is not None:
+                store.move_to_end(key)
+                return cached
+            pending = self._building.get(key)
+            owner = pending is None
+            if pending is None:
+                pending = self._building[key] = Future()
+        if not owner:
+            # Another rule is building it; its error is this rule's too.
+            return pending.result()
+        try:
+            value = build()
+        except BaseException as error:
+            with self._lock:
+                del self._building[key]
+            pending.set_exception(error)
+            raise
+        with self._lock:
+            self._put(store, key, height(value), value)
+            del self._building[key]
+        pending.set_result(value)
+        return value
+
+    def _put(
+        self, store: OrderedDict[Any, Any], key: Any, height: int, value: Any
+    ) -> None:
+        previous = store.pop(key, None)
+        if previous is not None:
+            self._rows -= (
+                previous.height
+                if isinstance(previous, pl.DataFrame)
+                else previous.df.height
+            )
+        store[key] = value
+        self._rows += height
         self._evict()
 
     def _evict(self) -> None:
@@ -440,20 +513,19 @@ class ColumnarEvaluator:
     def _selection(self, spec: SelectionSpec) -> Frame:
         if not spec.table:
             raise EvaluationError(f"selection {spec.text()} has no table")
-        cached = self.cache.get_frame(spec)
-        if cached is not None:
-            return cached
+        return self.cache.selection(spec, lambda: self._build_selection(spec))
+
+    def _build_selection(self, spec: SelectionSpec) -> Frame:
+        assert spec.table is not None
         query = CellQuery(spec.table, spec.rows, spec.columns, spec.sheets)
-        raw = self.cache.get_raw(query)
-        if raw is None:
-            try:
-                raw = self.provider.select_frame(query)
-            except LookupError as error:
-                raise EvaluationError(str(error)) from error
-            self.cache.put_raw(query, raw)
-        frame = _build_selection(raw, spec)
-        self.cache.put_frame(spec, frame)
-        return frame
+        raw = self.cache.raw_frame(query, lambda: self._select_frame(query))
+        return _build_selection(raw, spec)
+
+    def _select_frame(self, query: CellQuery) -> pl.DataFrame:
+        try:
+            return self.provider.select_frame(query)
+        except LookupError as error:
+            raise EvaluationError(str(error)) from error
 
     # Calls ------------------------------------------------------------------
 

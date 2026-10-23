@@ -316,7 +316,7 @@ def format_computed(value: Decimal) -> str:
 
     A division yields up to 28 decimals. Beyond ten, the number shows six
     significant digits, but keeps every integer digit and two decimals:
-    ``1.852935352358765...`` reads ``1.85294`` and ``12345.678901234``
+    ``1.852935352358765...`` reads ``1.85294`` and ``12345.67890123456``
     ``12,345.68``. Shorter fractions, such as the exact difference of two
     reported values, are shown in full, as reported values always are.
 

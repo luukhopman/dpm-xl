@@ -7,18 +7,24 @@ name = "dpm-xl"
 version = "0.1.0"
 description = "Parser and evaluator for the EBA DPM-XL validation-rule language"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
-authors = [{ name = "Luuk Hopman" }]
+authors = [{ name = "Luuk Hopman", email = "github@luukhopman.nl" }]
 keywords = ["DPM", "DPM-XL", "EBA", "XBRL", "validation rules"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Financial and Insurance Industry",
-    "Private :: Do Not Upload",
     "Programming Language :: Python :: 3 :: Only",
     "Topic :: Office/Business :: Financial",
     "Typing :: Typed",
 ]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/luukhopman/dpm-xl"
+Source = "https://github.com/luukhopman/dpm-xl"
+Issues = "https://github.com/luukhopman/dpm-xl/issues"
 
 [project.scripts]
 dpm-xl = "dpmxl.cli:main"

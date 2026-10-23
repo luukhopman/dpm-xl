@@ -22,6 +22,9 @@ The package does not read report files and knows nothing about a particular
 DPM release. Data comes through a small provider protocol (see below), so the
 same evaluator works against an xBRL-CSV upload, a database, or test fixtures.
 
+dpm-xl is an independent project, not affiliated with or endorsed by the
+European Banking Authority.
+
 ## Modules
 
 | Module | Purpose |

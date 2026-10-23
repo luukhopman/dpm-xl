@@ -1,0 +1,30 @@
+name: Publish
+
+# Publishing a GitHub release tagged v<version> tests, builds and uploads the
+# package to PyPI through trusted publishing; no API token is stored.
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+jobs:
+  publish:
+    name: Test, build and publish to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+      - name: Check the tag matches the version
+        run: test "${GITHUB_REF_NAME#v}" = "$(uv version --short)"
+      - run: uv sync --frozen --all-extras --group test
+      - run: uv run --frozen pytest
+      - run: uv build
+      - run: uv publish --trusted-publishing always

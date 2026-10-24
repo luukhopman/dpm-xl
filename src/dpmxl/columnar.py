@@ -58,7 +58,14 @@ from .ast import (
     Where,
     With,
 )
-from .evaluator import _UNSUPPORTED_FUNCTIONS, AGGREGATES, _parse_cached, is_boolean
+from .evaluator import (
+    _UNSUPPORTED_FUNCTIONS,
+    AGGREGATES,
+    _context_condition,
+    _key_names,
+    _parse_cached,
+    is_boolean,
+)
 from .provider import (
     CellQuery,
     DataPoint,
@@ -431,6 +438,7 @@ class ColumnarEvaluator:
         self.provider = provider
         self.cache = cache or FrameCache()
         self._conditions: list[Node] = []
+        self._overrides: tuple[str, ...] = ()
 
     def evaluate(self, node: Node, context: SelectionSpec | None = None) -> Frame:
         """Evaluate a node under an inherited ``with`` context.
@@ -458,7 +466,9 @@ class ColumnarEvaluator:
             case Selection(spec=spec):
                 frame = self._selection(spec.merged_into(context))
                 for condition in self._conditions:
-                    frame = self._where(frame, condition)
+                    kept = _context_condition(condition, self._overrides, frame.keys)
+                    if kept is not None:
+                        frame = self._where(frame, kept)
                 return frame
             case TableReported(table=table):
                 return scalar_frame(self.provider.table_reported(table))
@@ -494,11 +504,16 @@ class ColumnarEvaluator:
             case Call():
                 return self._call(node, context)
             case Where(operand=operand, condition=condition):
-                return self._where(self._clause_operand(operand, context), condition)
+                return self._where(
+                    self._clause_operand(operand, _key_names(condition), context),
+                    condition,
+                )
             case Get(operand=operand, name=name):
                 return self._get(self.evaluate(operand, context), name)
             case Sub(operand=operand, name=name, value=value):
-                return self._sub(self._clause_operand(operand, context), name, value)
+                return self._sub(
+                    self._clause_operand(operand, (name,), context), name, value
+                )
             case Rename(operand=operand, pairs=pairs):
                 return self._rename(self.evaluate(operand, context), pairs)
             case SetLiteral():
@@ -515,15 +530,18 @@ class ColumnarEvaluator:
         except EvaluationError as error:
             raise ColumnarUnsupported(f"error in a branch: {error}") from error
 
-    def _clause_operand(self, operand: Node, context: SelectionSpec) -> Frame:
-        # DPM-XL 3.2: a where or sub on a selection overrides the with-where.
-        if not isinstance(operand, Selection) or not self._conditions:
-            return self.evaluate(operand, context)
-        saved, self._conditions = self._conditions, []
+    def _clause_operand(
+        self, operand: Node, names: tuple[str, ...], context: SelectionSpec
+    ) -> Frame:
+        # DPM-XL 3.2: a where or sub on a selection overrides the with-where
+        # on the same key (see dpmxl.evaluator._context_condition).
+        saved = self._overrides
+        direct = isinstance(operand, Selection | Where | Sub)
+        self._overrides = saved + names if direct else ()
         try:
             return self.evaluate(operand, context)
         finally:
-            self._conditions = saved
+            self._overrides = saved
 
     # Selections -------------------------------------------------------------
 

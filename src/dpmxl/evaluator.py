@@ -50,6 +50,7 @@ from .ast import (
     Unary,
     Where,
     With,
+    walk,
 )
 from .parser import parse
 from .provider import (
@@ -219,6 +220,9 @@ class Evaluator:
         self._notes: list[str] = []
         self._selection_cache: dict[tuple[object, ...], list[DataPoint]] = {}
         self._context_conditions: list[Node] = []
+        # Keys named by where and sub clauses written on the selection being
+        # evaluated; they override the context's where on those keys.
+        self._overrides: tuple[str, ...] = ()
 
     def run(self, node: Node) -> Evaluation:
         """Evaluate a complete expression.
@@ -267,7 +271,9 @@ class Evaluator:
             case Selection(spec=spec):
                 selected = self._selection(spec.merged_into(context))
                 for condition in self._context_conditions:
-                    selected = self._where(selected, condition, context)
+                    kept = _context_condition(condition, self._overrides, selected.keys)
+                    if kept is not None:
+                        selected = self._where(selected, kept, context)
                 return selected
             case TableReported(table=table):
                 return Recordset.scalar(self.provider.table_reported(table))
@@ -313,14 +319,18 @@ class Evaluator:
                 return self._call(node, context, bindings)
             case Where(operand=operand, condition=condition):
                 return self._where(
-                    self._clause_operand(operand, context, bindings), condition, context
+                    self._clause_operand(
+                        operand, _key_names(condition), context, bindings
+                    ),
+                    condition,
+                    context,
                 )
             case Get(operand=operand, name=name):
                 return self._get(self.evaluate(operand, context, bindings), name)
             case Sub(operand=operand, name=name, value=value):
                 fixed = self.evaluate(value, context, bindings).single()
                 return self._sub(
-                    self._clause_operand(operand, context, bindings),
+                    self._clause_operand(operand, (name,), context, bindings),
                     name,
                     _checked(fixed.value) if fixed else None,
                 )
@@ -351,18 +361,19 @@ class Evaluator:
     def _clause_operand(
         self,
         operand: Node,
+        names: tuple[str, ...],
         context: SelectionSpec,
         bindings: Mapping[str, Value] | None,
     ) -> Recordset:
         # DPM-XL 3.2: a where or sub clause on a selection overrides the
-        # with-level where instead of adding to it.
-        if not isinstance(operand, Selection) or not self._context_conditions:
-            return self.evaluate(operand, context, bindings)
-        saved, self._context_conditions = self._context_conditions, []
+        # with-level where on the same key instead of adding to it.
+        saved = self._overrides
+        direct = isinstance(operand, Selection | Where | Sub)
+        self._overrides = saved + names if direct else ()
         try:
             return self.evaluate(operand, context, bindings)
         finally:
-            self._context_conditions = saved
+            self._overrides = saved
 
     # Selections ---------------------------------------------------------
 
@@ -571,6 +582,50 @@ class Evaluator:
     ) -> Value:
         record = self.evaluate(node, context, bindings).single()
         return _checked(record.value) if record else None
+
+
+def _context_condition(
+    condition: Node, overrides: tuple[str, ...], keys: tuple[str, ...]
+) -> Node | None:
+    """Return the part of a ``with`` where that applies to a selection.
+
+    A where or sub clause written on the selection overrides the context's
+    where on the same key (DPM-XL 3.2): the context condition's ``and``
+    terms that name an overridden key are left out.
+
+    Args:
+        condition: The ``with`` context's where condition.
+        overrides: Key names of the clauses written on the selection.
+        keys: The selection's keys, which the names resolve against.
+
+    Returns:
+        Node | None: The condition to apply, or ``None`` for none.
+    """
+    if not overrides:
+        return condition
+    overridden = {resolve_key(name, keys) for name in overrides} - {None}
+    if not overridden:
+        return condition
+    terms: list[Node] = []
+    pending = [condition]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, Binary) and current.op == "and":
+            pending += [current.right, current.left]
+        elif not {resolve_key(name, keys) for name in _key_names(current)} & (
+            overridden
+        ):
+            terms.append(current)
+    if not terms:
+        return None
+    kept = terms[0]
+    for term in terms[1:]:
+        kept = Binary("and", kept, term, span=(kept.span[0], term.span[1]))
+    return kept
+
+
+def _key_names(node: Node) -> tuple[str, ...]:
+    return tuple(current.name for current in walk(node) if isinstance(current, Name))
 
 
 # Value helpers -------------------------------------------------------------

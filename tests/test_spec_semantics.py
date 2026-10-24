@@ -179,3 +179,28 @@ def test_open_table_without_rows_keeps_its_keys() -> None:
     assert status("sum({tO, r0010, c0010} group by KEY) = 0", data) == "not_applicable"
     rule = "if not isnull({tO, r0010, c0010}) then {tO, r0010, c0010} > 0 endif"
     assert status(rule, data) == "not_applicable"
+
+
+def test_clauses_on_a_selection_override_the_context_where_on_their_key() -> None:
+    # 3.2: a where on a selection replaces the with-level where on its key;
+    # where on other keys still applies.
+    table = TableLayout("O2", rows=("0010",), columns=("0010",), open_keys=("qA", "qB"))
+    data = MemoryProvider(
+        [table],
+        {
+            ("O2", "0010", "0010", None, (("qA", a), ("qB", b))): Number.of(value, 0)
+            for a, b, value in [("a1", "b1", 1), ("a2", "b1", -1), ("a1", "b2", -5)]
+        },
+    )
+    context = 'with {tO2, r0010, c0010} [where qA = "a1" and B = "b1"]: '
+    for body, expected in [
+        ("{tO2} > 0", "passed"),
+        ('{tO2} [where qB = "b2"] > 0', "failed"),
+        ('{tO2} [where A = "a2"] > 0', "failed"),
+        ('{tO2} [sub qA = "a2"] > -10', "passed"),
+        ('{tO2} [sub qB = "b2"] > 0', "failed"),
+        ('{tO2} [where A != "a2"] [where B != "b1"] > -10', "passed"),
+    ]:
+        result = evaluate_rule(context + body, data)
+        assert result.status == expected, body
+        assert len(result.outcomes) == 1, body

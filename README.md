@@ -104,8 +104,9 @@ European Banking Authority.
   as presence checks expect; Booleans, and numbers mixed with other
   values in one group, are an error.
 - **Clauses.** `[get key]` omits records whose fact is null; a `where` or
-  `sub` inside a `with` body overrides the context's clause on the same key.
-  Booleans order `false < true`.
+  `sub` on a selection inside a `with` body overrides the terms of the
+  context's `where` (split at `and`) that name the same key; the other terms
+  still apply. Booleans order `false < true`.
 - **Key names** in `where`, `group by`, `sub` and `get` match with or without
   the DPM 2.0 `q` prefix and ignore case (`EBB` finds `qEBB`).
 - **Items** compare by code and category, ignoring the `eba_` prefix and a

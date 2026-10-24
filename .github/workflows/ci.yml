@@ -1,0 +1,54 @@
+name: CI
+
+# Every push and pull request runs the tests on each supported Python, with
+# and without the optional extras, plus the linters and the type checker.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python ${{ matrix.python }}${{ matrix.extras && ' with extras' || '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14", "3.15"]
+        extras: [true, false]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+      - name: Test
+        env:
+          UV_PYTHON_PREFERENCE: only-managed
+        run: >-
+          uv run --isolated --python ${{ matrix.python }}
+          ${{ matrix.extras && '--all-extras --group test' || '--no-dev --with pytest' }}
+          pytest -W error::DeprecationWarning
+
+  lint:
+    name: Lint and type check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --all-extras --group lint
+      - run: uv run --frozen ruff check .
+      - run: uv run --frozen ruff format --check .
+      - run: uv run --frozen ty check

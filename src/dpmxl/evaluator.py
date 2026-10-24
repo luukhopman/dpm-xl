@@ -593,14 +593,27 @@ class Evaluator:
         if code in self._operations:
             raise EvaluationError(f"operation {code} refers to itself")
         node = _parse_cached(expression) if isinstance(expression, str) else expression
-        saved = self._context_conditions, self._overrides
+        # An operation is evaluated on its own: the caller's context,
+        # temporaries and assignments neither reach it nor receive its own.
+        saved = (
+            self._context_conditions,
+            self._overrides,
+            self._temporaries,
+            self._assignments,
+        )
         self._operations.append(code)
         self._context_conditions, self._overrides = [], ()
+        self._temporaries, self._assignments = {}, {}
         try:
             return self.evaluate(node, SelectionSpec(), None)
         finally:
             self._operations.pop()
-            self._context_conditions, self._overrides = saved
+            (
+                self._context_conditions,
+                self._overrides,
+                self._temporaries,
+                self._assignments,
+            ) = saved
 
     def _typed_parameter(self, node: TypedParameter) -> Value:
         value = self.provider.parameter(node.name)

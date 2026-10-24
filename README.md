@@ -304,7 +304,9 @@ Every distinct EBA rule and precondition expression in releases
   is null. `{g_Group, …}` selects from every table the provider's
   `table_group(code)` lists, keyed by table code `t` when there are several
   (the tables must share their keys). `{o_Code, …}` evaluates the expression
-  the provider's `operation(code)` returns; its axes keep the result's
+  the provider's `operation(code)` returns, on its own (the rule's context,
+  temporaries and assignments neither reach it nor receive its own); its
+  axes keep the result's
   matching `r`/`c`/`s` records (dropping a key selected by one code),
   `default` fills nulls and `interval: false` makes numbers exact. Without
   those provider methods the rule is `unsupported`; an operation that refers

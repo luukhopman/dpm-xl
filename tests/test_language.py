@@ -794,3 +794,15 @@ def test_time_shift_explanations_show_the_earlier_report() -> None:
         ("F", "0010", "0010", None, ()),
         EarlierRef("Q", 1, ("F", "0010", "0010", None, ())),
     ]
+
+
+def test_operations_do_not_share_temporaries_or_assignments() -> None:
+    provider = provider_with_references()
+    provider.operations["uses_x"] = "x + 1"
+    provider.operations["sets_x"] = "x := 5; {vInner} <- x; x"
+    result = evaluate_rule("x := 1; {o_uses_x} > 0", provider)
+    assert result.status == "error"
+    assert "unknown key component or parameter 'x'" in (result.message or "")
+    result = evaluate_rule("x := 1; {vOuter} <- {o_sets_x}; x = 1", provider)
+    assert result.status == "passed"
+    assert list(result.assignments) == ["{vOuter}"]

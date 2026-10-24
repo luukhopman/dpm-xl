@@ -189,6 +189,7 @@ to (`max_aggr` is `max`), `CALL_NAMES` all of them; `textmate_grammar()` builds 
 - Statements separated by `;`, temporary assignments `name := expression`
   and persistent assignments `{tT, r…, c…} <- expression` or `{vX} <- …`
   (`parse_program`; `evaluate_rule` and `dpm-xl check` accept them too).
+  `<-` is always the assignment: compare with a negated operand as `a < -b`.
 - `with {context} [where …]: body`, nested contexts replacing inherited parts.
 - Selections `{tTABLE, r…, c…, s…, default: v, interval: b}` with single codes,
   inclusive ranges (`r0010-0050`), lists (`(c0010, c0030)`) and wildcards.

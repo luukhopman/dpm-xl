@@ -41,6 +41,7 @@ from dpmxl.ast import (
 )
 from dpmxl.evaluator import Evaluator
 from dpmxl.explain import TIMES
+from dpmxl.parser import tokenize
 from dpmxl.provider import CellKey
 from dpmxl.values import ValueSet
 
@@ -639,3 +640,16 @@ def test_analytic_errors(expression: str, message: str) -> None:
     result = evaluate_rule(expression, report())
     assert result.status == "error"
     assert result.message is not None and message in result.message
+
+
+def test_arrow_is_always_a_persistent_assignment() -> None:
+    assert [token.text for token in tokenize("{tA} <- {tB} + 1")][3] == "<-"
+    program = parse_program("{tA, r0010} <- {tB, r0010} + 1")
+    assert isinstance(program.statements[0], PersistentAssignment)
+    with pytest.raises(DpmXlSyntaxError, match="assignments need parse_program"):
+        parse("{tA} <- {tB} + 1")
+    with pytest.raises(DpmXlSyntaxError, match="found '<-'"):
+        parse("1 + {tA}<-{tB}")
+    # With a space, it is a comparison with a negated operand.
+    node = parse("{tA} < -{tB} + 1")
+    assert isinstance(node, Binary) and node.op == "<"

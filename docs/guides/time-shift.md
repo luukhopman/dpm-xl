@@ -116,6 +116,18 @@ quarter, June plus one quarter, and September moved past the data), so the
 comparison has records where both sides do: June fails (90 < 100), September
 passes (120 ≥ 90).
 
+The explanation fills the shifted operand with the value of the record it
+came from, here March's:
+
+```python
+june = result.failures[0]
+print(explain(result.evaluation, rising, june.key).summary)
+```
+
+```text
+90 should be at least 100 (time_shift(100, Q, 1, qDAT)): difference 10
+```
+
 ## `annualise`
 
 `annualise(x, fiscalYearEnd, key)` scales a year-to-date amount to a full

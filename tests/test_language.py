@@ -875,3 +875,29 @@ def test_aggregates_without_an_operand_are_errors(expression: str) -> None:
 def test_variable_names_may_contain_dots() -> None:
     assert parse("{vTotal.A}") == Parameter("Total.A")
     assert value("{vTotal.A}", report(**{"Total.A": "x"})) == "x"
+
+
+def test_explanations_of_a_date_key_shift_show_the_earlier_record() -> None:
+    provider = MemoryProvider(
+        [TableLayout("D", columns=("0010",), open_keys=("qDAT",))],
+        {
+            ("D", None, "0010", None, (("qDAT", day),)): Number.of(amount, 0)
+            for day, amount in (
+                (date(2026, 3, 31), 10),
+                (date(2026, 6, 30), 20),
+                (date(2026, 9, 30), 30),
+            )
+        },
+    )
+    rule = "{tD, c0010} <= time_shift({tD, c0010}, Q, 1, qDAT)"
+    result = evaluate_rule(rule, provider)
+    assert result.status == "failed"
+    assert result.evaluation is not None
+    summaries = [
+        explain(result.evaluation, rule, outcome.key).summary
+        for outcome in result.failures
+    ]
+    assert summaries == [
+        "20 should not exceed 10 (time_shift(10, Q, 1, qDAT)): difference 10",
+        "30 should not exceed 20 (time_shift(20, Q, 1, qDAT)): difference 10",
+    ]

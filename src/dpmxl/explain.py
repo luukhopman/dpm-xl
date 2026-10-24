@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
+from datetime import date
 from decimal import (
     ROUND_DOWN,
     ROUND_HALF_EVEN,
@@ -57,9 +58,9 @@ from .ast import (
     With,
     children,
 )
-from .evaluator import AGGREGATES, Evaluation
+from .evaluator import AGGREGATES, Evaluation, _shift_date
 from .provider import DataPoint
-from .recordset import resolve_key, unique_points
+from .recordset import EvaluationError, resolve_key, unique_points
 from .values import (
     DECIMAL_CONTEXT,
     Number,
@@ -432,7 +433,7 @@ class _Formatter:
             renames = self._shapes["renames", id(evaluation.root)] = _renames(
                 evaluation.root
             )
-        self._renames: dict[int, tuple[Rename, ...]] = renames
+        self._renames: dict[int, tuple[Rename | Call, ...]] = renames
 
     # Values -------------------------------------------------------------
 
@@ -447,20 +448,55 @@ class _Formatter:
     def _binding(self, node: Node) -> Mapping[str, Hashable]:
         """Return the failing record's key as the node names it.
 
-        Below ``[rename a to b]`` the key ``b`` is still called ``a``.
+        Below ``[rename a to b]`` the key ``b`` is still called ``a``, and
+        below a ``time_shift`` that moves a date key, the key holds the date
+        before the shift.
 
         Returns:
             Mapping[str, Hashable]: The key binding.
         """
         binding = self.key
-        for rename in self._renames.get(id(node), ()):
-            operand = self.evaluation.trace.get(id(rename.operand))
+        for above in self._renames.get(id(node), ()):
+            if isinstance(above, Call):
+                binding = self._unshifted(above, binding)
+                continue
+            operand = self.evaluation.trace.get(id(above.operand))
             keys = operand.keys if operand is not None else ()
             binding = dict(binding)
-            for old, new in reversed(rename.pairs):
+            for old, new in reversed(above.pairs):
                 if new in binding:
                     binding[resolve_key(old, keys) or old] = binding.pop(new)
         return binding
+
+    def _unshifted(
+        self, call: Call, binding: Mapping[str, Hashable]
+    ) -> Mapping[str, Hashable]:
+        """Undo a ``time_shift`` on a date key for the nodes below it.
+
+        Returns:
+            Mapping[str, Hashable]: The binding with the date moved back, or
+            unchanged when the shift read another report instead.
+        """
+        operand, period, count, key = call.args
+        trace = self.evaluation.trace
+        data = trace.get(id(operand))
+        counted = trace.get(id(count))
+        record = counted.records.get(()) if counted is not None else None
+        if data is None or record is None or not isinstance(key, Name):
+            return binding
+        found = resolve_key(key.name, data.keys)
+        moment = binding.get(found) if found is not None else None
+        if (
+            not isinstance(period, Name)
+            or not isinstance(moment, date)
+            or not isinstance(record.value, Number)
+        ):
+            return binding
+        try:
+            earlier = _shift_date(moment, period.name, -int(record.value.value))
+        except (EvaluationError, KeyError, ValueError):
+            return binding
+        return {**binding, cast(str, found): earlier}
 
     def value(self, node: Node) -> Value | None:
         records = self.records(node)
@@ -694,20 +730,25 @@ class _Formatter:
         return parenthesized
 
 
-def _renames(root: Node) -> dict[int, tuple[Rename, ...]]:
-    """Map each node below a rename to the renames above it, outermost first.
+def _renames(root: Node) -> dict[int, tuple[Rename | Call, ...]]:
+    """Map each node to the key changes above it, outermost first.
+
+    Key changes are renames and ``time_shift`` calls with a key, which may
+    move a date key.
 
     Returns:
-        dict[int, tuple[Rename, ...]]: Renames by node id; nodes without any
-        are left out.
+        dict[int, tuple[Rename | Call, ...]]: Key changes by node id; nodes
+        without any are left out.
     """
-    found: dict[int, tuple[Rename, ...]] = {}
-    pending: list[tuple[Node, tuple[Rename, ...]]] = [(root, ())]
+    found: dict[int, tuple[Rename | Call, ...]] = {}
+    pending: list[tuple[Node, tuple[Rename | Call, ...]]] = [(root, ())]
     while pending:
         node, above = pending.pop()
         if above:
             found[id(node)] = above
-        if isinstance(node, Rename):
+        if isinstance(node, Rename) or (
+            isinstance(node, Call) and node.name == "time_shift" and len(node.args) == 4
+        ):
             above = (*above, node)
         pending.extend((child, above) for child in children(node))
     return found

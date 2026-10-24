@@ -451,12 +451,19 @@ class Program(Node):
 def children(node: Node) -> tuple[Node, ...]:
     """Return a node's direct child expressions in source order.
 
+    A selection's or ``with`` context's ``default`` and a typed parameter's
+    ``default`` are children too, so :func:`walk` reaches every literal.
+
     Returns:
-        tuple[Node, ...]: Child nodes; literal and leaf nodes have none.
+        tuple[Node, ...]: Child nodes; literals and other leaves have none.
     """
     match node:
-        case With(body=body, condition=condition):
-            return ((condition,) if condition else ()) + (body,)
+        case With(context=context, body=body, condition=condition):
+            return (
+                _default_of(context.default)
+                + ((condition,) if condition else ())
+                + (body,)
+            )
         case SetLiteral(items=items):
             return items
         case Unary(operand=operand) | Get(operand=operand) | Rename(operand=operand):
@@ -481,7 +488,15 @@ def children(node: Node) -> tuple[Node, ...]:
             return (value,)
         case PersistentAssignment(target=target, value=value):
             return (target, value)
+        case Selection(spec=spec):
+            return _default_of(spec.default)
+        case TypedParameter(default=default):
+            return _default_of(default)
     return ()
+
+
+def _default_of(default: Literal_ | SetLiteral | _Missing) -> tuple[Node, ...]:
+    return (default,) if isinstance(default, Node) else ()
 
 
 def walk(node: Node) -> list[Node]:

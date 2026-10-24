@@ -834,3 +834,17 @@ def test_arrow_inside_a_clause_is_a_comparison() -> None:
         "<", Name("qX"), Unary("-", Literal_(Decimal(1), "number"))
     )
     assert parse("{tO} [where qX<-1]") == parse("{tO} [where qX < -1]")
+
+
+def test_walk_reaches_selection_and_parameter_defaults() -> None:
+    node = parse(
+        "with {tT, default: 0}: {r0010, default: [qC:x]} in "
+        "{p_S, set-item, default: {[qC:y]}}"
+    )
+    literals = [item for item in walk(node) if isinstance(item, Literal_)]
+    assert [literal.value for literal in literals] == [
+        Decimal(0),
+        Item("qC", "x"),
+        Item("qC", "y"),
+    ]
+    assert all(literal.span != (0, 0) for literal in literals)

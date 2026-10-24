@@ -71,6 +71,8 @@ All notable changes to this project are documented here. The project follows
 - A `_` after a selection prefix is cosmetic, as the DPM-XL grammar says:
   `{t_T1}` selects table `T1`, not `_T1`. `SelectionSpec` has
   `table_group` and `operation` fields.
+- `children()` and `walk()` reach the `default` of a selection, a `with`
+  context and a typed parameter.
 - `with`, `to`, `where`, `get`, `sub`, `rename` and `over` are reserved
   words; escape a key of that name as `` `to` ``. `a<-1` is now a persistent
   assignment; write `a < -1` for the comparison.

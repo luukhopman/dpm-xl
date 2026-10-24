@@ -286,6 +286,8 @@ def test_typed_parameters(expression: str, parameters: dict, expected: Value) ->
         ("{p_N, number} = 1", {"N": "x"}, "is not a number"),
         ("{p_S, set-string} = 1", {"S": "x"}, "is not a set"),
         ("{p_B, boolean}", {"B": 1}, "is not a Boolean"),
+        ("{p_N, number} = 1", {"N": float("nan")}, "is not a number"),
+        ("{p_N, integer} = 1", {"N": float("inf")}, "is not an integer"),
     ],
 )
 def test_typed_parameter_errors(

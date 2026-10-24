@@ -1341,8 +1341,10 @@ def _parameter_value(name: str, kind: str, value: Value) -> Value:
     if kind in {"number", "integer"}:
         if isinstance(found, int | float | Decimal) and not isinstance(found, bool):
             found = Number(Decimal(str(found)))
-        if not isinstance(found, Number) or (
-            kind == "integer" and found.value != found.value.to_integral_value()
+        if (
+            not isinstance(found, Number)
+            or not found.value.is_finite()
+            or (kind == "integer" and found.value != found.value.to_integral_value())
         ):
             raise EvaluationError(f"parameter {name} is not {_ARTICLES[kind]}")
         return found

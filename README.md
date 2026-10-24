@@ -293,7 +293,9 @@ Every distinct EBA rule and precondition expression in releases
 - **Sets** hold distinct non-null values (numbers exactly, items ignoring the
   `eba_` prefix) in first-seen order. An operand of `in` or of a set operator
   that is not a set stands for the set of its non-null values, so
-  `{c0010} in {tT, r*, c0020}` tests against the column's values. Sets cannot
+  `{c0010} in {tT, r*, c0020}` tests against the column's values; a single
+  null, such as a missing set parameter, is a null set, which makes `in` and
+  the set operators null (`set_of(null)` is `{}`). Sets cannot
   be compared or appear in a rule's result; a set `default` on a cell
   selection is an error.
 - **References.** `{p_Name, type}` reads `parameter(Name)` and checks its

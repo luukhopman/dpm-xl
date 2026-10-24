@@ -347,7 +347,11 @@ class Evaluator:
             ):
                 found = self._as_set(self.evaluate(values, context, bindings), "in")
                 return self.evaluate(operand, context, bindings).map(
-                    _unary_per_record(lambda value: _membership(value, found.members))
+                    _unary_per_record(
+                        lambda value: (
+                            None if found is None else _membership(value, found.members)
+                        )
+                    )
                 )
             case In(operand=operand, values=SetLiteral() as values):
                 members = self._members.get(id(values))
@@ -794,11 +798,18 @@ class Evaluator:
         if name in {"union", "intersect"} and count < 2:
             raise EvaluationError(f"{name} takes at least 2 operands")
         operands = [self.evaluate(arg, context, bindings) for arg in node.args]
-        sets = [self._as_set(operand, name) for operand in operands]
-        first = sets[0]
+        found = [self._as_set(operand, name) for operand in operands]
+        points = unique_points(
+            record.points for operand in operands for record in operand.records.values()
+        )
         if name == "set_of":
-            result = first
-        elif name == "union":
+            return Recordset.scalar(found[0] or ValueSet(), points)
+        sets = [item for item in found if item is not None]
+        if len(sets) != len(found):
+            # A null set, such as a missing set parameter, makes the result null.
+            return Recordset.scalar(None, points)
+        first = sets[0]
+        if name == "union":
             result = _value_set(member for found in sets for member in found.members)
         elif name == "intersect":
             result = ValueSet(
@@ -817,24 +828,25 @@ class Evaluator:
                 tuple(member for member in first.members if member not in sets[1])
                 + tuple(member for member in sets[1].members if member not in first)
             )
-        points = unique_points(
-            record.points for operand in operands for record in operand.records.values()
-        )
         return Recordset.scalar(result, points)
 
     @staticmethod
-    def _as_set(data: Recordset, name: str) -> ValueSet:
+    def _as_set(data: Recordset, name: str) -> ValueSet | None:
         """Read an operand as a set: a set value, or the set of its values.
 
         Returns:
-            ValueSet: The set; null values are left out.
+            ValueSet | None: The set, with null values left out; ``None`` for
+            a single null value, such as a set parameter that is missing.
 
         Raises:
             EvaluationError: If a value failed or is itself a set.
         """
         values = [_checked(record.value) for record in data.records.values()]
-        if not data.keys and len(values) == 1 and isinstance(values[0], ValueSet):
-            return values[0]
+        if not data.keys and len(values) == 1:
+            if isinstance(values[0], ValueSet):
+                return values[0]
+            if values[0] is None:
+                return None
         try:
             return ValueSet.of(values)
         except TypeError as error:

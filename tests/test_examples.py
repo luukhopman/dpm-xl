@@ -59,7 +59,7 @@ def test_cli_check_json_reports_positions(capsys) -> None:
 def test_cli_rejects_a_malformed_rule_file(tmp_path, capsys) -> None:
     rules = tmp_path / "rules.json"
     rules.write_text('{"code": "x"}', encoding="utf-8")
-    assert main(["check", str(rules)]) == 2
+    assert main(["check", str(rules)]) == 3
     assert "must hold a list of rules" in capsys.readouterr().err
 
 

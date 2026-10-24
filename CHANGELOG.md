@@ -53,6 +53,8 @@ All notable changes to this project are documented here. The project follows
 
 ### Changed
 
+- **Breaking:** `dpm-xl` exits with status 3, not 2, for an evaluation error
+  or unreadable input, so 2 means a usage error only.
 - The tokenizer splits selections into tokens; `Token.text` is the exact
   source text (quotes, brackets and backticks included) and `Token` is a
   named tuple. Error positions inside selections point at the component.

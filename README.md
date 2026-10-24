@@ -151,9 +151,9 @@ and an optional `precondition` ([`examples/rules.json`](https://github.com/luukh
 document). `--json` output is an object with
 `schema_version` (1), and `results` (`eval`: rule, expression, status,
 message, counts and failures with key, summary and cells) or `parsed`,
-`total` and `errors` with positions (`check`). The exit status is 0 when everything parsed or
-held, 1 when an expression does not parse or a rule fails, and 2 for an
-evaluation error or unreadable input.
+`total` and `errors` with positions (`check`). The exit status is 0 when
+everything parsed or held, 1 when an expression does not parse or a rule
+fails, 2 for a usage error, and 3 for an evaluation error or unreadable input.
 
 ```text
 $ dpm-xl eval examples/rules.json examples/data.json

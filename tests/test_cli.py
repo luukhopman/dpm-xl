@@ -99,7 +99,7 @@ def test_eval_accepts_inf_decimals(tmp_path, capsys) -> None:
 )
 def test_eval_reports_bad_data_cleanly(tmp_path, capsys, fact, message) -> None:
     data = _write(tmp_path, [fact])
-    assert main(["eval", "{tA, r0010, c0010} = 1", data]) == 2
+    assert main(["eval", "{tA, r0010, c0010} = 1", data]) == 3
     error = capsys.readouterr().err
     assert error.startswith("error: ")
     assert message in error

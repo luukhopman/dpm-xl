@@ -42,8 +42,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Returns:
         int: Process exit code: 0 when everything parsed or held, 1 when an
-        expression did not parse or a rule failed, 2 for an evaluation error
-        or unreadable input.
+        expression did not parse or a rule failed, 3 for an evaluation error
+        or unreadable input (argparse uses 2 for usage errors).
     """
     parser = argparse.ArgumentParser(
         prog="dpm-xl",
@@ -150,7 +150,7 @@ def _check(source: str, *, show_references: bool, as_json: bool = False) -> int:
         rules = _rules(source)
     except (OSError, ValueError) as error:
         print(f"error: {source}: {error}", file=sys.stderr)
-        return 2
+        return INVALID_INPUT
     total = 0
     errors: list[dict[str, Any]] = []
     selections: list[dict[str, str]] = []
@@ -185,6 +185,9 @@ def _check(source: str, *, show_references: bool, as_json: bool = False) -> int:
     return 1 if errors else 0
 
 
+INVALID_INPUT = 3
+"""Exit status for an evaluation error or unreadable input."""
+
 _EXIT_CODES = {"passed": 0, "not_applicable": 0, "failed": 1}
 
 
@@ -201,7 +204,7 @@ def _evaluate(
         provider = load_memory_provider(document)
     except (OSError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
-        return 2
+        return INVALID_INPUT
     if precondition and len(rules) == 1:
         rules = [_Rule(rules[0].label, rules[0].expression, precondition)]
     results = []
@@ -253,7 +256,8 @@ def _evaluate(
                 + ", ".join(f"{count} {status}" for status, count in statuses.items())
             )
     return max(
-        (_EXIT_CODES.get(result.status, 2) for _, result, _ in results), default=0
+        (_EXIT_CODES.get(result.status, INVALID_INPUT) for _, result, _ in results),
+        default=0,
     )
 
 

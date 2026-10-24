@@ -442,11 +442,8 @@ class _Formatter:
         match node:
             case Binary(op="+" | "-"):
                 return self._additive(node, filled=filled)
-            case Binary(op=op, left=left, right=right):
-                return (
-                    f"{self.render(left, filled=filled)} {_SYMBOLS.get(op, op)} "
-                    f"{self.render(right, filled=filled)}"
-                )
+            case Binary():
+                return self._chain(node, filled=filled)
             case Unary(op="not", operand=operand):
                 return f"not {self.render(operand, filled=filled)}"
             case Unary(op=op, operand=operand):
@@ -504,6 +501,25 @@ class _Formatter:
             self.operands.append(Operand(source, text, points))
         return text if filled else source
 
+    def _chain(self, node: Binary, *, filled: bool) -> str:
+        # A left-deep chain (a or b or c ...) in a loop, not one recursion
+        # per operator.
+        spine = [node]
+        while True:
+            left = spine[-1].left
+            if (
+                not isinstance(left, Binary)
+                or left.op in {"+", "-"}
+                or self._parenthesized(left)
+            ):
+                break
+            spine.append(left)
+        text = self.render(spine[-1].left, filled=filled)
+        for current in reversed(spine):
+            symbol = _SYMBOLS.get(current.op, current.op)
+            text = f"{text} {symbol} {self.render(current.right, filled=filled)}"
+        return text
+
     def _additive(self, node: Node, *, filled: bool) -> str:
         terms = self._shapes.get(("additive", id(node)))
         if terms is None:
@@ -545,23 +561,38 @@ class _Formatter:
         return parenthesized
 
 
-def _flatten_additive(node: Node, sign: int = 1) -> list[tuple[int, Node]]:
+def _flatten_additive(node: Node) -> list[tuple[int, Node]]:
     # Sums and differences flatten without changing their value, whatever
-    # the source's parentheses: a - (b - c) is a - b + c.
-    if isinstance(node, Binary) and node.op in {"+", "-"}:
-        right_sign = sign if node.op == "+" else -sign
-        return _flatten_additive(node.left, sign) + _flatten_additive(
-            node.right, right_sign
-        )
-    if isinstance(node, Unary) and node.op in {"+", "-"} and _is_leaf(node.operand):
-        return [(sign if node.op == "+" else -sign, node.operand)]
-    return [(sign, node)]
+    # the source's parentheses: a - (b - c) is a - b + c. A stack, not
+    # recursion: sums of a thousand cells are left-deep trees.
+    terms: list[tuple[int, Node]] = []
+    pending: list[tuple[int, Node]] = [(1, node)]
+    while pending:
+        sign, current = pending.pop()
+        if isinstance(current, Binary) and current.op in {"+", "-"}:
+            pending.append((sign if current.op == "+" else -sign, current.right))
+            pending.append((sign, current.left))
+        elif (
+            isinstance(current, Unary)
+            and current.op in {"+", "-"}
+            and _is_leaf(current.operand)
+        ):
+            terms.append((sign if current.op == "+" else -sign, current.operand))
+        else:
+            terms.append((sign, current))
+    return terms
 
 
 def _leaves(node: Node) -> list[Node]:
-    if _is_leaf(node):
-        return [node]
-    return [leaf for child in children(node) for leaf in _leaves(child)]
+    leaves: list[Node] = []
+    pending = [node]
+    while pending:
+        current = pending.pop()
+        if _is_leaf(current):
+            leaves.append(current)
+        else:
+            pending.extend(reversed(children(current)))
+    return leaves
 
 
 def _literal_value(node: Literal_) -> Value:

@@ -24,7 +24,7 @@ import re
 from collections.abc import Callable, Collection, Hashable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from functools import lru_cache
 from operator import attrgetter
 from typing import Any, Literal, cast
@@ -289,12 +289,8 @@ class Evaluator:
                 return self.evaluate(operand, context, bindings).map(
                     _unary_per_record(_unary(op))
                 )
-            case Binary(op=op, left=left, right=right):
-                operands = [
-                    self.evaluate(left, context, bindings),
-                    self.evaluate(right, context, bindings),
-                ]
-                return combine(operands, _binary(op))
+            case Binary():
+                return self._chain(node, context, bindings)
             case In(operand=operand, values=values):
                 members = [
                     self._set_member(item, context, bindings) for item in values.items
@@ -331,6 +327,26 @@ class Evaluator:
             case Rename(operand=operand, pairs=pairs):
                 return self._rename(self.evaluate(operand, context, bindings), pairs)
         raise UnsupportedError(f"unsupported expression node {type(node).__name__}")
+
+    def _chain(
+        self,
+        node: Binary,
+        context: SelectionSpec,
+        bindings: Mapping[str, Value] | None,
+    ) -> Recordset:
+        # Sums of hundreds of cells and long or-chains parse as left-deep
+        # trees: evaluate the left spine in a loop, not one recursion per
+        # operator.
+        spine = [node]
+        while isinstance(spine[-1].left, Binary):
+            spine.append(spine[-1].left)
+        result = self.evaluate(spine[-1].left, context, bindings)
+        for current in reversed(spine):
+            right = self.evaluate(current.right, context, bindings)
+            result = combine([result, right], _binary(current.op))
+            if current is not node and self.trace_enabled and bindings is None:
+                self._trace[id(current)] = result
+        return result
 
     def _clause_operand(
         self,
@@ -528,7 +544,11 @@ class Evaluator:
         keys = data.keys[:position] + data.keys[position + 1 :]
         result = Recordset(keys)
         for record_key, record in data.records.items():
-            if compare("=", _value_of_key(record_key[position]), value) is True:
+            try:
+                equal = compare("=", _value_of_key(record_key[position]), value)
+            except TypeError as error:
+                raise EvaluationError(str(error)) from error
+            if equal is True:
                 result.records[record_key[:position] + record_key[position + 1 :]] = (
                     record
                 )
@@ -945,8 +965,8 @@ def _math(function: Callable[[float], float], name: str) -> Callable[[Value], Va
     def apply(value: Value) -> Value:
         number = _require_number(value, name)
         try:
-            return Number(Decimal(repr(function(float(number.value)))))
-        except (ValueError, OverflowError, InvalidOperation):
+            return _float_number(function(float(number.value)))
+        except (ValueError, OverflowError):
             return None
 
     return apply
@@ -956,9 +976,17 @@ def _power(base: Value, exponent: Value) -> Value:
     left = _require_number(base, "power")
     right = _require_number(exponent, "power")
     try:
-        return Number(Decimal(repr(float(left.value) ** float(right.value))))
-    except (ValueError, OverflowError, InvalidOperation, ZeroDivisionError):
+        return _float_number(float(left.value) ** float(right.value))
+    except (ValueError, OverflowError, ZeroDivisionError):
         return None
+
+
+def _float_number(value: float | complex) -> Value:
+    # Out of float range (inf) or undefined (nan, complex): null, as math
+    # domain errors are.
+    if not isinstance(value, float) or not math.isfinite(value):
+        return None
+    return Number(Decimal(repr(value)))
 
 
 _SCALAR_FUNCTIONS: dict[
@@ -1095,6 +1123,11 @@ def evaluate_rule(
         return RuleResult("unsupported", message=str(error))
     except (EvaluationError, DpmXlSyntaxError) as error:
         return RuleResult("error", message=str(error))
+    except ArithmeticError as error:
+        # Decimal overflow and the like, e.g. power(10, 300) * 1e6000.
+        return RuleResult("error", message=f"arithmetic error: {type(error).__name__}")
+    except RecursionError:
+        return RuleResult("error", message="expression too deeply nested")
 
     outcomes: list[Outcome] = []
     for key, record in evaluation.result.records.items():

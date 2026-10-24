@@ -197,6 +197,32 @@ def test_unsupported_and_errors_are_reported_not_raised() -> None:
     )
 
 
+def test_runtime_failures_are_reported_not_raised() -> None:
+    provider = closed({("0010", "0010"): 1})
+    for rule, message in [
+        ("{tC_01.00, r*, c0010} [sub r = 0010] > 0", "cannot compare"),
+        ("power(10, 300) * 1e6000 > 0", "arithmetic error"),
+    ]:
+        result = evaluate_rule(rule, provider)
+        assert result.status == "error"
+        assert result.message is not None
+        assert message in result.message
+    assert evaluate_rule("power(power(10, 300), 2) > 0", provider).status == (
+        "not_applicable"
+    )
+
+
+def test_long_sums_evaluate_and_explain() -> None:
+    provider = closed({("0010", "0010"): 1, ("0020", "0010"): 1})
+    rule = "with {tC_01.00, c0010}: {r0010} = " + " + ".join(["{r0020}"] * 3000)
+    result = evaluate_rule(rule, provider)
+    assert result.status == "failed"
+    explanation = explain(_traced(result), rule, result.failures[0].key)
+    assert explanation.summary.startswith("1 should equal 3,000 (1 + 1 + ")
+    rule = "with {tC_01.00, c0010}: " + " or ".join(["{r0020} > 1"] * 3000)
+    assert evaluate_rule(rule, provider).status == "failed"
+
+
 def test_match_len_dates_and_parameters() -> None:
     tables = [TableLayout("B_01.01", rows=("0010",), columns=("0010", "0020"))]
     values: dict[CellKey, Value] = {

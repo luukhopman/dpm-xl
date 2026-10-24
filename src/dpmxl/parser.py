@@ -490,6 +490,8 @@ class _Parser:
                     "number",
                     span=(node.span[0], token.end + self.offset),
                 )
+                if self.at("op", "%"):
+                    raise self.error("'%' must follow a number, not a percentage")
                 continue
             if self.at("["):
                 node = self.parse_clause(node)

@@ -149,6 +149,7 @@ def test_spans_cover_source() -> None:
         ("-" * 2000 + "1", "too deeply nested"),
         ("not " * 2000 + "true", "too deeply nested"),
         ("1e99999999999 + 1 = 1", "number out of range"),
+        ("4.5%% = 0.045", "'%' must follow a number"),
         ("{tA, default: 1e-99999999999}", "invalid default"),
     ],
 )

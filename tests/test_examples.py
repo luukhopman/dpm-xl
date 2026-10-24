@@ -31,7 +31,9 @@ def test_cli_evaluates_the_example_rule_file(capsys) -> None:
     output = capsys.readouterr().out
     assert "4 rules: 2 failed, 1 passed, 1 not_applicable" in output
     assert main(["eval", rules, data, "--json"]) == 1
-    results = json.loads(capsys.readouterr().out)
+    document = json.loads(capsys.readouterr().out)
+    assert document["schema_version"] == 1
+    results = document["results"]
     assert [result["status"] for result in results] == [
         "failed",
         "failed",
@@ -44,6 +46,7 @@ def test_cli_evaluates_the_example_rule_file(capsys) -> None:
 def test_cli_check_json_reports_positions(capsys) -> None:
     assert main(["check", "{tA} >=", "--json"]) == 1
     document = json.loads(capsys.readouterr().out)
+    assert document["schema_version"] == 1
     assert document["errors"] == [
         {
             "source": "argument",

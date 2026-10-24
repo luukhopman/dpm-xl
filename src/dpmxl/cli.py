@@ -22,6 +22,9 @@ from .provider import CellKey, MemoryProvider, TableLayout
 from .references import references
 from .values import Number, Value
 
+JSON_SCHEMA_VERSION = 1
+"""Version of the ``--json`` output layout; it changes only with a new major."""
+
 _DESCRIPTION = "Parse and evaluate EBA DPM-XL validation rules."
 _EPILOG = """examples:
   dpm-xl check rules.json
@@ -168,7 +171,11 @@ def _check(source: str, *, show_references: bool, as_json: bool = False) -> int:
                 if not as_json:
                     print(f"{label}: {reference.spec.text()}")
     if as_json:
-        document: dict[str, Any] = {"parsed": total - len(errors), "total": total}
+        document: dict[str, Any] = {
+            "schema_version": JSON_SCHEMA_VERSION,
+            "parsed": total - len(errors),
+            "total": total,
+        }
         document["errors"] = errors
         if show_references:
             document["selections"] = selections
@@ -219,17 +226,20 @@ def _evaluate(
     if as_json:
         print(
             json.dumps(
-                [
-                    {
-                        "rule": rule.label,
-                        "expression": rule.expression,
-                        "status": result.status,
-                        "message": result.message,
-                        "counts": result.counts,
-                        "failures": failures,
-                    }
-                    for rule, result, failures in results
-                ],
+                {
+                    "schema_version": JSON_SCHEMA_VERSION,
+                    "results": [
+                        {
+                            "rule": rule.label,
+                            "expression": rule.expression,
+                            "status": result.status,
+                            "message": result.message,
+                            "counts": result.counts,
+                            "failures": failures,
+                        }
+                        for rule, result, failures in results
+                    ],
+                },
                 indent=2,
             )
         )

@@ -11,6 +11,10 @@ All notable changes to this project are documented here. The project follows
   every rule; `check` and `eval` accept `--json`; `--version` and examples in
   `--help`.
 - Runnable examples in `examples/`, run by the tests.
+- `dpmxl.__version__`; `--json` output carries `schema_version`.
+- The public API is documented: every name in a module's `__all__`
+  (including the `dpmxl.ast` tree and `VALUE_COLUMNS`), the columnar frame
+  schema and which caches are thread-safe.
 
 ### Changed
 

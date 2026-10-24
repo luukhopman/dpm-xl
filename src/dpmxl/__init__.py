@@ -9,6 +9,7 @@ Typical use::
         print(explain(result.evaluation, expression, outcome.key).summary)
 """
 
+from ._version import __version__
 from .ast import AxisSelector, Item, Node, SelectionSpec
 from .evaluator import (
     Evaluation,
@@ -65,6 +66,7 @@ __all__ = [
     "TableLayout",
     "UnsupportedError",
     "Value",
+    "__version__",
     "axis_matcher",
     "axis_matches",
     "compare",

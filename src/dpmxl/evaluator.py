@@ -182,7 +182,9 @@ class SelectionCache:
     Rules over the same report select the same cells again and again (every
     sum rule on a table reads its columns); building each record set once
     makes large open tables affordable. Record sets are never mutated by the
-    evaluator, so sharing them is safe. Use one cache per report.
+    evaluator, so sharing them is safe. Use one cache per report. Rules may
+    share it across threads: a selection two threads miss at once is built
+    by both, and either result is kept.
     """
 
     def __init__(self) -> None:

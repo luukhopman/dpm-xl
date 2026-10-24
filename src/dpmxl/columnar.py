@@ -1720,6 +1720,7 @@ __all__ = [
     "NUM",
     "THR",
     "TXT",
+    "VALUE_COLUMNS",
     "ColumnarEvaluator",
     "ColumnarResult",
     "ColumnarUnsupported",

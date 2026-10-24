@@ -134,7 +134,10 @@ and an optional `precondition` ([`examples/rules.json`](https://github.com/luukh
 `data.json` ([`examples/data.json`](https://github.com/luukhopman/dpm-xl/blob/main/examples/data.json)) holds `tables`
 (`code`, `rows`, `columns`, `sheets`, `open_keys`), `facts` (`table`, `row`,
 `column`, `sheet`, `keys`, `value`, `decimals` as an integer or `INF`, `type`),
-`reported` and `parameters`. The exit status is 0 when everything parsed or
+`reported` and `parameters`. `--json` output is an object with
+`schema_version` (1), and `results` (`eval`: rule, expression, status,
+message, counts and failures with key, summary and cells) or `parsed`,
+`total` and `errors` with positions (`check`). The exit status is 0 when everything parsed or
 held, 1 when an expression does not parse or a rule fails, and 2 for an
 evaluation error or unreadable input.
 
@@ -275,10 +278,42 @@ checks both evaluators agree case by case. `PointsFrameProvider` adapts any `Dat
 ## Stability
 
 Releases follow [semantic versioning](https://semver.org). The public API is
-what this README documents: the names exported by `dpmxl` and
-`dpmxl.columnar`, the provider protocol, the result and explanation fields,
-the CLI and its exit codes. Explanation and error wording may improve in minor
-releases. See [CHANGELOG.md](https://github.com/luukhopman/dpm-xl/blob/main/CHANGELOG.md) for each release.
+every name in the `__all__` of the modules listed above, including the
+expression tree in `dpmxl.ast` (frozen node classes with source `span`s,
+`walk` and `children`) for callers that analyse rules, and the frame schema
+below. Names starting with an underscore are internal. Explanation and error
+wording may improve in minor releases; statuses, keys and field names may not.
+`dpmxl.__version__` gives the installed version. See
+[CHANGELOG.md](https://github.com/luukhopman/dpm-xl/blob/main/CHANGELOG.md)
+for each release.
+
+### Columnar frame schema
+
+A `FrameProvider` (or a caller building frames for `frame_from_points`'s
+consumers) returns one row per selected data point with these columns:
+
+| Column | Type | Content |
+| --- | --- | --- |
+| `cell` (`CELL`) | any | Opaque cell reference, returned in outcomes |
+| `r`, `c`, `s` | text or null | Raw closed coordinates |
+| `k:<code>` | text (may be categorical) | One per open key: text, canonical items (`category:code`, `canonical_item`) or ISO dates |
+| `num` (`NUM`) | `DEC` = `Decimal(38, 12)` | Numeric value |
+| `thr` (`THR`) | `DEC` | Its interval threshold, `0.5·10^-decimals` (0 when exact) |
+| `txt` (`TXT`) | text | Text, canonical item or ISO date value |
+| `flag` (`FLAG`) | Boolean | Boolean value |
+
+`VALUE_COLUMNS` is `(num, thr, txt, flag)`; all four are null for a cell
+with no fact, and `value_columns(value)` maps one Python value to them.
+A cell and open-key combination appears at most once.
+
+### Threads
+
+`evaluate_rule` and `evaluate_rule_columnar` may run concurrently on one
+report. `parse_cached` and `FrameCache` are thread-safe; `FrameCache` builds
+each selection once while other threads wait for it. A shared
+`SelectionCache` is safe too, though two threads that miss the same selection
+at once may both build it. Providers shared across threads must be safe to
+read concurrently; `MemoryProvider` is.
 
 ## Development
 

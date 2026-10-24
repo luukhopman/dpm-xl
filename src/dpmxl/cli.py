@@ -8,6 +8,7 @@ import sys
 from collections import Counter
 from collections.abc import Iterable, Sequence
 from datetime import date
+from decimal import InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -84,7 +85,12 @@ def _check(source: str, *, show_references: bool) -> int:
 
 
 def _evaluate(expression: str, data_path: Path, precondition: str | None) -> int:
-    provider = load_memory_provider(json.loads(data_path.read_text(encoding="utf-8")))
+    try:
+        document = json.loads(data_path.read_text(encoding="utf-8"))
+        provider = load_memory_provider(document)
+    except (OSError, ValueError) as error:
+        print(f"error: {data_path}: {error}", file=sys.stderr)
+        return 2
     result = evaluate_rule(expression, provider, precondition=precondition)
     print(f"status: {result.status}")
     if result.message:
@@ -111,7 +117,17 @@ def load_memory_provider(document: dict[str, Any]) -> MemoryProvider:
 
     Returns:
         MemoryProvider: The in-memory report.
+
+    Raises:
+        ValueError: For a malformed table, fact or parameter.
     """
+    try:
+        return _memory_provider(document)
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError(f"malformed data document ({error!r})") from error
+
+
+def _memory_provider(document: dict[str, Any]) -> MemoryProvider:
     tables = [
         TableLayout(
             code=table["code"],
@@ -124,17 +140,21 @@ def load_memory_provider(document: dict[str, Any]) -> MemoryProvider:
         for table in document.get("tables", ())
     ]
     values: dict[CellKey, Value] = {}
-    for fact in document.get("facts", ()):
-        keys = tuple(
-            (name, _typed(value)) for name, value in fact.get("keys", {}).items()
-        )
+    for index, fact in enumerate(document.get("facts", ()), start=1):
+        try:
+            keys = tuple(
+                (name, _typed(value)) for name, value in fact.get("keys", {}).items()
+            )
+            value = _typed(fact.get("value"), fact.get("type"), fact.get("decimals"))
+        except ValueError as error:
+            raise ValueError(f"fact {index}: {error}") from error
         values[
             fact["table"],
             fact.get("row"),
             fact.get("column"),
             fact.get("sheet"),
             keys,
-        ] = _typed(fact.get("value"), fact.get("type"), fact.get("decimals"))
+        ] = value
     parameters = {
         name: _typed(value) for name, value in document.get("parameters", {}).items()
     }
@@ -143,13 +163,23 @@ def load_memory_provider(document: dict[str, Any]) -> MemoryProvider:
     )
 
 
-def _typed(value: Any, kind: str | None = None, decimals: int | None = None) -> Value:
+def _typed(
+    value: Any, kind: str | None = None, decimals: int | str | None = None
+) -> Value:
     if value is None:
         return None
     if kind == "number" or (
         isinstance(value, int | float) and not isinstance(value, bool)
     ):
-        return Number.of(str(value), decimals)
+        try:
+            number = Number.of(str(value), decimals)
+        except InvalidOperation:
+            raise ValueError(f"invalid number {value!r}") from None
+        except ValueError:
+            raise ValueError(f"invalid decimals {decimals!r}") from None
+        if not number.value.is_finite():
+            raise ValueError(f"invalid number {value!r}")
+        return number
     if kind == "item" or (isinstance(value, str) and value.startswith("[")):
         return Item.parse(str(value).strip("[]"))
     if kind == "date":

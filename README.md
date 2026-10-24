@@ -163,8 +163,8 @@ dpm-xl eval "with {tC_01.00, c0010, default: 0, interval: true}: {r0010} = {r002
 ```
 
 `data.json` holds `tables` (`code`, `rows`, `columns`, `sheets`, `open_keys`),
-`facts` (`table`, `row`, `column`, `sheet`, `keys`, `value`, `decimals`,
-`type`), `reported` and `parameters`.
+`facts` (`table`, `row`, `column`, `sheet`, `keys`, `value`, `decimals` as an
+integer or `INF`, `type`), `reported` and `parameters`.
 
 ## Development
 

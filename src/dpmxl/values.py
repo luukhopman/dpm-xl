@@ -57,16 +57,30 @@ class Number:
     tolerance: Decimal = ZERO
 
     @classmethod
-    def of(cls, value: int | str | Decimal, decimals: int | None = None) -> Number:
+    def of(
+        cls, value: int | str | Decimal, decimals: int | str | None = None
+    ) -> Number:
         """Build a number, deriving tolerance from XBRL ``decimals``.
+
+        Args:
+            value: The amount.
+            decimals: XBRL ``decimals``: an integer, ``"INF"`` (in any case)
+                or ``None``, which both mean exact.
 
         Returns:
             Number: The value with ``0.5 * 10**-decimals`` tolerance, or an
-            exact value when ``decimals`` is ``None``.
+            exact value.
+
+        Raises:
+            ValueError: If ``decimals`` is text other than ``INF`` or an integer.
         """
         amount = value if isinstance(value, Decimal) else Decimal(value)
         if decimals is None:
             return cls(amount)
+        if isinstance(decimals, str):
+            if decimals.strip().casefold() == "inf":
+                return cls(amount)
+            decimals = int(decimals)
         return cls(amount, Decimal(5).scaleb(-decimals - 1, DECIMAL_CONTEXT))
 
     def exact(self) -> Number:

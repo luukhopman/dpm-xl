@@ -396,3 +396,24 @@ def test_items_without_a_category_go_to_the_reference(
     assert evaluate_rule(expression, provider).status == expected
     with pytest.raises(ColumnarUnsupported):
         evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+
+
+def test_frame_from_points_checks_numbers_in_bulk() -> None:
+    from decimal import Decimal
+
+    from dpmxl import DataPoint
+    from dpmxl.columnar import frame_from_points
+
+    points = [
+        DataPoint("T", "0010", value=Number(Decimal("1.0000000000000"))),
+        DataPoint("T", "0020", value=Number.of("2.5", 1)),
+        DataPoint("T", "0030", value="text"),
+        DataPoint("T", "0040"),
+    ]
+    frame = frame_from_points(points)
+    assert frame.get_column("num").to_list() == [1, Decimal("2.5"), None, None]
+    assert frame.get_column("thr").to_list()[1] == Decimal("0.05")
+    assert frame.columns[-4:] == ["num", "thr", "txt", "flag"]
+    for wide in ("1e30", "0.0000000000004", "NaN"):
+        with pytest.raises(ColumnarUnsupported):
+            frame_from_points([DataPoint("T", "0010", value=Number(Decimal(wide)))])

@@ -253,6 +253,8 @@ def frame_from_points(
     for point in points:
         key_names.extend(name for name in point.keys if name not in key_names)
     rows = []
+    nums: list[Decimal | None] = []
+    thrs: list[Decimal | None] = []
     for point in points:
         row: dict[str, Any] = {
             CELL: repr(point.ref),
@@ -270,7 +272,17 @@ def frame_from_points(
             # Its text has no category separator, so nothing would stop the
             # txt column from ordering it as text.
             raise ColumnarUnsupported("item without a category")
-        row.update(value_columns(point.value))
+        value = point.value
+        if isinstance(value, Number):
+            # Checked in bulk below, not number by number.
+            nums.append(value.value)
+            thrs.append(value.tolerance)
+            row[TXT] = row[FLAG] = None
+        else:
+            nums.append(None)
+            thrs.append(None)
+            columns = value_columns(value)
+            row[TXT], row[FLAG] = columns[TXT], columns[FLAG]
         rows.append(row)
     schema: dict[str, Any] = {
         CELL: pl.String,
@@ -279,8 +291,39 @@ def frame_from_points(
         "s": pl.String,
     }
     schema.update({_key(name): pl.String for name in key_names})
-    schema.update(_VALUE_SCHEMA)
-    return pl.DataFrame(rows, schema=schema)
+    schema.update({TXT: pl.String, FLAG: pl.Boolean})
+    return (
+        pl.DataFrame(rows, schema=schema)
+        .with_columns(_decimals(NUM, nums), _decimals(THR, thrs))
+        .select(*[name for name in schema if name not in VALUE_COLUMNS], *VALUE_COLUMNS)
+    )
+
+
+def _decimals(name: str, values: list[Decimal | None]) -> pl.Series:
+    """Build a ``Decimal(38, 12)`` column, checking every value fits exactly.
+
+    Returns:
+        pl.Series: The column.
+
+    Raises:
+        ColumnarUnsupported: For a value out of range or with more than 12
+            decimals, which polars would reject or round.
+    """
+    try:
+        # Inferring the type finds the largest scale in one pass.
+        series = pl.Series(name, values)
+        if isinstance(series.dtype, pl.Decimal) and (series.dtype.scale or 0) > 12:
+            # Trailing zeros (1.0000000000000) fit; anything else does not.
+            for value in values:
+                if value is not None:
+                    _exact(value)
+        return series.cast(DEC, strict=True)
+    except (
+        RuntimeError,
+        pl.exceptions.PolarsError,
+        pl.exceptions.PanicException,
+    ) as error:
+        raise ColumnarUnsupported(f"{name} does not fit Decimal(38, 12)") from error
 
 
 def _key_text(value: Any) -> str | None:

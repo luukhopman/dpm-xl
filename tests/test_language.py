@@ -6,28 +6,38 @@ from decimal import Decimal
 import pytest
 
 from dpmxl import (
+    DpmXlSyntaxError,
     Item,
     MemoryProvider,
     Number,
     TableLayout,
     Value,
     evaluate_rule,
+    explain,
     parse,
+    parse_program,
     references,
     tables,
 )
 from dpmxl.ast import (
+    Assignment,
     Binary,
     Call,
     Get,
     In,
     Literal_,
     Name,
+    Parameter,
+    PersistentAssignment,
+    Program,
     Selection,
     SetLiteral,
     Where,
+    With,
+    walk,
 )
 from dpmxl.evaluator import Evaluator
+from dpmxl.explain import TIMES
 from dpmxl.provider import CellKey
 from dpmxl.values import ValueSet
 
@@ -329,3 +339,64 @@ def test_references_describe_groups_and_operations() -> None:
     ]
     assert tables(node) == ("A",)
     assert parse("{t_A}") == parse("{tA}") == parse("{t`A`}")
+
+
+def test_parse_program_reads_statements_and_assignments() -> None:
+    source = (
+        "total := sum({tT, r*, c0010}); {tT, r0010, c0020} <- total * 2; "
+        "{v_X} <- 1; with {tT, c0010}: total > {r0010} * 3;"
+    )
+    program = parse_program(source)
+    assert isinstance(program, Program)
+    first, second, third, fourth = program.statements
+    assert isinstance(first, Assignment) and first.name == "total"
+    assert isinstance(second, PersistentAssignment)
+    assert isinstance(second.target, Selection)
+    assert isinstance(third, PersistentAssignment)
+    assert third.target == Parameter("X")
+    assert isinstance(fourth, With)
+    assert source[slice(*second.span)] == "{tT, r0010, c0020} <- total * 2"
+    assert [type(node).__name__ for node in walk(program)].count("Selection") == 3
+
+
+def test_parse_keeps_returning_single_expressions() -> None:
+    assert parse("{tT, r0010} > 0;") == parse("{tT, r0010} > 0")
+    assert parse_program("1 = 1").statements == (parse("1 = 1"),)
+    with pytest.raises(DpmXlSyntaxError, match="several statements need parse_program"):
+        parse("a := 1; a > 0")
+    with pytest.raises(DpmXlSyntaxError, match="assignments need parse_program"):
+        parse("{tT, r0010} <- 1")
+    with pytest.raises(DpmXlSyntaxError, match="assignment target"):
+        parse_program("{p_X, number} <- 1")
+
+
+def test_programs_evaluate_statement_by_statement() -> None:
+    source = (
+        "total := sum({tT, r*, c0010}); {tT, r0010, c0020} <- total * 2; "
+        "with {tT, c0010}: total > {r0010} * 3"
+    )
+    result = evaluate_rule(source, report())
+    assert result.status == "failed"
+    assert list(result.assignments) == ["{tT, r0010, c0020}"]
+    assigned = result.assignments["{tT, r0010, c0020}"].single()
+    assert assigned is not None and assigned.value == Number(Decimal(400))
+    assert result.evaluation is not None
+    explanation = explain(result.evaluation, source, result.failures[0].key)
+    assert (
+        explanation.summary == f"200 should exceed 300 (100 {TIMES} 3): difference 100"
+    )
+
+
+def test_temporaries_shadow_parameters_and_keep_records() -> None:
+    provider = report(x=Number(Decimal(1)))
+    assert evaluate_rule("x := {tT, c0010, r*}; x > 50", provider).counts == {
+        "passed": 2,
+        "failed": 1,
+        "null": 0,
+    }
+    assert evaluate_rule("x > 0", provider).status == "passed"
+    # A program whose result is not Boolean still returns its assignments.
+    result = evaluate_rule("{vY} <- 1 + 1", provider)
+    assert result.status == "error" and "number values" in (result.message or "")
+    assigned = result.assignments["{vY}"].single()
+    assert assigned is not None and assigned.value == Number(Decimal(2))

@@ -39,6 +39,7 @@ from typing import Any, Literal, cast
 
 from .ast import (
     AXIS_KEYS,
+    Assignment,
     Binary,
     Call,
     Get,
@@ -49,6 +50,8 @@ from .ast import (
     Name,
     Node,
     Parameter,
+    PersistentAssignment,
+    Program,
     Rename,
     Selection,
     SelectionSpec,
@@ -61,7 +64,7 @@ from .ast import (
     With,
     walk,
 )
-from .parser import parse
+from .parser import _may_be_program, parse, parse_program
 from .provider import (
     CellQuery,
     DataPoint,
@@ -170,6 +173,9 @@ class Evaluation:
     result: Recordset
     trace: dict[int, Recordset] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
+    assignments: dict[str, Recordset] = field(default_factory=dict)
+    """Results of persistent assignments (``{target} <- value``) by target,
+    written as normalized DPM-XL such as ``{tT, r0010, c0010}`` or ``{vX}``."""
     shapes: dict[tuple[str, int], Any] = field(
         default_factory=dict, repr=False, compare=False
     )
@@ -238,6 +244,8 @@ class Evaluator:
         self._overrides: tuple[str, ...] = ()
         self._members: dict[int, list[Value]] = {}
         self._operations: list[str] = []
+        self._temporaries: dict[str, Recordset] = {}
+        self._assignments: dict[str, Recordset] = {}
 
     def run(self, node: Node) -> Evaluation:
         """Evaluate a complete expression.
@@ -247,8 +255,12 @@ class Evaluator:
         """
         self._trace = {}
         self._notes = []
+        self._temporaries = {}
+        self._assignments = {}
         result = self.evaluate(node, SelectionSpec(), None)
-        return Evaluation(node, result, self._trace, self._notes)
+        return Evaluation(
+            node, result, self._trace, self._notes, assignments=self._assignments
+        )
 
     def evaluate(
         self,
@@ -308,6 +320,9 @@ class Evaluator:
                     key = resolve_key(name, bindings)
                     if key is not None:
                         return Recordset.scalar(bindings[key])
+                temporary = self._temporaries.get(name)
+                if temporary is not None:
+                    return temporary
                 value = self.provider.parameter(name)
                 if value is not None:
                     return Recordset.scalar(value)
@@ -385,6 +400,19 @@ class Evaluator:
                 )
             case Rename(operand=operand, pairs=pairs):
                 return self._rename(self.evaluate(operand, context, bindings), pairs)
+            case Program(statements=statements):
+                result = Recordset(())
+                for statement in statements:
+                    result = self.evaluate(statement, context, bindings)
+                return result
+            case Assignment(name=name, value=value):
+                result = self.evaluate(value, context, bindings)
+                self._temporaries[name] = result
+                return result
+            case PersistentAssignment(target=target, value=value):
+                result = self.evaluate(value, context, bindings)
+                self._assignments[_target_text(target)] = result
+                return result
         raise UnsupportedError(f"unsupported expression node {type(node).__name__}")
 
     def _chain(
@@ -549,7 +577,7 @@ class Evaluator:
             )
         if code in self._operations:
             raise EvaluationError(f"operation {code} refers to itself")
-        node = parse_cached(expression) if isinstance(expression, str) else expression
+        node = _parse_cached(expression) if isinstance(expression, str) else expression
         saved = self._context_conditions, self._overrides
         self._operations.append(code)
         self._context_conditions, self._overrides = [], ()
@@ -777,6 +805,14 @@ class Evaluator:
     ) -> Value:
         record = self.evaluate(node, context, bindings).single()
         return _checked(record.value) if record else None
+
+
+def _target_text(target: Node) -> str:
+    if isinstance(target, Selection):
+        return target.spec.text()
+    if isinstance(target, Parameter):
+        return f"{{v{target.name}}}"
+    raise EvaluationError("assignment target must be a selection")
 
 
 def _restrict(data: Recordset, spec: SelectionSpec) -> Recordset:
@@ -1087,8 +1123,12 @@ def is_boolean(node: Node) -> bool:
             return True
         case If(then=then):
             return is_boolean(then)
-        case With(body=body):
+        case With(body=body) | Assignment(value=body):
             return is_boolean(body)
+        case PersistentAssignment(value=body):
+            return is_boolean(body)
+        case Program(statements=statements):
+            return is_boolean(statements[-1])
         case Where(operand=operand) | Sub(operand=operand) | Rename(operand=operand):
             return is_boolean(operand)
     return False
@@ -1502,6 +1542,10 @@ class RuleResult:
     message: str | None = None
     evaluation: Evaluation | None = None
     notes: list[str] = field(default_factory=list)
+    assignments: dict[str, Recordset] = field(default_factory=dict)
+    """Results of persistent assignments by target (see
+    :attr:`Evaluation.assignments`); the verdict comes from the last
+    statement."""
 
     @property
     def failures(self) -> list[Outcome]:
@@ -1531,7 +1575,27 @@ def parse_cached(expression: str) -> Node:
     return parse(expression)
 
 
-_parse_cached = parse_cached
+@lru_cache(maxsize=4_096)
+def _parse_program_cached(source: str) -> Program:
+    return parse_program(source)
+
+
+def _parse_cached(expression: str) -> Node:
+    """Parse a rule: an expression, or statements with assignments.
+
+    Returns:
+        Node: The expression as :func:`parse_cached` returns it, or a
+        :class:`~dpmxl.ast.Program` for several statements or assignments.
+    """
+    if not _may_be_program(expression):
+        return parse_cached(expression)
+    program = _parse_program_cached(expression)
+    first = program.statements[0]
+    if len(program.statements) == 1 and not isinstance(
+        first, Assignment | PersistentAssignment
+    ):
+        return first
+    return program
 
 
 def evaluate_rule(
@@ -1592,12 +1656,17 @@ def evaluate_rule(
     outcomes: list[Outcome] = []
     for key, record in evaluation.result.records.items():
         if type(record.value) is _Failed:
-            return RuleResult("error", message=record.value.message)
+            return RuleResult(
+                "error",
+                message=record.value.message,
+                assignments=evaluation.assignments,
+            )
         if record.value is not None and not isinstance(record.value, bool):
             return RuleResult(
                 "error",
                 message=f"rule yields {type_name(record.value)} values, not booleans",
                 evaluation=evaluation,
+                assignments=evaluation.assignments,
             )
         outcomes.append(
             Outcome(
@@ -1613,7 +1682,11 @@ def evaluate_rule(
     else:
         status = "not_applicable"
     return RuleResult(
-        status, outcomes, evaluation=evaluation, notes=list(evaluation.notes)
+        status,
+        outcomes,
+        evaluation=evaluation,
+        notes=list(evaluation.notes),
+        assignments=evaluation.assignments,
     )
 
 

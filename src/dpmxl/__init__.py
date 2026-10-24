@@ -21,7 +21,7 @@ from .evaluator import (
     parse_cached,
 )
 from .explain import Explanation, Operand, explain
-from .parser import DpmXlSyntaxError, parse, parse_selection
+from .parser import DpmXlSyntaxError, parse, parse_program, parse_selection
 from .provider import (
     CellQuery,
     DataPoint,
@@ -78,6 +78,7 @@ __all__ = [
     "normalize_code",
     "parse",
     "parse_cached",
+    "parse_program",
     "parse_selection",
     "references",
     "reported_templates",

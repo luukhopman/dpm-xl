@@ -16,6 +16,7 @@ from typing import Any, Literal, NamedTuple, cast
 from .ast import (
     AXIS_PREFIXES,
     MISSING,
+    Assignment,
     AxisSelector,
     Binary,
     Call,
@@ -27,6 +28,8 @@ from .ast import (
     Name,
     Node,
     Parameter,
+    PersistentAssignment,
+    Program,
     Rename,
     Selection,
     SelectionSpec,
@@ -399,6 +402,9 @@ def _lex_error(
 def parse(expression: str) -> Node:
     """Parse a complete DPM-XL expression.
 
+    A trailing ``;`` is allowed. Several statements and assignments need
+    :func:`parse_program`.
+
     Returns:
         Node: The expression tree.
 
@@ -407,13 +413,62 @@ def parse(expression: str) -> Node:
     """
     if not expression or not expression.strip():
         raise DpmXlSyntaxError("empty expression", expression or "", 0)
-    parser = _Parser(expression, _scan(expression))
-    try:
-        node = parser.parse_root()
-    except RecursionError:  # pragma: no cover - MAX_NESTING applies first
-        raise DpmXlSyntaxError("expression too deeply nested", expression, 0) from None
+    if not _may_be_program(expression):
+        parser = _Parser(expression, _scan(expression))
+        try:
+            node = parser.parse_root()
+        except RecursionError:  # pragma: no cover - MAX_NESTING applies first
+            raise DpmXlSyntaxError(
+                "expression too deeply nested", expression, 0
+            ) from None
+        parser.expect_end()
+        return node
+    program = parse_program(expression)
+    first = program.statements[0]
+    if len(program.statements) > 1:
+        second = program.statements[1]
+        raise DpmXlSyntaxError(
+            "several statements need parse_program",
+            expression,
+            second.span[0],
+            second.span[1],
+        )
+    if isinstance(first, Assignment | PersistentAssignment):
+        raise DpmXlSyntaxError(
+            "assignments need parse_program", expression, *first.span
+        )
+    return first
+
+
+def parse_program(source: str) -> Program:
+    """Parse statements separated by ``;``, with assignments.
+
+    A statement is an expression (with an optional ``with`` context), a
+    temporary assignment ``name := expression`` or a persistent assignment
+    ``{target} <- expression``. A trailing ``;`` is allowed.
+
+    Returns:
+        Program: The statements, also when there is only one.
+
+    Raises:
+        DpmXlSyntaxError: If the text is not a valid program.
+    """
+    if not source or not source.strip():
+        raise DpmXlSyntaxError("empty expression", source or "", 0)
+    parser = _Parser(source, _scan(source))
+    statements = [parser.parse_statement()]
+    while parser.accept(";"):
+        if parser.current.kind == "eof":
+            break
+        statements.append(parser.parse_statement())
     parser.expect_end()
-    return node
+    return Program(
+        tuple(statements), span=(statements[0].span[0], statements[-1].span[1])
+    )
+
+
+def _may_be_program(expression: str) -> bool:
+    return ";" in expression or ":=" in expression or "<-" in expression
 
 
 def parse_selection(
@@ -518,6 +573,49 @@ class _Parser:
         return (start, end)
 
     # Grammar -----------------------------------------------------------
+
+    def parse_statement(self) -> Node:
+        token = self.current
+        if token.kind == "identifier" and self.peek().text == ":=":
+            self.advance()
+            self.advance()
+            value = self.parse_assigned()
+            return Assignment(_name(token), value, span=(token.start, value.span[1]))
+        return self.parse_assigned()
+
+    def parse_assigned(self) -> Node:
+        """Parse a persistent assignment or an expression with its context.
+
+        Returns:
+            Node: The statement.
+        """
+        token = self.current
+        if token.kind == "brace" and token.text == "{":
+            closing = self._closing_brace(self.index)
+            following = self.tokens[closing + 1]
+            if following.kind == "operator" and following.text == "<-":
+                self.advance()
+                target = self.parse_brace(token)
+                if isinstance(target, TableReported):
+                    target = Parameter(target.table, span=target.span)
+                elif not isinstance(target, Selection | Parameter):
+                    raise self.error("assignment target must be a selection", token)
+                self.advance()
+                value = self.parse_root()
+                return PersistentAssignment(
+                    target, value, span=(token.start, value.span[1])
+                )
+        return self.parse_root()
+
+    def _closing_brace(self, index: int) -> int:
+        depth = 0
+        for position in range(index, len(self.tokens)):
+            token = self.tokens[position]
+            if token.kind == "brace":
+                depth += 1 if token.text == "{" else -1
+                if depth == 0:
+                    return position
+        return len(self.tokens) - 2
 
     def parse_root(self) -> Node:
         if self.at_keyword("with"):
@@ -1159,4 +1257,11 @@ def _number(text: str) -> Decimal:
     return value
 
 
-__all__ = ["DpmXlSyntaxError", "Token", "parse", "parse_selection", "tokenize"]
+__all__ = [
+    "DpmXlSyntaxError",
+    "Token",
+    "parse",
+    "parse_program",
+    "parse_selection",
+    "tokenize",
+]

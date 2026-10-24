@@ -30,6 +30,7 @@ from functools import lru_cache
 from typing import Literal, cast
 
 from .ast import (
+    Assignment,
     Binary,
     Call,
     Get,
@@ -39,6 +40,8 @@ from .ast import (
     Name,
     Node,
     Parameter,
+    PersistentAssignment,
+    Program,
     Rename,
     Selection,
     SetLiteral,
@@ -173,8 +176,15 @@ def _explain(
     evaluation: Evaluation, expression: str, key: Mapping[str, Hashable]
 ) -> Explanation:
     body = evaluation.root
-    while isinstance(body, With):
-        body = body.body
+    while True:
+        if isinstance(body, Program):
+            body = body.statements[-1]
+        elif isinstance(body, Assignment | PersistentAssignment):
+            body = body.value
+        elif isinstance(body, With):
+            body = body.body
+        else:
+            break
     formatter = _Formatter(evaluation, expression, key)
     filled = formatter.render(body, filled=True)
     formula = formatter.render(body, filled=False)

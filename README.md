@@ -73,6 +73,7 @@ bad rule or bad data; it returns a `RuleResult`:
 | `message` | Why the status is `error`, `unsupported` or `not_applicable` |
 | `outcomes` | One `Outcome` per record: `key` (such as `{'c': '0020'}`), `passed` (`True`, `False` or `None` when not evaluated) and `points`, the cells it used |
 | `failures`, `counts` | The failing outcomes, and the number passed, failed and not evaluated |
+| `assignments` | Results of persistent assignments (`{target} <- value`) by target text, such as `{tT, r0010, c0010}` |
 
 `DataPoint.ref` in `outcome.points` is whatever identity your provider gave
 the cell, so a user interface can highlight it. `explain(result.evaluation,
@@ -83,7 +84,8 @@ expression, key)` returns an `Explanation`: `summary` (the sentence above),
 intervals.
 
 `parse(expression)` returns the expression tree, whose nodes keep their
-source `span`, and raises `DpmXlSyntaxError` with a plain message, the
+source `span` (`parse_program` reads several statements and assignments),
+and raises `DpmXlSyntaxError` with a plain message, the
 `position` and `end` of the offending text and a `pointer()` that marks it:
 
 ```text
@@ -175,6 +177,9 @@ to (`max_aggr` is `max`), `CALL_NAMES` all of them; `textmate_grammar()` builds 
 
 ## Supported language
 
+- Statements separated by `;`, temporary assignments `name := expression`
+  and persistent assignments `{tT, r…, c…} <- expression` or `{vX} <- …`
+  (`parse_program`; `evaluate_rule` and `dpm-xl check` accept them too).
 - `with {context} [where …]: body`, nested contexts replacing inherited parts.
 - Selections `{tTABLE, r…, c…, s…, default: v, interval: b}` with single codes,
   inclusive ranges (`r0010-0050`), lists (`(c0010, c0030)`) and wildcards.
@@ -272,6 +277,11 @@ to (`max_aggr` is `max`), `CALL_NAMES` all of them; `textmate_grammar()` builds 
   `default` fills nulls and `interval: false` makes numbers exact. Without
   those provider methods the rule is `unsupported`; an operation that refers
   to itself is an error.
+- **Statements** run in order; the last one gives the rule's records and
+  verdict. `name := e` keeps `e`'s records for later statements, where `name`
+  wins over a report parameter of that name and loses to a key component
+  inside a clause. `{target} <- e` computes `e` and returns it in
+  `RuleResult.assignments`; nothing is written to the report.
 - **Key names** in `where`, `group by`, `sub` and `get` match with or without
   the DPM 2.0 `q` prefix and ignore case (`EBB` finds `qEBB`).
 - **Items** compare by code and category, ignoring the `eba_` prefix and a

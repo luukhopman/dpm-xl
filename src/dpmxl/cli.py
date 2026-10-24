@@ -17,7 +17,7 @@ from typing import Any
 from .ast import Item
 from .evaluator import RuleResult, evaluate_rule
 from .explain import explain
-from .parser import DpmXlSyntaxError, parse
+from .parser import DpmXlSyntaxError, parse_program
 from .provider import CellKey, MemoryProvider, TableLayout
 from .references import references
 from .values import Number, Value, ValueSet
@@ -157,7 +157,7 @@ def _check(source: str, *, show_references: bool, as_json: bool = False) -> int:
     for label, expression in _expressions(rules):
         total += 1
         try:
-            node = parse(expression)
+            node = parse_program(expression)
         except DpmXlSyntaxError as error:
             errors.append(
                 {"source": label, "message": error.message, "position": error.position}

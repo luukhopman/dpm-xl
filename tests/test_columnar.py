@@ -429,6 +429,7 @@ NEW_CONSTRUCTS = [
     "with {tT, c0010}: {r0010} in set_of({tT, r*, c0010})",
     "5 in {tONE, r0010, c0010}",
     "{p_X, number, default: 5} = {tONE, r0010, c0010}",
+    "x := {tONE, r0010, c0010}; x = 5",
 ]
 
 

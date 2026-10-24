@@ -31,6 +31,12 @@ All notable changes to this project are documented here. The project follows
   `operation(code)` and `table_group(code)` provider methods (and
   `MemoryProvider`'s `operations` and `table_groups`, also in the CLI data
   file); `Reference.kind` and `Reference.code`.
+- Statements separated by `;` with temporary (`name := e`) and persistent
+  (`{target} <- e`) assignments: `parse_program`, the `Program`,
+  `Assignment` and `PersistentAssignment` nodes, and
+  `RuleResult.assignments`. `evaluate_rule`, the columnar fallback and
+  `dpm-xl check` accept programs; `parse` still returns one expression and
+  allows a trailing `;`.
 - `dpmxl.grammar`: keywords, operators, function names and parameter types as
   frozensets, `canonical_function` and `CALL_NAMES` for the `Call.name` of
   each spelling, and a TextMate grammar in `editors/dpm-xl.tmLanguage.json`.

@@ -371,6 +371,37 @@ class With(Node):
     condition: Node | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class Assignment(Node):
+    """``name := value``: a temporary result later statements refer to."""
+
+    name: str
+    value: Node
+
+
+@dataclass(frozen=True, slots=True)
+class PersistentAssignment(Node):
+    """``{target} <- value``: a computed result for a cell or variable.
+
+    ``target`` is a :class:`Selection` (``{tT, r0010, c0010}``) or a
+    :class:`Parameter` (``{vX}``, also written ``{v_X}``).
+    """
+
+    target: Node
+    value: Node
+
+
+@dataclass(frozen=True, slots=True)
+class Program(Node):
+    """Statements separated by ``;``; the last one gives the result.
+
+    :func:`dpmxl.parser.parse_program` returns one; :func:`dpmxl.parser.parse`
+    returns a single expression instead.
+    """
+
+    statements: tuple[Node, ...]
+
+
 def children(node: Node) -> tuple[Node, ...]:
     """Return a node's direct child expressions in source order.
 
@@ -396,6 +427,12 @@ def children(node: Node) -> tuple[Node, ...]:
             return (operand, condition)
         case Sub(operand=operand, value=value):
             return (operand, value)
+        case Program(statements=statements):
+            return statements
+        case Assignment(value=value):
+            return (value,)
+        case PersistentAssignment(target=target, value=value):
+            return (target, value)
     return ()
 
 
@@ -444,6 +481,7 @@ __all__ = [
     "AXIS_KEYS",
     "AXIS_PREFIXES",
     "MISSING",
+    "Assignment",
     "AxisName",
     "AxisSelector",
     "Binary",
@@ -456,6 +494,8 @@ __all__ = [
     "Name",
     "Node",
     "Parameter",
+    "PersistentAssignment",
+    "Program",
     "Rename",
     "Selection",
     "SelectionSpec",

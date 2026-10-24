@@ -78,7 +78,10 @@ from .recordset import STANDARD_KEYS, EvaluationError, UnsupportedError, resolve
 from .values import Number, Value, type_name
 
 DEC = pl.Decimal(38, 12)
-NUM, THR, TXT, FLAG = "num", "thr", "txt", "flag"
+NUM = "num"
+THR = "thr"
+TXT = "txt"
+FLAG = "flag"
 VALUE_COLUMNS = (NUM, THR, TXT, FLAG)
 CELL = "cell"
 ZERO = Decimal(0)

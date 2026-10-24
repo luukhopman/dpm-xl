@@ -16,6 +16,7 @@ from typing import Any, Literal, NamedTuple, cast
 from .ast import (
     AXIS_PREFIXES,
     MISSING,
+    Analytic,
     Assignment,
     AxisSelector,
     Binary,
@@ -39,10 +40,14 @@ from .ast import (
     TypedParameter,
     Unary,
     Where,
+    Window,
+    WindowBound,
     With,
     _Missing,
 )
 from .grammar import (
+    AGGREGATE_FUNCTIONS,
+    ANALYTIC_FUNCTIONS,
     FUNCTION_ALIASES,
     FUNCTIONS,
     KEYWORDS,
@@ -896,9 +901,12 @@ class _Parser:
         self.expect("(")
         args: list[Node] = []
         group_by: tuple[str, ...] | None = None
+        function = _name(name).casefold()
         if not self.at(")"):
             while True:
                 args.append(self.parse_expression())
+                if self.at_keyword("over") and len(args) == 1:
+                    return self.parse_analytic(name, function, args[0])
                 if self.at_keyword("group by"):
                     self.advance()
                     keys = [self.expect_name()]
@@ -909,7 +917,8 @@ class _Parser:
                 if not self.accept(","):
                     break
         end = self.expect(")")
-        function = _name(name).casefold()
+        if function in ANALYTIC_FUNCTIONS:
+            raise self.error(f"{function} needs an over clause", end)
         if function in FUNCTION_ALIASES:
             # max_aggr/min_aggr are the aggregate forms of max/min, which the
             # evaluators recognise by their single operand.
@@ -917,6 +926,85 @@ class _Parser:
                 raise self.error(f"{function} takes one operand")
             function = FUNCTION_ALIASES[function]
         return Call(function, tuple(args), group_by, span=self.span(name.start, end))
+
+    def parse_analytic(self, name: Token, function: str, operand: Node) -> Node:
+        over = self.advance()
+        if function not in _ANALYTIC_NAMES:
+            raise self.error(f"{function} takes no over clause", over)
+        self.expect("(")
+        partition: list[str] = []
+        order: list[tuple[str, bool]] = []
+        window = None
+        if self.at_keyword("partition by"):
+            self.advance()
+            partition.append(self.expect_name())
+            while self.accept(","):
+                partition.append(self.expect_name())
+        if self.at_keyword("order by"):
+            self.advance()
+            while True:
+                key = self.expect_name()
+                descending = False
+                if self.at_keyword("asc", "desc"):
+                    descending = _keyword(self.advance()) == "desc"
+                order.append((key, descending))
+                if not self.accept(","):
+                    break
+        if self.at_keyword("data points", "range"):
+            unit = cast(Literal["data points", "range"], _keyword(self.advance()))
+            self.expect_keyword("between")
+            start = self.parse_bound()
+            self.expect_keyword("and")
+            window = Window(unit, start, self.parse_bound())
+        self.expect(")")
+        end = self.expect(")")
+        if function == "rank" and not order:
+            raise self.error("rank needs an order by clause", over)
+        return Analytic(
+            FUNCTION_ALIASES.get(function, function),
+            operand,
+            tuple(partition),
+            tuple(order),
+            window,
+            span=self.span(name.start, end),
+        )
+
+    def parse_bound(self) -> WindowBound:
+        if self.at_keyword("unbounded"):
+            self.advance()
+            direction = self.current
+            if not self.at_keyword("preceding", "following"):
+                raise self.error(
+                    f"expected 'preceding' or 'following', found {_describe(direction)}"
+                )
+            self.advance()
+            return WindowBound(
+                "unbounded preceding"
+                if _keyword(direction) == "preceding"
+                else "unbounded following"
+            )
+        if self.at_keyword("current data point"):
+            self.advance()
+            return WindowBound("current data point")
+        count = self.expect_kind("number")
+        if not count.text.isdigit():
+            raise self.error("a window offset is a whole number", count)
+        period = None
+        if self.current.kind in {"period", "identifier"} and (
+            self.current.text in TIME_PERIODS
+        ):
+            period = self.advance().text
+        direction = self.current
+        if not self.at_keyword("preceding", "following"):
+            raise self.error(
+                f"expected 'preceding' or 'following', found {_describe(direction)}"
+            )
+        self.advance()
+        return WindowBound(
+            "preceding" if _keyword(direction) == "preceding" else "following",
+            int(count.text),
+            period,
+        )
 
     # Selections ----------------------------------------------------------
 
@@ -1128,6 +1216,7 @@ class _Parser:
 
 
 _SYMBOL_KINDS = frozenset({"punctuation", "brace", "operator"})
+_ANALYTIC_NAMES = AGGREGATE_FUNCTIONS | ANALYTIC_FUNCTIONS | {"max", "min"}
 _LITERAL_KINDS = frozenset({"number", "string", "date", "item", "boolean", "null"})
 
 

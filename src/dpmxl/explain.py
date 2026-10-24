@@ -30,6 +30,7 @@ from functools import lru_cache
 from typing import Literal, cast
 
 from .ast import (
+    Analytic,
     Assignment,
     Binary,
     Call,
@@ -740,7 +741,7 @@ def _is_leaf(node: Node) -> bool:
         and (len(node.args) == 1 or node.group_by is not None)
     ):
         return True
-    return isinstance(node, Where | Get | Sub)
+    return isinstance(node, Where | Get | Sub | Analytic)
 
 
 def _source(expression: str, node: Node) -> str:

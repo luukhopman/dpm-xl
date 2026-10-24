@@ -211,6 +211,10 @@ to (`max_aggr` is `max`), `CALL_NAMES` all of them; `textmate_grammar()` builds 
   `quarter`, `month`, `week`, `day` and `date(y, m, d)`;
   `time_shift(x, A|S|Q|M|W|D, n[, key])`, `annualise(x, fiscalYearEnd, key)`;
   `filter(data, condition)`.
+- Analytic `rank(x over (…))` and aggregates with `over (partition by k, …
+  order by k [asc|desc], … [data points|range] between … and …)`, with bounds
+  `unbounded preceding|following`, `current data point` and `n [A|S|Q|M|W|D]
+  preceding|following`.
 - Clauses `[where …]`, `[get key]`, `[sub key = value]`, `[rename a to b]`.
 
 Every distinct EBA rule and precondition expression in releases
@@ -259,6 +263,18 @@ Every distinct EBA rule and precondition expression in releases
   items by their text (ISO dates in date order, items by category and code),
   as presence checks expect; Booleans, and numbers mixed with other
   values in one group, are an error.
+- **Analytic functions** keep the operand's records: each gets the aggregate
+  of the records in its window (or its rank) within its partition. Partition
+  and order keys must be keys of the operand; `rank` needs `order by` and
+  ranks by those keys, ties sharing the lowest rank and leaving gaps (1, 1,
+  3). Without a window clause the window is the whole partition, or with
+  `order by` every record up to the current one and its peers (`range
+  between unbounded preceding and current data point`). `data points`
+  windows count records; `range` windows compare the single order key's
+  values (numbers, or dates with a period: `3 M preceding` is three calendar
+  months back). `preceding` follows the sort direction. These analytic calls
+  are `Analytic` nodes, not `Call`s, and `rank` is not in
+  `evaluator.AGGREGATES`.
 - **Clauses.** `[get key]` omits records whose fact is null; a `where` or
   `sub` on a selection inside a `with` body overrides the terms of the
   context's `where` (split at `and`) that name the same key; the other terms

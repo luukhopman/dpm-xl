@@ -327,6 +327,52 @@ class Call(Node):
 
 
 @dataclass(frozen=True, slots=True)
+class WindowBound:
+    """One end of an analytic window.
+
+    ``kind`` is ``unbounded preceding``, ``preceding``, ``current data
+    point``, ``following`` or ``unbounded following``; ``offset`` counts
+    data points, or for a ``range`` window units of the order key, or of
+    ``period`` (``A``, ``S``, ``Q``, ``M``, ``W``, ``D``) for a date key.
+    """
+
+    kind: Literal[
+        "unbounded preceding",
+        "preceding",
+        "current data point",
+        "following",
+        "unbounded following",
+    ]
+    offset: int = 0
+    period: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Window:
+    """``data points|range between start and end``."""
+
+    unit: Literal["data points", "range"]
+    start: WindowBound
+    end: WindowBound
+
+
+@dataclass(frozen=True, slots=True)
+class Analytic(Node):
+    """``name(operand over (partition by … order by … window))``.
+
+    ``name`` is ``rank`` or an aggregate's call name (``sum``, ``count``,
+    ``avg``, ``max``, ``min``, ``median``). ``order_by`` pairs each key with
+    whether it sorts descending. The result keeps the operand's records.
+    """
+
+    name: str
+    operand: Node
+    partition_by: tuple[str, ...] = ()
+    order_by: tuple[tuple[str, bool], ...] = ()
+    window: Window | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Where(Node):
     """``operand [where condition]`` filters records by key components."""
 
@@ -423,6 +469,8 @@ def children(node: Node) -> tuple[Node, ...]:
             return (condition, then) + ((otherwise,) if otherwise else ())
         case Call(args=args):
             return args
+        case Analytic(operand=operand):
+            return (operand,)
         case Where(operand=operand, condition=condition):
             return (operand, condition)
         case Sub(operand=operand, value=value):
@@ -481,6 +529,7 @@ __all__ = [
     "AXIS_KEYS",
     "AXIS_PREFIXES",
     "MISSING",
+    "Analytic",
     "Assignment",
     "AxisName",
     "AxisSelector",
@@ -506,6 +555,8 @@ __all__ = [
     "TypedParameter",
     "Unary",
     "Where",
+    "Window",
+    "WindowBound",
     "With",
     "children",
     "walk",

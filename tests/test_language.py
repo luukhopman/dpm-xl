@@ -20,6 +20,7 @@ from dpmxl import (
     tables,
 )
 from dpmxl.ast import (
+    Analytic,
     Assignment,
     Binary,
     Call,
@@ -33,6 +34,8 @@ from dpmxl.ast import (
     Selection,
     SetLiteral,
     Where,
+    Window,
+    WindowBound,
     With,
     walk,
 )
@@ -519,3 +522,120 @@ def test_time_shift_without_the_provider_method_stays_unsupported() -> None:
     )
     for expression in ("{o_X} > 0", "{g_G, r0010} > 0"):
         assert evaluate_rule(expression, _SingleReport()).status == "unsupported"
+
+
+def plain(expression: str) -> dict:
+    return {
+        key: str(item) if item is None else str(item.value)
+        for key, item in values(expression).items()
+    }
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        (
+            "rank({tT, c0010, r*} over (order by r desc))",
+            {"0010": "3", "0020": "2", "0030": "1"},
+        ),
+        (
+            "sum({tT, c0010, r*} over (order by r))",
+            {"0010": "100", "0020": "160", "0030": "200"},
+        ),
+        (
+            "sum({tT, c0010, r*} over (order by r data points between 1 preceding "
+            "and 1 following))",
+            {"0010": "160", "0020": "200", "0030": "100"},
+        ),
+        ("sum({tT, c0010, r*} over ())", {"0010": "200", "0020": "200", "0030": "200"}),
+        (
+            "count({tT, (c0010, c0020), r*} over (partition by c))",
+            {
+                ("0010", "0010"): "3",
+                ("0020", "0010"): "3",
+                ("0030", "0010"): "3",
+                ("0010", "0020"): "2",
+                ("0020", "0020"): "2",
+                ("0030", "0020"): "2",
+            },
+        ),
+        (
+            "rank({tT, (c0010, c0020), r*} over (order by c))",
+            {
+                ("0010", "0010"): "1",
+                ("0020", "0010"): "1",
+                ("0030", "0010"): "1",
+                ("0010", "0020"): "4",
+                ("0020", "0020"): "4",
+                ("0030", "0020"): "4",
+            },
+        ),
+        (
+            "avg({tO, c0010} over (order by qDAT range between 3 M preceding "
+            "and current data point))",
+            {
+                ("a", date(2026, 3, 31)): "10",
+                ("b", date(2026, 6, 30)): "15",
+                ("c", date(2026, 9, 30)): "25",
+            },
+        ),
+        (
+            "max_aggr({tO, c0010} over (order by qDAT desc range between "
+            "3 M preceding and current data point))",
+            {
+                ("c", date(2026, 9, 30)): "30",
+                ("b", date(2026, 6, 30)): "30",
+                ("a", date(2026, 3, 31)): "20",
+            },
+        ),
+        (
+            "count({tO, c0010} over (order by qDAT range between current data point "
+            "and unbounded following))",
+            {
+                ("a", date(2026, 3, 31)): "3",
+                ("b", date(2026, 6, 30)): "2",
+                ("c", date(2026, 9, 30)): "1",
+            },
+        ),
+    ],
+)
+def test_analytic_functions(expression: str, expected: dict) -> None:
+    assert plain(expression) == expected
+
+
+def test_analytic_calls_parse_to_their_own_node() -> None:
+    node = parse(
+        "sum({tA} over (partition by r, c order by qD desc, s range between "
+        "unbounded preceding and 2 following))"
+    )
+    assert isinstance(node, Analytic) and node.name == "sum"
+    assert node.partition_by == ("r", "c")
+    assert node.order_by == (("qD", True), ("s", False))
+    assert node.window == Window(
+        "range", WindowBound("unbounded preceding"), WindowBound("following", 2)
+    )
+    assert isinstance(node.operand, Selection)
+    assert walk(node)[1] is node.operand
+    with pytest.raises(DpmXlSyntaxError, match="rank needs an over clause"):
+        parse("rank({tA})")
+    with pytest.raises(DpmXlSyntaxError, match="rank needs an order by clause"):
+        parse("rank({tA} over (partition by r))")
+    with pytest.raises(DpmXlSyntaxError, match="abs takes no over clause"):
+        parse("abs({tA} over ())")
+
+
+@pytest.mark.parametrize(
+    ("expression", "message"),
+    [
+        ("rank({tT, c0010, r*} over (order by qX)) > 0", "not a key of the operand"),
+        (
+            "sum({tT, c0010, r*} over (order by r range between 1 preceding and "
+            "current data point)) > 0",
+            "needs a number or date order key",
+        ),
+    ],
+)
+def test_analytic_errors(expression: str, message: str) -> None:
+    result = evaluate_rule(expression, report())
+    assert result.status == "error"
+    assert result.message is not None and message in result.message

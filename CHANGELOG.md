@@ -42,6 +42,9 @@ All notable changes to this project are documented here. The project follows
   optional `earlier_report(period, count)` provider method (or
   `MemoryProvider(earlier_reports=...)`, or `earlier` in the CLI data file),
   or moves a date key; `annualise(x, fiscalYearEnd, key)`.
+- Analytic functions: `rank` and aggregates with `over (partition by …
+  order by … window)`, parsed to the `Analytic` node with `Window` and
+  `WindowBound`.
 - `dpmxl.grammar`: keywords, operators, function names and parameter types as
   frozensets, `canonical_function` and `CALL_NAMES` for the `Call.name` of
   each spelling, and a TextMate grammar in `editors/dpm-xl.tmLanguage.json`.

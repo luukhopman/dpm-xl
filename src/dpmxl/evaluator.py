@@ -32,7 +32,7 @@ from collections.abc import (
 )
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from functools import lru_cache
 from operator import attrgetter
@@ -40,6 +40,7 @@ from typing import Any, Literal, cast
 
 from .ast import (
     AXIS_KEYS,
+    Analytic,
     Assignment,
     Binary,
     Call,
@@ -62,6 +63,8 @@ from .ast import (
     TypedParameter,
     Unary,
     Where,
+    Window,
+    WindowBound,
     With,
     walk,
 )
@@ -384,6 +387,8 @@ class Evaluator:
                 )
             case Call():
                 return self._call(node, context, bindings)
+            case Analytic(operand=operand):
+                return _analytic(node, self.evaluate(operand, context, bindings))
             case Where(operand=operand, condition=condition):
                 return self._where(
                     self._clause_operand(
@@ -970,6 +975,204 @@ def _annualised(value: Value, reference: Value, fiscal_end: int) -> Value:
         raise EvaluationError(f"annualise needs a date, found {type_name(reference)}")
     months = (reference.month - fiscal_end - 1) % 12 + 1
     return number * Number(Decimal(12)) / Number(Decimal(months))
+
+
+def _analytic(node: Analytic, data: Recordset) -> Recordset:
+    """Evaluate ``rank`` or an aggregate over an analytic window.
+
+    Returns:
+        Recordset: One record per operand record, with the same keys.
+
+    Raises:
+        EvaluationError: For a key the operand lacks or an invalid window.
+    """
+
+    def position(name: str) -> int:
+        key = resolve_key(name, data.keys)
+        if key is None:
+            raise EvaluationError(
+                f"{node.name} over {name!r}, which is not a key of the operand "
+                f"({', '.join(data.keys) or 'no keys'})"
+            )
+        return data.keys.index(key)
+
+    partition = [position(name) for name in node.partition_by]
+    order = [(position(name), descending) for name, descending in node.order_by]
+    groups: dict[tuple[Hashable, ...], list[tuple[tuple[Hashable, ...], Record]]] = {}
+    for key, record in data.records.items():
+        groups.setdefault(tuple([key[index] for index in partition]), []).append(
+            (key, record)
+        )
+    result = Recordset(data.keys)
+    reduce = _per_record(lambda values: _reduce(node.name, values, len(values)))
+    for members in groups.values():
+        for index, descending in reversed(order):
+            members.sort(
+                key=lambda item: _sort_value(item[0][index]), reverse=descending
+            )
+        ranks = _order_values(members, order)
+        if node.name == "rank":
+            first: dict[tuple[Any, ...], int] = {}
+            for number, rank_key in enumerate(ranks, start=1):
+                first.setdefault(rank_key, number)
+            for (key, record), rank_key in zip(members, ranks, strict=True):
+                result.records[key] = Record(
+                    Number(Decimal(first[rank_key])), record.points
+                )
+            continue
+        for current, (key, _record) in enumerate(members):
+            low, high = _window_span(node, members, order, current)
+            window = members[low:high]
+            values: list[Value] = [
+                item.value for _, item in window if item.value is not None
+            ]
+            result.records[key] = Record(
+                reduce(values), tuple(item.points for _, item in window)
+            )
+    return result
+
+
+def _sort_value(value: Hashable) -> tuple[int, Any]:
+    """Order key values of mixed types: null first, then by type and value.
+
+    Returns:
+        tuple[int, Any]: A sort key.
+    """
+    if value is None:
+        return (0, 0)
+    if isinstance(value, bool):
+        return (1, int(value))
+    if isinstance(value, Decimal):
+        return (2, value)
+    if isinstance(value, date):
+        return (3, _moment(value))
+    return (4, str(value))
+
+
+def _moment(value: date) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    return datetime(value.year, value.month, value.day)
+
+
+def _order_values(
+    members: list[tuple[tuple[Hashable, ...], Record]], order: list[tuple[int, bool]]
+) -> list[tuple[Any, ...]]:
+    return [tuple(_sort_value(key[index]) for index, _ in order) for key, _ in members]
+
+
+def _window_span(
+    node: Analytic,
+    members: list[tuple[tuple[Hashable, ...], Record]],
+    order: list[tuple[int, bool]],
+    current: int,
+) -> tuple[int, int]:
+    """Return the half-open range of sorted members in a record's window.
+
+    Without a window clause the window is the whole partition, or, with an
+    ``order by``, every member up to the current one and its peers.
+
+    Returns:
+        tuple[int, int]: Start and end positions.
+
+    Raises:
+        EvaluationError: For a ``range`` window that is not over one number
+            or date key.
+    """
+    count = len(members)
+    window = node.window
+    if window is None:
+        if not order:
+            return 0, count
+        window = Window(
+            "range",
+            WindowBound("unbounded preceding"),
+            WindowBound("current data point"),
+        )
+    if window.unit == "data points":
+        low = _row_bound(window.start, current, count)
+        high = _row_bound(window.end, current, count) + 1
+        return max(low, 0), max(min(high, count), max(low, 0))
+    if not order:
+        return 0, count
+    if len(order) != 1 and (
+        window.start.kind in {"preceding", "following"}
+        or window.end.kind in {"preceding", "following"}
+    ):
+        raise EvaluationError("a range window with offsets needs one order key")
+    index, descending = order[0]
+    value = members[current][0][index]
+    low = _range_bound(window.start, value, descending, members, index, start=True)
+    high = _range_bound(window.end, value, descending, members, index, start=False)
+    return low, max(high, low)
+
+
+def _row_bound(bound: WindowBound, current: int, count: int) -> int:
+    match bound.kind:
+        case "unbounded preceding":
+            return 0
+        case "unbounded following":
+            return count - 1
+        case "preceding":
+            return current - bound.offset
+        case "following":
+            return current + bound.offset
+    return current
+
+
+def _range_bound(
+    bound: WindowBound,
+    value: Hashable,
+    descending: bool,
+    members: list[tuple[tuple[Hashable, ...], Record]],
+    index: int,
+    *,
+    start: bool,
+) -> int:
+    """Find a range window bound among members sorted on one key.
+
+    Returns:
+        int: The first member inside the window (``start``) or the first
+        after it.
+
+    Raises:
+        EvaluationError: For an offset over a key that is not a number or
+            date.
+    """
+    count = len(members)
+    if bound.kind == "unbounded preceding":
+        return 0
+    if bound.kind == "unbounded following":
+        return count
+    if bound.kind == "current data point":
+        target = value
+    else:
+        offset = bound.offset if bound.kind == "following" else -bound.offset
+        if descending:
+            offset = -offset
+        if isinstance(value, Decimal) and bound.period is None:
+            target = value + offset
+        elif isinstance(value, date):
+            target = _shift_date(value, bound.period or "D", offset)
+        else:
+            raise EvaluationError(
+                "a range window offset needs a number or date order key"
+                + (" and a period for dates" if isinstance(value, date) else "")
+            )
+    goal = _sort_value(target)
+    # Members are sorted ascending on the key, or descending.
+    positions = range(count)
+    if start:
+        for position in positions:
+            found = _sort_value(members[position][0][index])
+            if (found >= goal) if not descending else (found <= goal):
+                return position
+        return count
+    for position in reversed(positions):
+        found = _sort_value(members[position][0][index])
+        if (found <= goal) if not descending else (found >= goal):
+            return position + 1
+    return 0
 
 
 def _target_text(target: Node) -> str:

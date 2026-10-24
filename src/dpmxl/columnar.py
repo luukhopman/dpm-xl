@@ -669,7 +669,12 @@ class ColumnarEvaluator:
     def _call(self, node: Call, context: SelectionSpec) -> Frame:
         name = node.name
         if name == "time_shift":
-            raise UnsupportedError(_UNSUPPORTED_FUNCTIONS["time_shift"])
+            underlying = getattr(self.provider, "provider", self.provider)
+            if not callable(getattr(underlying, "earlier_report", None)):
+                raise UnsupportedError(_UNSUPPORTED_FUNCTIONS["time_shift"])
+            raise ColumnarUnsupported("time_shift")
+        if name == "annualise":
+            raise ColumnarUnsupported("annualise")
         if name in AGGREGATES and (len(node.args) == 1 or node.group_by is not None):
             if len(node.args) != 1:
                 raise EvaluationError(f"{name} with group by takes one operand")

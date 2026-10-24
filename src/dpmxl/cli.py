@@ -287,8 +287,9 @@ def load_memory_provider(document: dict[str, Any]) -> MemoryProvider:
     The document has ``tables`` (code, rows, columns, sheets, open_keys),
     ``facts`` (table, row, column, sheet, keys, value, decimals, type),
     ``reported`` template codes, ``parameters`` (a list is a set),
-    ``table_groups`` (group code to table codes) and ``operations``
-    (operation code to expression).
+    ``table_groups`` (group code to table codes), ``operations``
+    (operation code to expression) and ``earlier`` reports for
+    ``time_shift`` (``period``, ``count`` and a nested ``data`` document).
 
     Returns:
         MemoryProvider: The in-memory report.
@@ -343,6 +344,10 @@ def _memory_provider(document: dict[str, Any]) -> MemoryProvider:
             for code, group in document.get("table_groups", {}).items()
         },
         operations=dict(document.get("operations", {})),
+        earlier_reports={
+            (entry["period"], int(entry["count"])): _memory_provider(entry["data"])
+            for entry in document.get("earlier", ())
+        },
     )
 
 

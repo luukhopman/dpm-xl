@@ -38,6 +38,10 @@ All notable changes to this project are documented here. The project follows
   `RuleResult.assignments`. `evaluate_rule`, the columnar fallback and
   `dpm-xl check` accept programs; `parse` still returns one expression and
   allows a trailing `;`.
+- `time_shift` evaluates its operand on another period's report from the
+  optional `earlier_report(period, count)` provider method (or
+  `MemoryProvider(earlier_reports=...)`, or `earlier` in the CLI data file),
+  or moves a date key; `annualise(x, fiscalYearEnd, key)`.
 - `dpmxl.grammar`: keywords, operators, function names and parameter types as
   frozensets, `canonical_function` and `CALL_NAMES` for the `Call.name` of
   each spelling, and a TextMate grammar in `editors/dpm-xl.tmLanguage.json`.
@@ -50,6 +54,10 @@ All notable changes to this project are documented here. The project follows
 - `{}` is the empty set rather than an empty selection, and `In.values` may
   be any set-valued node, not only a `SetLiteral`; `Value` includes
   `ValueSet`.
+- `time_shift` is no longer always `unsupported`: with a provider that has
+  `earlier_report` it is evaluated, and `MemoryProvider` without the
+  requested report reports it with a new message. The columnar evaluator
+  hands such rules to the reference evaluator.
 - A `_` after a selection prefix is cosmetic, as the DPM-XL grammar says:
   `{t_T1}` selects table `T1`, not `_T1`. `SelectionSpec` has
   `table_group` and `operation` fields.

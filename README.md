@@ -69,7 +69,7 @@ bad rule or bad data; it returns a `RuleResult`:
 
 | Field | Meaning |
 | --- | --- |
-| `status` | `passed`, `failed`, `not_applicable` (precondition not met, or no record could be evaluated), `error` (syntax error, unknown table, type mismatch, division by zero that reaches the result) or `unsupported` (`time_shift`) |
+| `status` | `passed`, `failed`, `not_applicable` (precondition not met, or no record could be evaluated), `error` (syntax error, unknown table, type mismatch, division by zero that reaches the result) or `unsupported` (a `time_shift`, `{o_…}` or `{g_…}` the provider cannot resolve) |
 | `message` | Why the status is `error`, `unsupported` or `not_applicable` |
 | `outcomes` | One `Outcome` per record: `key` (such as `{'c': '0020'}`), `passed` (`True`, `False` or `None` when not evaluated) and `points`, the cells it used |
 | `failures`, `counts` | The failing outcomes, and the number passed, failed and not evaluated |
@@ -113,8 +113,10 @@ reported key combination, with the key components in `DataPoint.keys`; an
 optional `open_keys(table)` method names them for tables with no rows.
 `table_reported` answers `{v_TABLE}` and `parameter` answers `{vName}` and
 `{p_Name, type}`. Optional `table_group(code)` and `operation(code)` methods
-resolve `{g_…}` table groups and `{o_…}` operation references
-(`MemoryProvider` takes them as `table_groups` and `operations`). In
+resolve `{g_…}` table groups and `{o_…}` operation references, and
+`earlier_report(period, count)` returns another period's report for
+`time_shift` (`MemoryProvider` takes them as `table_groups`, `operations` and
+`earlier_reports`). In
 `references(node)`, a group or operation read has `spec.table` `None`, with
 `kind` (`table`, `table_group` or `operation`) and `code`;
 `tables(node, provider)` counts a group read as reading every table
@@ -143,7 +145,9 @@ and an optional `precondition` ([`examples/rules.json`](https://github.com/luukh
 `data.json` ([`examples/data.json`](https://github.com/luukhopman/dpm-xl/blob/main/examples/data.json)) holds `tables`
 (`code`, `rows`, `columns`, `sheets`, `open_keys`), `facts` (`table`, `row`,
 `column`, `sheet`, `keys`, `value`, `decimals` as an integer or `INF`, `type`),
-`reported`, `parameters` (a list is a set), `table_groups` and `operations`. `--json` output is an object with
+`reported`, `parameters` (a list is a set), `table_groups`, `operations` and
+`earlier` reports for `time_shift` (`period`, `count` and a nested `data`
+document). `--json` output is an object with
 `schema_version` (1), and `results` (`eval`: rule, expression, status,
 message, counts and failures with key, summary and cells) or `parsed`,
 `total` and `errors` with positions (`check`). The exit status is 0 when everything parsed or
@@ -205,11 +209,11 @@ to (`max_aggr` is `max`), `CALL_NAMES` all of them; `textmate_grammar()` builds 
   scalar `abs`, `isnull`, `nvl`, `len`, `substr`, `match`, `min`/`max` with
   several operands, `exp`, `ln`, `sqrt`, `power`, `log`; `year`, `semester`,
   `quarter`, `month`, `week`, `day` and `date(y, m, d)`;
+  `time_shift(x, A|S|Q|M|W|D, n[, key])`, `annualise(x, fiscalYearEnd, key)`;
   `filter(data, condition)`.
 - Clauses `[where …]`, `[get key]`, `[sub key = value]`, `[rename a to b]`.
 
-`time_shift` needs the previous reporting period and is reported as
-`unsupported`. Every distinct EBA rule and precondition expression in releases
+Every distinct EBA rule and precondition expression in releases
 3.4–4.4 parses, except two source expressions with typos (`trueendif`,
 `ornot`), which are reported as syntax errors.
 
@@ -286,6 +290,20 @@ to (`max_aggr` is `max`), `CALL_NAMES` all of them; `textmate_grammar()` builds 
   wins over a report parameter of that name and loses to a key component
   inside a clause. `{target} <- e` computes `e` and returns it in
   `RuleResult.assignments`; nothing is written to the report.
+- **Time.** `time_shift(x, Q, 1, refPeriod)` presents the previous quarter's
+  records as the current period's, as in the EBA introduction to DPM-XL:
+  when the key is not a key component of `x` (`refPeriod`, or no key), `x` is
+  evaluated on the report the provider's `earlier_report(period, count)`
+  returns, `count` periods earlier (later when negative); without that
+  method, or when it returns `None`, the rule is `unsupported`. When the key
+  is a date key component of `x`, its values move `count` periods later
+  instead. Periods move dates by calendar months (12, 6, 3, 1; a month's
+  last day stays the last day) or by 7 or 1 days. `annualise(x, m, key)`
+  scales a year-to-date amount to a year: `x · 12 / months`, where `months`
+  counts the months from the fiscal year that ends in month `m` up to and
+  including the month of the date in `key` (a date key component, else the
+  report parameter of that name). It treats that month as complete, so it is
+  meant for period-end dates.
 - **Key names** in `where`, `group by`, `sub` and `get` match with or without
   the DPM 2.0 `q` prefix and ignore case (`EBB` finds `qEBB`).
 - **Items** compare by code and category, ignoring the `eba_` prefix and a

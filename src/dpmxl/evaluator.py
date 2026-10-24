@@ -19,6 +19,7 @@ Semantics in brief:
 
 from __future__ import annotations
 
+import calendar
 import math
 import re
 from collections.abc import (
@@ -31,7 +32,7 @@ from collections.abc import (
 )
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from functools import lru_cache
 from operator import attrgetter
@@ -207,6 +208,8 @@ class SelectionCache:
     def __init__(self) -> None:
         """Create an empty cache."""
         self.recordsets: dict[SelectionSpec, Recordset] = {}
+        self.earlier: dict[tuple[str, int], SelectionCache] = {}
+        """Caches of earlier reports for ``time_shift``, by period and count."""
 
 
 class Evaluator:
@@ -609,8 +612,10 @@ class Evaluator:
         bindings: Mapping[str, Value] | None,
     ) -> Recordset:
         name = node.name
-        if name in _UNSUPPORTED_FUNCTIONS:
-            raise UnsupportedError(_UNSUPPORTED_FUNCTIONS[name])
+        if name == "time_shift":
+            return self._time_shift(node, context, bindings)
+        if name == "annualise":
+            return self._annualise(node, context, bindings)
         if name in _SET_FUNCTIONS:
             return self._set_function(node, context, bindings)
         if name in AGGREGATES and (len(node.args) == 1 or node.group_by is not None):
@@ -652,6 +657,101 @@ class Evaluator:
                 f"{name} takes {' or '.join(map(str, arity))} operands"
             )
         return combine(args, _per_record(implementation))
+
+    def _time_shift(
+        self,
+        node: Call,
+        context: SelectionSpec,
+        bindings: Mapping[str, Value] | None,
+    ) -> Recordset:
+        if node.group_by is not None or len(node.args) not in {3, 4}:
+            raise EvaluationError("time_shift takes 3 or 4 operands")
+        operand, period_node, count_node = node.args[:3]
+        period = _period(period_node)
+        count = self._integer_operand(count_node, "time_shift", context, bindings)
+        key = node.args[3] if len(node.args) == 4 else None
+        if key is not None and not isinstance(key, Name):
+            raise EvaluationError("time_shift needs a key name as its fourth operand")
+        if key is not None:
+            try:
+                current = self.evaluate(operand, context, bindings)
+            except EvaluationError:
+                current = None
+            found = resolve_key(key.name, current.keys) if current else None
+            if current is not None and found is not None:
+                return _shift_key(current, found, period, count)
+        method = getattr(self.provider, "earlier_report", None)
+        if not callable(method):
+            raise UnsupportedError(_UNSUPPORTED_FUNCTIONS["time_shift"])
+        earlier = method(period, count)
+        if earlier is None:
+            raise UnsupportedError(
+                f"time_shift needs the report {count} {_PERIOD_NAMES[period]} "
+                "earlier, which the provider does not have"
+            )
+        cache = None
+        if self.cache is not None:
+            cache = self.cache.earlier.setdefault((period, count), SelectionCache())
+        inner = Evaluator(earlier, trace=False, cache=cache, only_keys=self.only_keys)
+        inner._context_conditions = list(self._context_conditions)
+        inner._overrides = self._overrides
+        inner._temporaries = dict(self._temporaries)
+        inner._operations = list(self._operations)
+        return inner.evaluate(operand, context, bindings)
+
+    def _annualise(
+        self,
+        node: Call,
+        context: SelectionSpec,
+        bindings: Mapping[str, Value] | None,
+    ) -> Recordset:
+        if node.group_by is not None or len(node.args) != 3:
+            raise EvaluationError("annualise takes 3 operands")
+        operand, end_node, key = node.args
+        if not isinstance(key, Name):
+            raise EvaluationError("annualise needs a key name as its third operand")
+        fiscal_end = self._integer_operand(end_node, "annualise", context, bindings)
+        if not 1 <= fiscal_end <= 12:
+            raise EvaluationError("annualise needs a fiscal year end month of 1 to 12")
+        data = self.evaluate(operand, context, bindings)
+        found = resolve_key(key.name, data.keys)
+        if found is None:
+            reference = self.provider.parameter(key.name)
+            if not isinstance(reference, date):
+                raise EvaluationError(
+                    f"annualise needs a date key or report parameter {key.name!r}"
+                )
+            return data.map(
+                _unary_per_record(
+                    lambda value: _annualised(value, reference, fiscal_end)
+                )
+            )
+        position = data.keys.index(found)
+        per_record = _per_record(
+            lambda values: _annualised(values[0], values[1], fiscal_end)
+        )
+        return Recordset(
+            data.keys,
+            {
+                record_key: Record(
+                    per_record([record.value, _value_of_key(record_key[position])]),
+                    record.points,
+                )
+                for record_key, record in data.records.items()
+            },
+        )
+
+    def _integer_operand(
+        self,
+        node: Node,
+        name: str,
+        context: SelectionSpec,
+        bindings: Mapping[str, Value] | None,
+    ) -> int:
+        record = self.evaluate(node, context, bindings).single()
+        if record is None or record.value is None:
+            raise EvaluationError(f"{name} needs a whole number, found null")
+        return _integer(_checked(record.value), name)
 
     def _set_function(
         self,
@@ -805,6 +905,71 @@ class Evaluator:
     ) -> Value:
         record = self.evaluate(node, context, bindings).single()
         return _checked(record.value) if record else None
+
+
+_PERIOD_MONTHS = {"A": 12, "S": 6, "Q": 3, "M": 1}
+_PERIOD_DAYS = {"W": 7, "D": 1}
+_PERIOD_NAMES = {
+    "A": "year(s)",
+    "S": "semester(s)",
+    "Q": "quarter(s)",
+    "M": "month(s)",
+    "W": "week(s)",
+    "D": "day(s)",
+}
+
+
+def _period(node: Node) -> str:
+    if isinstance(node, Name) and node.name in _PERIOD_NAMES:
+        return node.name
+    raise EvaluationError("time_shift needs a period of A, S, Q, M, W or D")
+
+
+def _shift_date(value: date, period: str, count: int) -> date:
+    """Move a date ``count`` periods later (earlier when negative).
+
+    Years, semesters, quarters and months move by calendar months: the day
+    is kept, limited to the target month's length, and a month's last day
+    stays the last day (``2026-02-28`` plus one quarter is ``2026-05-31``).
+    Weeks and days move by 7 and 1 days.
+
+    Returns:
+        date: The shifted date (a ``datetime`` stays one).
+    """
+    if period in _PERIOD_DAYS:
+        return value + timedelta(days=_PERIOD_DAYS[period] * count)
+    months = value.year * 12 + value.month - 1 + _PERIOD_MONTHS[period] * count
+    year, month = divmod(months, 12)
+    last = calendar.monthrange(year, month + 1)[1]
+    month_end = value.day == calendar.monthrange(value.year, value.month)[1]
+    return value.replace(
+        year=year, month=month + 1, day=last if month_end else min(value.day, last)
+    )
+
+
+def _shift_key(data: Recordset, key: str, period: str, count: int) -> Recordset:
+    position = data.keys.index(key)
+    result = Recordset(data.keys)
+    for record_key, record in data.records.items():
+        moment = record_key[position]
+        if not isinstance(moment, date):
+            found = type_name(_value_of_key(moment))
+            raise EvaluationError(f"time_shift needs dates in key {key}, found {found}")
+        shifted = _shift_date(moment, period, count)
+        result.records[*record_key[:position], shifted, *record_key[position + 1 :]] = (
+            record
+        )
+    return result
+
+
+def _annualised(value: Value, reference: Value, fiscal_end: int) -> Value:
+    if value is None or reference is None:
+        return None
+    number = _require_number(value, "annualise")
+    if not isinstance(reference, date):
+        raise EvaluationError(f"annualise needs a date, found {type_name(reference)}")
+    months = (reference.month - fiscal_end - 1) % 12 + 1
+    return number * Number(Decimal(12)) / Number(Decimal(months))
 
 
 def _target_text(target: Node) -> str:

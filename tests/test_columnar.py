@@ -459,3 +459,25 @@ def test_groups_and_operations_go_to_the_reference_engine(expression: str) -> No
     with pytest.raises(ColumnarUnsupported):
         evaluate_rule_columnar(expression, PointsFrameProvider(provider))
     assert evaluate_rule(expression, provider).status == "passed"
+
+
+def test_time_functions_go_to_the_reference_engine() -> None:
+    provider = data()
+    earlier = MemoryProvider(
+        list(provider.tables.values()),
+        dict(provider.values),
+        parameters={"refPeriod": date(2025, 12, 31)},
+    )
+    shifting = MemoryProvider(
+        list(provider.tables.values()),
+        dict(provider.values),
+        parameters={"refPeriod": date(2026, 12, 31)},
+        earlier_reports={("A", 1): earlier},
+    )
+    for expression in (
+        "{tT, r0010, c0010} = time_shift({tT, r0010, c0010}, A, 1, refPeriod)",
+        "annualise({tT, r0010, c0010}, 12, refPeriod) = 100",
+    ):
+        with pytest.raises(ColumnarUnsupported):
+            evaluate_rule_columnar(expression, PointsFrameProvider(shifting))
+        assert evaluate_rule(expression, shifting).status == "passed"

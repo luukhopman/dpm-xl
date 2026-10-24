@@ -401,3 +401,121 @@ def test_temporaries_shadow_parameters_and_keep_records() -> None:
     assert result.status == "error" and "number values" in (result.message or "")
     assigned = result.assignments["{vY}"].single()
     assert assigned is not None and assigned.value == Number(Decimal(2))
+
+
+def quarterly(value: int, day: date) -> MemoryProvider:
+    table = TableLayout("F", rows=("0010", "0210"), columns=("0010",))
+    data: dict[CellKey, Value] = {
+        ("F", "0010", "0010", None, ()): Number.of(value, 0),
+        ("F", "0210", "0010", None, ()): Number.of(value + 5, 0),
+    }
+    return MemoryProvider([table], data, parameters={"refPeriod": day})
+
+
+def test_time_shift_reads_the_earlier_report() -> None:
+    previous = quarterly(100, date(2026, 3, 31))
+    current = MemoryProvider(
+        list(quarterly(0, date(2026, 6, 30)).tables.values()),
+        {("F", "0010", "0010", None, ()): Number.of(105, 0)},
+        parameters={"refPeriod": date(2026, 6, 30)},
+        earlier_reports={("Q", 1): previous},
+    )
+    rule = "with {tF, c0010}: {r0010} = time_shift({r0210}, Q, 1, refPeriod)"
+    assert evaluate_rule(rule, current).status == "passed"
+    assert (
+        evaluate_rule(
+            "with {tF, c0010}: {r0010} = time_shift({r0210}, Q, 1)", current
+        ).status
+        == "passed"
+    )
+    result = evaluate_rule(
+        "with {tF, c0010}: {r0010} = time_shift({r0210}, A, 1, refPeriod)", current
+    )
+    assert result.status == "unsupported"
+    assert "report 1 year(s) earlier" in (result.message or "")
+    without = evaluate_rule(rule, quarterly(1, date(2026, 6, 30)))
+    assert without.status == "unsupported"
+    assert "report 1 quarter(s) earlier" in (without.message or "")
+
+
+def test_time_shift_moves_a_date_key() -> None:
+    shifted = values("time_shift({tO, c0010}, Q, 1, qDAT)")
+    assert shifted == {
+        ("a", date(2026, 6, 30)): Number(Decimal(10)),
+        ("b", date(2026, 9, 30)): Number(Decimal(20)),
+        ("c", date(2026, 12, 31)): Number(Decimal(30)),
+    }
+    back = values("time_shift({tO, c0010}, M, (-1), qDAT)")
+    assert ("a", date(2026, 2, 28)) in back
+    weeks = values("time_shift({tO, c0010}, W, 2, qDAT)")
+    assert ("a", date(2026, 4, 14)) in weeks
+
+
+@pytest.mark.parametrize(
+    ("expression", "parameters", "expected"),
+    [
+        ("annualise(30, 12, refPeriod)", {"refPeriod": date(2026, 3, 31)}, 120),
+        ("annualise(30, 12, refPeriod)", {"refPeriod": date(2026, 12, 31)}, 30),
+        ("annualise(30, 3, refPeriod)", {"refPeriod": date(2026, 6, 30)}, 120),
+        ("annualise(30, 6, refPeriod)", {"refPeriod": date(2026, 3, 31)}, 40),
+    ],
+)
+def test_annualise_scales_by_the_months_of_the_fiscal_year(
+    expression: str, parameters: dict, expected: int
+) -> None:
+    assert value(expression, report(**parameters)) == Number(Decimal(expected))
+
+
+def test_annualise_reads_a_date_key_per_record() -> None:
+    assert values("annualise({tO, c0010}, 12, qDAT)") == {
+        ("a", date(2026, 3, 31)): Number(Decimal(40)),
+        ("b", date(2026, 6, 30)): Number(Decimal(40)),
+        ("c", date(2026, 9, 30)): Number(Decimal(40)),
+    }
+
+
+@pytest.mark.parametrize(
+    ("expression", "message"),
+    [
+        ("time_shift({tT, r0010, c0010}, X, 1) > 0", "period of A, S, Q, M, W or D"),
+        ("time_shift({tO, c0010}, Q, 1, qKEY) > 0", "needs dates in key qKEY"),
+        ("time_shift({tT, r0010, c0010}, Q, 1.5) > 0", "whole numbers"),
+        ("annualise(1, 13, refPeriod) > 0", "fiscal year end month of 1 to 12"),
+        ("annualise(1, 12, refPeriod) > 0", "needs a date key or report parameter"),
+        ("annualise('a', 12, qDAT) > 0", "needs a date key or report parameter"),
+    ],
+)
+def test_time_errors(expression: str, message: str) -> None:
+    result = evaluate_rule(expression, report())
+    assert result.status == "error"
+    assert result.message is not None and message in result.message
+
+
+class _SingleReport:
+    """A provider with only the three required methods."""
+
+    def __init__(self) -> None:
+        self.inner = quarterly(1, date(2026, 6, 30))
+
+    def select(self, query):
+        return self.inner.select(query)
+
+    def table_reported(self, table: str) -> bool | None:
+        return self.inner.table_reported(table)
+
+    def parameter(self, name: str) -> Value:
+        return self.inner.parameter(name)
+
+
+def test_time_shift_without_the_provider_method_stays_unsupported() -> None:
+    result = evaluate_rule(
+        "{tF, r0010, c0010} = time_shift({tF, r0210, c0010}, A, 1, refPeriod)",
+        _SingleReport(),
+    )
+    assert result.status == "unsupported"
+    assert result.message == (
+        "The rule compares with the previous reporting period (time_shift), "
+        "which a single report does not include"
+    )
+    for expression in ("{o_X} > 0", "{g_G, r0010} > 0"):
+        assert evaluate_rule(expression, _SingleReport()).status == "unsupported"

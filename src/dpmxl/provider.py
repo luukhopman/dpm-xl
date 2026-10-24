@@ -96,6 +96,9 @@ class DataProvider(Protocol):
       table group, for ``{g_Group, ...}`` selections.
     * ``operation(code) -> str | None``: the expression of another
       operation, for ``{o_Code, ...}`` references.
+    * ``earlier_report(period, count) -> DataProvider | None``: the report
+      ``count`` periods earlier (later when negative), where ``period`` is
+      ``A``, ``S``, ``Q``, ``M``, ``W`` or ``D``, for ``time_shift``.
 
     Without the method, or when it returns ``None``, rules that need it are
     ``unsupported``.
@@ -270,6 +273,7 @@ class MemoryProvider:
         parameters: Mapping[str, Value] | None = None,
         table_groups: Mapping[str, Sequence[str]] | None = None,
         operations: Mapping[str, str] | None = None,
+        earlier_reports: Mapping[tuple[str, int], DataProvider] | None = None,
     ) -> None:
         """Index tables and values.
 
@@ -281,7 +285,10 @@ class MemoryProvider:
             parameters: Report parameters such as ``refPeriod``.
             table_groups: Table codes by table group code.
             operations: Operation expressions by operation code.
+            earlier_reports: Reports of other periods by ``(period, count)``,
+                such as ``("A", 1)`` for the previous year.
         """
+        self.earlier_reports = dict(earlier_reports or {})
         self.table_groups = dict(table_groups or {})
         self.operations = dict(operations or {})
         self.tables = {table.code: table for table in tables}
@@ -370,6 +377,14 @@ class MemoryProvider:
             Sequence[str] | None: The tables, or ``None`` for an unknown group.
         """
         return self.table_groups.get(code)
+
+    def earlier_report(self, period: str, count: int) -> DataProvider | None:
+        """Return the report ``count`` periods earlier.
+
+        Returns:
+            DataProvider | None: The report, or ``None`` when not given.
+        """
+        return self.earlier_reports.get((period, count))
 
     def operation(self, code: str) -> str | None:
         """Return the expression of an operation.

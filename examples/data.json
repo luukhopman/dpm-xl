@@ -1,0 +1,18 @@
+{
+  "tables": [
+    {"code": "C_01.00", "rows": ["0010", "0020", "0030"], "columns": ["0010", "0020"]},
+    {"code": "C_27.00", "columns": ["0010"], "open_keys": ["qCPI"]}
+  ],
+  "facts": [
+    {"table": "C_01.00", "row": "0010", "column": "0010", "value": 100, "decimals": 0},
+    {"table": "C_01.00", "row": "0020", "column": "0010", "value": 60, "decimals": 0},
+    {"table": "C_01.00", "row": "0030", "column": "0010", "value": 40, "decimals": 0},
+    {"table": "C_01.00", "row": "0010", "column": "0020", "value": 1204, "decimals": 0},
+    {"table": "C_01.00", "row": "0020", "column": "0020", "value": 1180, "decimals": 0},
+    {"table": "C_01.00", "row": "0030", "column": "0020", "value": 31, "decimals": 0},
+    {"table": "C_27.00", "column": "0010", "keys": {"qCPI": "LEI-A"}, "value": 120, "decimals": 0},
+    {"table": "C_27.00", "column": "0010", "keys": {"qCPI": "LEI-B"}, "value": -5, "decimals": 0}
+  ],
+  "reported": ["C_01.00", "C_27.00"],
+  "parameters": {"refPeriod": "2026-12-31"}
+}

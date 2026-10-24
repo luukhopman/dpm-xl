@@ -165,6 +165,7 @@ _ITEM = (
     r"\[\s*(?:[A-Za-z](?:[A-Za-z0-9_\-]*:[A-Za-z0-9._\-]*[A-Za-z0-9])+"
     r"|[A-Za-z](?:[A-Za-z0-9_.]*[A-Za-z0-9])?|`[A-Za-z0-9_.+]+`)\s*\]"
 )
+_ITEM_TEXT = re.compile(_ITEM)
 _NUMBER = r"\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|\.\d+"
 # Expression mode: everything outside braces, clause brackets included. Most
 # groups are named after the token kind they produce; leading whitespace is
@@ -176,12 +177,13 @@ _EXPRESSION = re.compile(
   | (?P<keyword>(?i:(?:group|partition|order)\s+by|current\s+data\s+point
         |data\s+points)(?![A-Za-z0-9_]))
   | (?P<word>[A-Za-z_](?:[A-Za-z0-9_.]*[A-Za-z0-9_])?)
-  | (?P<operator>:=|<-|<>|!=|<=|>=|[=<>+\-*/%&])
+  | (?P<arrow><-)
+  | (?P<operator>:=|<>|!=|<=|>=|[=<>+\-*/%&])
   | (?P<punctuation>[(),:;\]])
   | (?P<brace>[{{}}])
   | (?P<string>"[^"]*"|'[^']*')
   | (?P<clause>\[(?=\s*(?i:where|get|sub|rename)(?![A-Za-z0-9_])))
-  | (?P<item>{_ITEM})
+  | (?P<item>\[[^\]]*\])
   | (?P<date>\#[^#]*\#)
   | (?P<identifier>`[^`]*`)
   | (?P<error>\S)
@@ -203,7 +205,7 @@ _SELECTION = re.compile(
   | (?P<identifier>[A-Za-z_][A-Za-z0-9_.\-]*)
   | (?P<operator>[+\-%])
   | (?P<string>"[^"]*"|'[^']*')
-  | (?P<item>{_ITEM})
+  | (?P<item>\[[^\]]*\])
   | (?P<date>\#[^#]*\#)
   | (?P<error>\S)
     )""",
@@ -219,7 +221,6 @@ _DIRECT_KINDS = frozenset(
         "axis",
         "type",
         "string",
-        "item",
         "date",
     }
 )
@@ -289,13 +290,15 @@ def _scan(
         # Scan in one mode until a brace switches it.
         switch = None
         for match in pattern.finditer(text, position):
-            group = cast(str, match.lastgroup)
+            group = match.lastgroup or ""
             value = match.group(group)
             end = match.end()
             start = end - len(value)
             if group in _DIRECT_KINDS:
                 kind = group
-                if value == "<-" and modes and modes[-1] == "c":
+            elif group == "arrow":
+                kind = "operator"
+                if modes and modes[-1] == "c":
                     # Clauses have no assignment: {x} [where a<-1] compares.
                     append(
                         new(
@@ -303,6 +306,15 @@ def _scan(
                         )
                     )
                     value, start = "-", start + 1
+            elif group == "item":
+                # Lexed loosely, then checked once: cheaper than a strict
+                # pattern in the scanner.
+                if _ITEM_TEXT.fullmatch(value) is None:
+                    error = DpmXlSyntaxError(
+                        f"invalid item {value!r}", source, start + offset, end + offset
+                    )
+                    raise error
+                kind = group
             elif group == "punctuation":
                 kind = group
                 if value == "(":
@@ -576,30 +588,35 @@ class _Parser:
     def expect(self, text: str) -> Token:
         if self.at(text):
             return self.advance()
-        raise self.error(f"expected {text!r}, found {_describe(self.current)}")
+        raise self.error(
+            f"expected {text!r}, found {_describe(self.tokens[self.index])}"
+        )
 
     def expect_keyword(self, word: str) -> Token:
         if self.at_keyword(word):
             return self.advance()
-        raise self.error(f"expected {word!r}, found {_describe(self.current)}")
+        raise self.error(
+            f"expected {word!r}, found {_describe(self.tokens[self.index])}"
+        )
 
     def expect_kind(self, kind: str) -> Token:
-        if self.current.kind == kind:
+        if self.tokens[self.index].kind == kind:
             return self.advance()
         wanted = _KIND_NAMES.get(kind, repr(kind))
-        raise self.error(f"expected {wanted}, found {_describe(self.current)}")
+        raise self.error(
+            f"expected {wanted}, found {_describe(self.tokens[self.index])}"
+        )
 
     def expect_name(self) -> str:
         return _name(self.expect_kind("identifier"))
 
     def expect_end(self) -> None:
-        if self.current.kind != "eof":
-            raise self.error(
-                f"expected end of expression, found {_describe(self.current)}"
-            )
+        token = self.tokens[self.index]
+        if token.kind != "eof":
+            raise self.error(f"expected end of expression, found {_describe(token)}")
 
     def error(self, message: str, token: Token | None = None) -> DpmXlSyntaxError:
-        token = token or self.current
+        token = token or self.tokens[self.index]
         return DpmXlSyntaxError(message, self.expression, token.start, token.end)
 
     def nest(self) -> None:
@@ -614,7 +631,7 @@ class _Parser:
     # Grammar -----------------------------------------------------------
 
     def parse_statement(self) -> Node:
-        token = self.current
+        token = self.tokens[self.index]
         if token.kind == "identifier" and self.peek().text == ":=":
             self.advance()
             self.advance()
@@ -628,7 +645,7 @@ class _Parser:
         Returns:
             Node: The statement.
         """
-        token = self.current
+        token = self.tokens[self.index]
         if token.kind == "brace" and token.text == "{":
             closing = self._closing_brace(self.index)
             following = self.tokens[closing + 1]
@@ -710,7 +727,7 @@ class _Parser:
 
     def parse_comparison(self) -> Node:
         left = self.parse_concat()
-        token = self.current
+        token = self.tokens[self.index]
         if token.kind == "operator" and token.text in _COMPARISON_OPERATORS:
             op = self.advance().text
             right = self.parse_concat()
@@ -771,7 +788,7 @@ class _Parser:
     def parse_concat(self) -> Node:
         left = self.parse_additive()
         while True:
-            token = self.current
+            token = self.tokens[self.index]
             if token.kind != "operator" or token.text != "&":
                 return left
             self.advance()
@@ -781,7 +798,7 @@ class _Parser:
     def parse_additive(self) -> Node:
         left = self.parse_multiplicative()
         while True:
-            token = self.current
+            token = self.tokens[self.index]
             if token.kind != "operator" or token.text not in {"+", "-"}:
                 return left
             op = self.advance().text
@@ -791,7 +808,7 @@ class _Parser:
     def parse_multiplicative(self) -> Node:
         left = self.parse_unary()
         while True:
-            token = self.current
+            token = self.tokens[self.index]
             if token.kind != "operator" or token.text not in {"*", "/"}:
                 return left
             op = self.advance().text
@@ -799,7 +816,7 @@ class _Parser:
             left = Binary(op, left, right, span=(left.span[0], right.span[1]))
 
     def parse_unary(self) -> Node:
-        token = self.current
+        token = self.tokens[self.index]
         if token.kind == "operator" and token.text in {"+", "-"}:
             self.advance()
             self.nest()
@@ -813,7 +830,7 @@ class _Parser:
         node = self.parse_primary()
         clauses = 0
         while True:
-            token = self.current
+            token = self.tokens[self.index]
             if token.text == "%" and token.kind == "operator":
                 self.advance()
                 if not (isinstance(node, Literal_) and node.kind == "number"):
@@ -866,7 +883,7 @@ class _Parser:
         return Rename(operand, tuple(pairs), span=(operand.span[0], end.end))
 
     def parse_primary(self) -> Node:
-        token = self.current
+        token = self.tokens[self.index]
         kind = token.kind
         if kind == "number":
             self.advance()
@@ -1003,7 +1020,7 @@ class _Parser:
     def parse_bound(self) -> WindowBound:
         if self.at_keyword("unbounded"):
             self.advance()
-            direction = self.current
+            direction = self.tokens[self.index]
             if not self.at_keyword("preceding", "following"):
                 raise self.error(
                     f"expected 'preceding' or 'following', found {_describe(direction)}"
@@ -1021,11 +1038,11 @@ class _Parser:
         if not count.text.isdigit():
             raise self.error("a window offset is a whole number", count)
         period = None
-        if self.current.kind in {"period", "identifier"} and (
-            self.current.text in TIME_PERIODS
+        if self.tokens[self.index].kind in {"period", "identifier"} and (
+            self.tokens[self.index].text in TIME_PERIODS
         ):
             period = self.advance().text
-        direction = self.current
+        direction = self.tokens[self.index]
         if not self.at_keyword("preceding", "following"):
             raise self.error(
                 f"expected 'preceding' or 'following', found {_describe(direction)}"
@@ -1040,7 +1057,7 @@ class _Parser:
     # Selections ----------------------------------------------------------
 
     def parse_brace(self, opening: Token) -> Node:
-        first = self.current
+        first = self.tokens[self.index]
         if self.starts_set(self.index):
             self.index -= 1
             return self.parse_set()
@@ -1064,7 +1081,7 @@ class _Parser:
     def parse_parameter(self, opening: Token) -> Node:
         name = _reference_name(self.advance().text)
         self.expect(",")
-        kind = self.current
+        kind = self.tokens[self.index]
         if kind.kind != "type":
             raise self.error(
                 f"expected a parameter type, found {_describe(kind)}", kind
@@ -1073,7 +1090,9 @@ class _Parser:
         default: Literal_ | SetLiteral | _Missing = MISSING
         if self.accept(","):
             if not self.at_keyword("default"):
-                raise self.error(f"expected 'default', found {_describe(self.current)}")
+                raise self.error(
+                    f"expected 'default', found {_describe(self.tokens[self.index])}"
+                )
             self.advance()
             self.expect(":")
             default = self.parse_default()
@@ -1100,7 +1119,7 @@ class _Parser:
             self._finish_spec(closing)
             return SelectionSpec()
         while True:
-            token = self.current
+            token = self.tokens[self.index]
             if token.text in {",", "}"} or token.kind == "eof":
                 raise self.error("empty selection component")
             if token.kind == "keyword" and _keyword(token) in {"default", "interval"}:
@@ -1109,7 +1128,7 @@ class _Parser:
                     raise self.error(f"duplicate {name} option", token)
                 self.expect(":")
                 if name == "interval":
-                    value = self.current
+                    value = self.tokens[self.index]
                     if value.kind != "boolean":
                         raise self.error("interval must be true or false", token)
                     self.advance()
@@ -1148,7 +1167,7 @@ class _Parser:
     def _at_spec_end(self, closing: str) -> bool:
         if closing:
             return self.at(closing)
-        return self.current.kind == "eof"
+        return self.tokens[self.index].kind == "eof"
 
     def _finish_spec(self, closing: str) -> None:
         if closing:
@@ -1164,7 +1183,7 @@ class _Parser:
         return (match.group().strip() if match else "") or token.text
 
     def parse_axis(self) -> tuple[AxisSelector, str]:
-        token = self.current
+        token = self.tokens[self.index]
         if token.kind == "axis":
             self.advance()
             return _axis_part(token.text)
@@ -1174,7 +1193,7 @@ class _Parser:
         parts: list[str | tuple[str, str]] = []
         axis: str | None = None
         while True:
-            part = self.current
+            part = self.tokens[self.index]
             if part.kind != "axis":
                 if part.text in {",", ")"}:
                     raise self.error("empty axis list member", part)
@@ -1195,7 +1214,7 @@ class _Parser:
         return AxisSelector(parts=tuple(parts)), axis
 
     def parse_default(self) -> Literal_ | SetLiteral:
-        token = self.current
+        token = self.tokens[self.index]
         start = token.start
         if token.kind == "brace" and token.text == "{":
             return self.parse_set()
@@ -1209,7 +1228,7 @@ class _Parser:
         if token.kind == "operator" and token.text in {"+", "-"}:
             sign = "-" if token.text == "-" else ""
             self.advance()
-            token = self.current
+            token = self.tokens[self.index]
             if token.kind != "number":
                 raise self.error(f"invalid default {self._component(token)!r}")
         span = (start, token.end)
@@ -1225,7 +1244,7 @@ class _Parser:
                     start,
                     token.end,
                 ) from error
-            percent = self.current
+            percent = self.tokens[self.index]
             if percent.kind == "operator" and percent.text == "%":
                 self.advance()
                 value = value.scaleb(-2, DECIMAL_CONTEXT)

@@ -34,7 +34,8 @@ _EPILOG = """examples:
 
 A rule source is one expression, a text file with one expression per line
 (# starts a comment), or a JSON list of objects with "code", "expression"
-and an optional "precondition". The data file format is in the README."""
+and an optional "precondition". Data file format:
+https://luukhopman.github.io/dpm-xl/reference/data-formats/"""
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -63,7 +64,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "eval", help="evaluate rules against a JSON data file and explain failures"
     )
     run.add_argument("source", metavar="rules", help="an expression or a rule file")
-    run.add_argument("data", type=Path, help="JSON data file (see README)")
+    run.add_argument("data", type=Path, help="JSON data file (see --help)")
     run.add_argument(
         "--precondition",
         help="precondition for a single expression, such as {v_C_01.00}",

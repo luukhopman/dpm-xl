@@ -40,6 +40,7 @@ All notable changes to this project are documented here. The project follows
   numeric open keys, ordering items and text that may be an item.
 - The CLI accepts `"decimals": "INF"` and reports malformed data without a
   traceback.
+- A non-Boolean condition of a keyed `if` fails only its records.
 
 ### Performance
 

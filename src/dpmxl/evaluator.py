@@ -829,20 +829,20 @@ def conditional(
         Recordset: The result.
 
     Raises:
-        EvaluationError: For a non-Boolean condition.
+        EvaluationError: For a non-Boolean key-less condition; a keyed one
+            fails only its records.
     """
     fallback: Value = True if boolean_then else None
 
     def verdict(value: Value) -> Value:
+        # A non-Boolean condition fails its record, like other type errors.
         if value is not None and not isinstance(value, bool | _Failed):
-            raise EvaluationError(
-                f"if needs a boolean condition, found {type_name(value)}"
-            )
+            return _failure(f"if needs a boolean condition, found {type_name(value)}")
         return value
 
     if not condition.keys:
         record = condition.single()
-        value = verdict(_checked(record.value) if record else None)
+        value = _checked(verdict(record.value if record else None))
         if value is True:
             return then
         if otherwise is not None:

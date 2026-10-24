@@ -203,9 +203,9 @@ v0004: not_applicable
   (except `isnull` and `nvl`). `and`/`or`/`not` use three-valued (Kleene)
   logic. A record whose result is null is "not evaluated", never a failure.
   Division by zero is a run-time error, as the specification requires; like
-  a type error, it fails only its record, so the rule is an error only if
-  that record reaches the result (`if {x} != 0 then {y} / {x} > 1 endif` is
-  not).
+  a type error (a non-Boolean `if` condition included), it fails only its
+  record, so the rule is an error only if that record reaches the result
+  (`if {x} != 0 then {y} / {x} > 1 endif` is not).
 - **Conditionals.** `if` takes the `else` branch when the condition is null;
   without `else`, a Boolean `then` (`{v_…}` and Boolean facts included)
   yields true where the condition is false or null. The result has the

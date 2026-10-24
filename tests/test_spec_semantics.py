@@ -221,3 +221,10 @@ def test_if_without_else_knows_more_boolean_then_branches() -> None:
     ]:
         result = evaluate_rule(rule, flags)
         assert result.counts == {"passed": 1, "failed": 0, "null": 0}, rule
+
+
+def test_non_boolean_if_conditions_fail_only_their_records() -> None:
+    data = provider({}, open_rows=[(Item("qK", "a"), 1)])
+    rule = "(if {tO, r0010, c0010} then true endif) [where qKEY = [qK:zz]]"
+    assert status(rule, data) == "not_applicable"
+    assert status("if {tO, r0010, c0010} then true endif", data) == "error"

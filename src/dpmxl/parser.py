@@ -81,6 +81,28 @@ class Token:
     end: int
 
 
+_KIND_NAMES = {
+    "eof": "end of expression",
+    "ident": "a name",
+    "number": "a number",
+    "string": "a string",
+    "keyword": "a keyword",
+}
+
+
+def _describe(token: Token) -> str:
+    """Name a token for an error message.
+
+    Returns:
+        str: For example ``end of expression``, ``number 5`` or ``')'``.
+    """
+    if token.kind == "eof":
+        return "end of expression"
+    if token.kind == "number":
+        return f"number {token.text}"
+    return repr(token.text) if token.text else _KIND_NAMES.get(token.kind, token.kind)
+
+
 _KEYWORDS = frozenset(
     {
         "and",
@@ -324,9 +346,8 @@ class _Parser:
     def expect(self, kind: str, text: str | None = None) -> Token:
         if self.at(kind, text):
             return self.advance()
-        wanted = text or kind
-        found = self.current.text or self.current.kind
-        raise self.error(f"expected {wanted!r}, found {found!r}")
+        wanted = repr(text) if text else _KIND_NAMES.get(kind, repr(kind))
+        raise self.error(f"expected {wanted}, found {_describe(self.current)}")
 
     def error(self, message: str, token: Token | None = None) -> DpmXlSyntaxError:
         position = (token or self.current).start + self.offset
@@ -583,7 +604,9 @@ class _Parser:
             if self.at("("):
                 return self.parse_call(token)
             return Name(token.text, span=self.span(token.start))
-        raise self.error(f"unexpected {token.text or token.kind!r}")
+        if token.kind == "eof":
+            raise self.error("expression ends where an operand is expected")
+        raise self.error(f"unexpected {_describe(token)} where an operand is expected")
 
     def parse_if(self) -> Node:
         start = self.expect("keyword", "if").start
@@ -664,7 +687,9 @@ def _matching(expression: str, start: int, opening: str, closing: str) -> int:
             if depth == 0:
                 return index
         index += 1
-    raise DpmXlSyntaxError(f"unterminated {opening!r}", expression, start)
+    raise DpmXlSyntaxError(
+        f"unterminated {opening!r}: no matching {closing!r}", expression, start
+    )
 
 
 def _split_top_level(text: str) -> list[tuple[str, int]]:

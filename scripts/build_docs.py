@@ -33,6 +33,12 @@ DIRECTIVE = re.compile(r"^::: (?P<name>[\w.]+)\n(?:(?: {4}.*)?\n)*", re.MULTILIN
 CROSS_REFERENCE = re.compile(r"\[([^\]\n]+)\]\[[\w.]*\]")
 MARKER = re.compile(r"^<!-- docs: [\w-]+ -->\n", re.MULTILINE)
 FRONT_MATTER = re.compile(r"\A---\n(?P<body>.*?)\n---\n", re.DOTALL)
+TOOLKIT = {
+    "dpm-xl": "Parse and evaluate DPM-XL validation rules.",
+    "dpm-xbrl": "Read, write and check xBRL-CSV and XBRL-XML reports.",
+    "dpm-synth": "Generate test reports that satisfy DPM-XL rules.",
+}
+TOUR = "https://luukhopman.github.io/dpm-xl/guides/toolkit-tour.md"
 
 
 def nav_pages(nav: list[object], section: str = "") -> Iterator[tuple[str, str]]:
@@ -48,7 +54,8 @@ def nav_pages(nav: list[object], section: str = "") -> Iterator[tuple[str, str]]
         assert isinstance(entry, dict)
         for title, value in entry.items():
             if isinstance(value, str):
-                yield section or title, value
+                if not value.startswith("https://"):  # links to other sites
+                    yield section or title, value
             else:
                 yield from nav_pages(value, section or title)
 
@@ -67,6 +74,26 @@ def front_matter(text: str) -> tuple[dict[str, str], str]:
         key, _, value = line.partition(":")
         meta[key.strip()] = value.strip().strip('"').replace('\\"', '"')
     return meta, text[match.end() :]
+
+
+def related(name: str) -> str:
+    """Return the llms.txt section that links the other packages of the toolkit.
+
+    Returns:
+        str: A ``## Related`` section, the same on every site but for ``name``.
+    """
+    links = [
+        f"- [{package}](https://luukhopman.github.io/{package}/llms.txt): {text}"
+        for package, text in TOOLKIT.items()
+        if package != name
+    ]
+    links.append(
+        f"- [Toolkit tour]({TOUR}): Generate a report with dpm-synth, read it "
+        "with dpm-xbrl, then evaluate and explain its rules with dpm-xl."
+    )
+    return "## Related\n\nThe other packages of the dpm toolkit:\n\n" + (
+        "\n".join(links) + "\n"
+    )
 
 
 def render_object(obj: griffe.Object | griffe.Alias, level: int) -> str:
@@ -234,9 +261,12 @@ def main() -> int:
         "affiliated with or endorsed by the EBA. "
         f"Everything below in one file: {site_url}llms-full.txt\n",
     ]
+    project = sections.pop("Project", [])
     for section, links in sections.items():
-        name = "Optional" if section == "Project" else section
-        index.append(f"## {name}\n\n" + "\n".join(links) + "\n")
+        index.append(f"## {section}\n\n" + "\n".join(links) + "\n")
+    index.append(related(config["site_name"]))
+    if project:
+        index.append("## Optional\n\n" + "\n".join(project) + "\n")
     (SITE / "llms.txt").write_text("\n".join(index), encoding="utf-8")
     (SITE / "llms-full.txt").write_text("\n".join(full), encoding="utf-8")
     print(f"llms.txt, llms-full.txt and {len(full)} Markdown pages written to site/")

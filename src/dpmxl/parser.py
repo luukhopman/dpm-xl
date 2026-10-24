@@ -194,7 +194,7 @@ _SELECTION = re.compile(
   | (?P<reference>[tgvop](?:`[^`]*`|[A-Za-z0-9_.\-]+))
   | (?P<number>{_NUMBER})
   | (?P<identifier>[A-Za-z_][A-Za-z0-9_.\-]*)
-  | (?P<operator>[+\-])
+  | (?P<operator>[+\-%])
   | (?P<string>"[^"]*"|'[^']*')
   | (?P<item>\[[^\]]*\])
   | (?P<date>\#[^#]*\#)
@@ -1208,7 +1208,7 @@ class _Parser:
         if kind == "number":
             self.advance()
             try:
-                return Literal_(_number(sign + token.text), "number", span=span)
+                value = _number(sign + token.text)
             except InvalidOperation as error:
                 raise DpmXlSyntaxError(
                     f"invalid default {self.expression[start : token.end]!r}",
@@ -1216,6 +1216,12 @@ class _Parser:
                     start,
                     token.end,
                 ) from error
+            percent = self.current
+            if percent.kind == "operator" and percent.text == "%":
+                self.advance()
+                value = value.scaleb(-2, DECIMAL_CONTEXT)
+                span = (start, percent.end)
+            return Literal_(value, "number", span=span)
         if kind == "null":
             self.advance()
             return Literal_(None, "null", span=span)

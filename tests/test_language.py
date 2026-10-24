@@ -848,3 +848,16 @@ def test_walk_reaches_selection_and_parameter_defaults() -> None:
         Item("qC", "y"),
     ]
     assert all(literal.span != (0, 0) for literal in literals)
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ("{1, 2%}", ValueSet((Number(Decimal(1)), Number(Decimal("0.02"))))),
+        ("{tT, r0030, c0020, default: 5%}", Number(Decimal("0.05"))),
+        ("{tT, r0030, c0020, default: -5%}", Number(Decimal("-0.05"))),
+        ("{p_X, number, default: 4.5%}", Number(Decimal("0.045"))),
+    ],
+)
+def test_percentages_inside_braces(expression: str, expected: Value) -> None:
+    assert value(expression) == expected

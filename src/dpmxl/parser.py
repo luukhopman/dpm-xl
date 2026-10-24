@@ -288,6 +288,14 @@ def _scan(
             start = end - len(value)
             if group in _DIRECT_KINDS:
                 kind = group
+                if value == "<-" and modes and modes[-1] == "c":
+                    # Clauses have no assignment: {x} [where a<-1] compares.
+                    append(
+                        new(
+                            Token, ("operator", "<", start + offset, start + 1 + offset)
+                        )
+                    )
+                    value, start = "-", start + 1
             elif group == "punctuation":
                 kind = group
                 if value == "(":

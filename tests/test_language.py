@@ -33,6 +33,7 @@ from dpmxl.ast import (
     Program,
     Selection,
     SetLiteral,
+    Unary,
     Where,
     Window,
     WindowBound,
@@ -819,3 +820,17 @@ def test_time_shift_rejects_dates_that_collide() -> None:
     result = evaluate_rule("time_shift({tD, c0010}, M, 1, qDAT) > 0", provider)
     assert result.status == "error"
     assert "moves several qDAT dates to 2026-02-28" in (result.message or "")
+
+
+def test_arrow_inside_a_clause_is_a_comparison() -> None:
+    assert [token.text for token in tokenize("{tO} [where qX<-1]")][6:9] == [
+        "<",
+        "-",
+        "1",
+    ]
+    node = parse("{tO} [where qX<-1] > 0")
+    assert isinstance(node, Binary) and isinstance(node.left, Where)
+    assert node.left.condition == Binary(
+        "<", Name("qX"), Unary("-", Literal_(Decimal(1), "number"))
+    )
+    assert parse("{tO} [where qX<-1]") == parse("{tO} [where qX < -1]")

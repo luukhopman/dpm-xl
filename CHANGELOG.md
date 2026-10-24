@@ -40,6 +40,8 @@ All notable changes to this project are documented here. The project follows
   numeric open keys, ordering items and text that may be an item.
 - The CLI accepts `"decimals": "INF"` and reports malformed data without a
   traceback.
+- `Number.of` raises `ValueError` for `decimals` beyond the decimal128 range
+  (such as -7000) instead of a decimal overflow, which the CLI reports.
 - The columnar evaluator hands record-level type errors (comparing text with
   numbers, `and`/`not`/`abs` on the wrong type, mixed `max`/`min` groups) to
   the reference evaluator, which fails only the records concerned.

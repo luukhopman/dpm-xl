@@ -92,6 +92,8 @@ def test_eval_accepts_inf_decimals(tmp_path, capsys) -> None:
         (_fact("0010", "2026/12/31", type="date"), "Invalid isoformat string"),
         (_fact("0010", "1,000", type="number"), "invalid number '1,000'"),
         (_fact("0010", 5, decimals="two"), "invalid decimals 'two'"),
+        (_fact("0010", 1, decimals=-7000), "invalid decimals -7000: out of range"),
+        (_fact("0010", 1, decimals=10**20), "out of range"),
         ({"row": "0010"}, "malformed data document"),
     ],
 )

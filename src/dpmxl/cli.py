@@ -338,8 +338,8 @@ def _typed(
             number = Number.of(str(value), decimals)
         except InvalidOperation:
             raise ValueError(f"invalid number {value!r}") from None
-        except ValueError:
-            raise ValueError(f"invalid decimals {decimals!r}") from None
+        except ValueError as error:
+            raise ValueError(f"invalid decimals {decimals!r}: {error}") from None
         if not number.value.is_finite():
             raise ValueError(f"invalid number {value!r}")
         return number

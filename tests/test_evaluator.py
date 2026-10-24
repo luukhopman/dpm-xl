@@ -298,6 +298,10 @@ def test_number_tolerance_from_decimals() -> None:
     assert Number.of(5, 2).tolerance == Decimal("0.005")
     assert Number.of(5, -3).tolerance == Decimal(500)
     assert (Number.of(1, 0) * Number.of(3)).tolerance == Decimal("1.5")
+    assert Number.of(5, "INF") == Number.of(5, "inf") == Number(Decimal(5))
+    for decimals in (-7000, 10**20, "two"):
+        with pytest.raises(ValueError, match=r"out of range|not an integer"):
+            Number.of(5, decimals)
 
 
 def _traced(result):

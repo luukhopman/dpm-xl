@@ -72,7 +72,9 @@ class Number:
             exact value.
 
         Raises:
-            ValueError: If ``decimals`` is text other than ``INF`` or an integer.
+            ValueError: If ``decimals`` is text other than ``INF`` or an
+                integer, or puts the tolerance outside the range of
+                :data:`DECIMAL_CONTEXT` (beyond about ±6,100).
         """
         amount = value if isinstance(value, Decimal) else Decimal(value)
         if decimals is None:
@@ -80,8 +82,14 @@ class Number:
         if isinstance(decimals, str):
             if decimals.strip().casefold() == "inf":
                 return cls(amount)
-            decimals = int(decimals)
-        return cls(amount, Decimal(5).scaleb(-decimals - 1, DECIMAL_CONTEXT))
+            try:
+                decimals = int(decimals)
+            except ValueError:
+                raise ValueError("not an integer or INF") from None
+        exponent = -decimals - 1
+        if not DECIMAL_CONTEXT.Etiny() <= exponent <= DECIMAL_CONTEXT.Emax:
+            raise ValueError("out of range")
+        return cls(amount, Decimal(5).scaleb(exponent, DECIMAL_CONTEXT))
 
     def exact(self) -> Number:
         """Return the same value without tolerance.

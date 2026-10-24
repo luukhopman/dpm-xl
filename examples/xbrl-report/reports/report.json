@@ -1,0 +1,12 @@
+{
+  "documentInfo": {
+    "documentType": "https://xbrl.org/2021/xbrl-csv",
+    "extends": [
+      "http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_lr.json"
+    ],
+    "namespaces": {
+      "rs": "https://eurofiling.info/eu/rs",
+      "iso4217": "http://www.xbrl.org/2003/iso4217"
+    }
+  }
+}

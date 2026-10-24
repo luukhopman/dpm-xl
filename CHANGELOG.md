@@ -3,6 +3,19 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org).
 
+## Unreleased
+
+### Added
+
+- Documentation site at https://luukhopman.github.io/dpm-xl/, with
+  `llms.txt` and `llms-full.txt`; every example in it is tested.
+- `examples/rules.txt` and `examples/xbrl-report/`, a small xBRL-CSV report
+  for the end-to-end guide.
+
+### Changed
+
+- `dpm-xl --help` points to the documentation for the data file format.
+
 ## 1.0.0 - 2026-10-24
 
 ### Added

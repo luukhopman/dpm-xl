@@ -1,0 +1,4 @@
+# One expression per line; lines starting with # are comments.
+with {tC_01.00, c*, default: 0, interval: true}: {r0010} = {r0020} + {r0030}
+{tC_27.00, c0010} > 0
+with {tC_01.00, c0010}: {r0020} >= {r0030}

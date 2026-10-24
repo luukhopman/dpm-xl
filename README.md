@@ -114,7 +114,11 @@ optional `open_keys(table)` method names them for tables with no rows.
 `table_reported` answers `{v_TABLE}` and `parameter` answers `{vName}` and
 `{p_Name, type}`. Optional `table_group(code)` and `operation(code)` methods
 resolve `{g_…}` table groups and `{o_…}` operation references
-(`MemoryProvider` takes them as `table_groups` and `operations`).
+(`MemoryProvider` takes them as `table_groups` and `operations`). In
+`references(node)`, a group or operation read has `spec.table` `None`, with
+`kind` (`table`, `table_group` or `operation`) and `code`;
+`tables(node, provider)` counts a group read as reading every table
+`table_group(code)` lists.
 Values are `Number` (use `Number.of(value, decimals)` for reported facts),
 `str`, `bool`, `datetime.date`, `Item`, `ValueSet` or `None`.
 [`examples/custom_provider.py`](https://github.com/luukhopman/dpm-xl/blob/main/examples/custom_provider.py) is a complete

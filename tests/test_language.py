@@ -338,6 +338,7 @@ def test_references_describe_groups_and_operations() -> None:
         ("operation", "v1", None),
     ]
     assert tables(node) == ("A",)
+    assert tables(node, provider_with_references()) == ("A", "B")
     assert parse("{t_A}") == parse("{tA}") == parse("{t`A`}")
 
 

@@ -45,7 +45,14 @@ class Reference:
 
 
 def references(node: Node) -> tuple[Reference, ...]:
-    """Return every cell selection with its inherited context applied.
+    """Return every selection with its inherited context applied.
+
+    Table-group and operation references are included with
+    ``spec.table`` set to ``None``: check :attr:`Reference.kind` and read the
+    group or operation code from :attr:`Reference.code`. A group read reads
+    every table the provider's ``table_group(code)`` lists; :func:`tables`
+    expands groups that way when given the provider. Targets of persistent
+    assignments are included too.
 
     Returns:
         tuple[Reference, ...]: Selections in source order.
@@ -67,19 +74,26 @@ def references(node: Node) -> tuple[Reference, ...]:
     return tuple(sorted(found, key=lambda reference: reference.span))
 
 
-def tables(node: Node) -> tuple[str, ...]:
+def tables(node: Node, provider: object | None = None) -> tuple[str, ...]:
     """Return the distinct table codes referenced by cell selections.
+
+    Args:
+        node: The expression tree.
+        provider: Optional provider whose ``table_group(code)`` method
+            resolves table groups; each group read then counts as reading
+            all its tables. Without it, groups are left out.
 
     Returns:
         tuple[str, ...]: Table codes in first-seen order.
     """
-    return tuple(
-        dict.fromkeys(
-            reference.spec.table
-            for reference in references(node)
-            if reference.spec.table
-        )
-    )
+    method = getattr(provider, "table_group", None)
+    found: list[str] = []
+    for reference in references(node):
+        if reference.spec.table:
+            found.append(reference.spec.table)
+        elif reference.spec.table_group and callable(method):
+            found.extend(method(reference.spec.table_group) or ())
+    return tuple(dict.fromkeys(found))
 
 
 def reported_templates(node: Node) -> tuple[str, ...]:

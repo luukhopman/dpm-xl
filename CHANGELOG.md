@@ -30,7 +30,8 @@ All notable changes to this project are documented here. The project follows
   `{o_Code, …}` and table groups `{g_Group, …}`, resolved through optional
   `operation(code)` and `table_group(code)` provider methods (and
   `MemoryProvider`'s `operations` and `table_groups`, also in the CLI data
-  file); `Reference.kind` and `Reference.code`.
+  file); `Reference.kind` and `Reference.code`, and `tables(node, provider)`
+  expands table groups.
 - Statements separated by `;` with temporary (`name := e`) and persistent
   (`{target} <- e`) assignments: `parse_program`, the `Program`,
   `Assignment` and `PersistentAssignment` nodes, and

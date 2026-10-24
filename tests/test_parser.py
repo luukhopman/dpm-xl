@@ -145,9 +145,20 @@ def test_spans_cover_source() -> None:
         ("{tA} = = 1", "unexpected"),
         ("{tA, r0010, r0020}", "duplicate rows selector"),
         ("{tA, interval: maybe}", "interval must be true or false"),
+        ("(" * 60 + "true" + ")" * 60, "too deeply nested"),
+        ("-" * 2000 + "1", "too deeply nested"),
+        ("not " * 2000 + "true", "too deeply nested"),
+        ("1e99999999999 + 1 = 1", "number out of range"),
+        ("{tA, default: 1e-99999999999}", "invalid default"),
     ],
 )
 def test_syntax_errors(source: str, message: str) -> None:
     with pytest.raises(DpmXlSyntaxError) as error:
         parse(source)
     assert message in error.value.message
+
+
+def test_long_operator_chains_parse() -> None:
+    node = parse(" + ".join(["{r0010}"] * 5000) + " = 0")
+    assert isinstance(node, Binary)
+    assert node.op == "="

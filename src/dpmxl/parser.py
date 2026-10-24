@@ -40,6 +40,7 @@ from .ast import (
     Where,
     With,
 )
+from .values import DECIMAL_CONTEXT
 
 
 class DpmXlSyntaxError(ValueError):
@@ -106,6 +107,10 @@ _OPERATORS = ("<>", "!=", "<=", ">=", "=", "<", ">", "+", "-", "*", "/", "%")
 _PUNCTUATION = "(),:"
 _CLAUSE_START = re.compile(r"\[\s*(where|get|sub|rename)\b", re.IGNORECASE)
 _AXIS_PART = re.compile(r"([rcs])(\*|[0-9A-Za-z]+(?:-[0-9A-Za-z]+)?)$")
+# Parentheses, signs, not, if, calls and with contexts nest at most this deep
+# (EBA rules nest below ten), well within Python's recursion limit when the
+# tree is evaluated and explained.
+MAX_NESTING = 50
 
 
 def tokenize(expression: str) -> list[Token]:
@@ -218,7 +223,10 @@ def parse(expression: str) -> Node:
     if not expression or not expression.strip():
         raise DpmXlSyntaxError("empty expression", expression or "", 0)
     parser = _Parser(expression, tokenize(expression), offset=0)
-    node = parser.parse_root()
+    try:
+        node = parser.parse_root()
+    except RecursionError:  # pragma: no cover - MAX_NESTING applies first
+        raise DpmXlSyntaxError("expression too deeply nested", expression, 0) from None
     parser.expect("eof")
     return node
 
@@ -284,6 +292,7 @@ class _Parser:
         self.tokens = tokens
         self.index = 0
         self.offset = offset
+        self.depth = 0
 
     # Token helpers -----------------------------------------------------
 
@@ -323,6 +332,11 @@ class _Parser:
         position = (token or self.current).start + self.offset
         return DpmXlSyntaxError(message, self.expression, position)
 
+    def nest(self) -> None:
+        self.depth += 1
+        if self.depth > MAX_NESTING:
+            raise self.error("expression too deeply nested")
+
     def span(self, start: int, end_token: Token | None = None) -> tuple[int, int]:
         end = (end_token or self.tokens[max(self.index - 1, 0)]).end
         return (start + self.offset, end + self.offset)
@@ -345,12 +359,20 @@ class _Parser:
                 condition = self.parse_expression()
                 self.expect("]")
             self.expect(":")
+            self.nest()
             body = self.parse_root()
+            self.depth -= 1
             return With(context, body, condition, span=self.span(start))
         return self.parse_expression()
 
     def parse_expression(self) -> Node:
-        return self.parse_or()
+        # Every nested expression (in parentheses, if, calls, clauses and
+        # sets) starts here. A syntax error ends the parse, so the depth needs
+        # no unwinding.
+        self.nest()
+        node = self.parse_or()
+        self.depth -= 1
+        return node
 
     def parse_or(self) -> Node:
         left = self.parse_and()
@@ -371,7 +393,9 @@ class _Parser:
     def parse_not(self) -> Node:
         if self.at_keyword("not"):
             start = self.advance().start
+            self.nest()
             operand = self.parse_not()
+            self.depth -= 1
             return Unary("not", operand, span=(start + self.offset, operand.span[1]))
         return self.parse_comparison()
 
@@ -420,6 +444,7 @@ class _Parser:
                     "empty set member", self.expression, body_offset + start
                 )
             sub = _Parser(self.expression, tokenize(part), offset=body_offset + start)
+            sub.depth = self.depth
             items.append(sub.parse_expression())
             sub.expect("eof")
         return SetLiteral(
@@ -445,7 +470,9 @@ class _Parser:
     def parse_unary(self) -> Node:
         if self.current.kind == "op" and self.current.text in {"+", "-"}:
             token = self.advance()
+            self.nest()
             operand = self.parse_unary()
+            self.depth -= 1
             op = cast(Literal["+", "-"], token.text)
             return Unary(op, operand, span=(token.start + self.offset, operand.span[1]))
         return self.parse_postfix()
@@ -459,7 +486,7 @@ class _Parser:
                     raise self.error("'%' must follow a number", token)
                 assert isinstance(node.value, Decimal)
                 node = Literal_(
-                    node.value / 100,
+                    node.value.scaleb(-2, DECIMAL_CONTEXT),
                     "number",
                     span=(node.span[0], token.end + self.offset),
                 )
@@ -511,9 +538,9 @@ class _Parser:
         if token.kind == "number":
             self.advance()
             try:
-                value = Decimal(token.text)
-            except InvalidOperation as error:  # pragma: no cover - regex guarantees
-                raise self.error("invalid number", token) from error
+                value = _number(token.text)
+            except InvalidOperation as error:
+                raise self.error("number out of range", token) from error
             return Literal_(value, "number", span=self.span(token.start))
         if token.kind == "string":
             self.advance()
@@ -719,9 +746,25 @@ def _parse_default(value: str, source: str, position: int) -> Literal_:
         except ValueError as error:
             raise DpmXlSyntaxError("invalid default date", source, position) from error
     try:
-        return Literal_(Decimal(text), "number", span=span)
+        return Literal_(_number(text), "number", span=span)
     except InvalidOperation as error:
         raise DpmXlSyntaxError(f"invalid default {text!r}", source, position) from error
+
+
+def _number(text: str) -> Decimal:
+    """Read a number literal within the range of decimal arithmetic.
+
+    Returns:
+        Decimal: The value.
+
+    Raises:
+        InvalidOperation: For text that is not a number, or a number whose
+            exponent arithmetic would overflow (``1e99999999999``).
+    """
+    value = Decimal(text)
+    if value and not DECIMAL_CONTEXT.Emin <= value.adjusted() <= DECIMAL_CONTEXT.Emax:
+        raise InvalidOperation(text)
+    return value
 
 
 _ = MISSING  # re-exported for callers building specs by hand

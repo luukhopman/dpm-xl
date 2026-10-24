@@ -227,7 +227,7 @@ def test_long_sums_evaluate_and_explain() -> None:
 def test_match_len_dates_and_parameters() -> None:
     tables = [TableLayout("B_01.01", rows=("0010",), columns=("0010", "0020"))]
     values: dict[CellKey, Value] = {
-        ("B_01.01", "0010", "0010", None, ()): "529900T8BM49AURSDO55",
+        ("B_01.01", "0010", "0010", None, ()): "SYNTHETICDPMXL000002",
         ("B_01.01", "0010", "0020", None, ()): date(2027, 1, 1),
     }
     provider = MemoryProvider(

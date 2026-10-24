@@ -35,7 +35,7 @@ for fact in report.facts[:3]:
 ```
 
 ```text
-xbrl-csv 529900T8BM49AURSDO55.CON 2026-03-31
+xbrl-csv SYNTHETICDPMXL000002.CON 2026-03-31
 {'C_47.00': True, 'C_48.02': True, 'C_43.00': False}
 {'decimalsMonetary': -3, 'decimalsPercentage': 4}
 c_47.00 dp9001 {} 812000 reports/c_47.00.csv:2

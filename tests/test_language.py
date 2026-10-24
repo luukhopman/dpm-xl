@@ -658,3 +658,18 @@ def test_arrow_is_always_a_persistent_assignment() -> None:
     # With a space, it is a comparison with a negated operand.
     node = parse("{tA} < -{tB} + 1")
     assert isinstance(node, Binary) and node.op == "<"
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "time_shift({tO, c0010}, A, 8000, qDAT) > 0",
+        "time_shift({tO, c0010}, D, 9999999, qDAT) > 0",
+        "sum({tO, c0010} over (order by qDAT range between 9000 A preceding "
+        "and current data point)) > 0",
+    ],
+)
+def test_dates_shifted_out_of_range_are_errors(expression: str) -> None:
+    result = evaluate_rule(expression, report())
+    assert result.status == "error"
+    assert "leaves the years 1 to 9999" in (result.message or "")

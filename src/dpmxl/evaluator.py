@@ -942,16 +942,27 @@ def _shift_date(value: date, period: str, count: int) -> date:
 
     Returns:
         date: The shifted date (a ``datetime`` stays one).
+
+    Raises:
+        EvaluationError: If the result falls outside the years 1 to 9999.
     """
-    if period in _PERIOD_DAYS:
-        return value + timedelta(days=_PERIOD_DAYS[period] * count)
-    months = value.year * 12 + value.month - 1 + _PERIOD_MONTHS[period] * count
-    year, month = divmod(months, 12)
-    last = calendar.monthrange(year, month + 1)[1]
-    month_end = value.day == calendar.monthrange(value.year, value.month)[1]
-    return value.replace(
-        year=year, month=month + 1, day=last if month_end else min(value.day, last)
-    )
+    try:
+        if period in _PERIOD_DAYS:
+            return value + timedelta(days=_PERIOD_DAYS[period] * count)
+        months = value.year * 12 + value.month - 1 + _PERIOD_MONTHS[period] * count
+        year, month = divmod(months, 12)
+        last = calendar.monthrange(year, month + 1)[1]
+        month_end = value.day == calendar.monthrange(value.year, value.month)[1]
+        return value.replace(
+            year=year,
+            month=month + 1,
+            day=last if month_end else min(value.day, last),
+        )
+    except (ValueError, OverflowError) as error:
+        raise EvaluationError(
+            f"shifting {value.isoformat()} by {count} {_PERIOD_NAMES[period]} "
+            "leaves the years 1 to 9999"
+        ) from error
 
 
 def _shift_key(data: Recordset, key: str, period: str, count: int) -> Recordset:

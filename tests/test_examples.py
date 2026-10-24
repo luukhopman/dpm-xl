@@ -64,3 +64,11 @@ def test_cli_version(capsys) -> None:
     with pytest.raises(SystemExit):
         main(["--version"])
     assert capsys.readouterr().out.startswith("dpm-xl ")
+
+
+def test_readme_quickstart_runs(capsys) -> None:
+    readme = (EXAMPLES.parent / "README.md").read_text(encoding="utf-8")
+    quickstart = readme.split("## Quickstart", 1)[1].split("```python\n", 1)[1]
+    exec(quickstart.split("```", 1)[0], {})
+    output = capsys.readouterr().out
+    assert "{'c': '0020'} 1,204 should equal 1,211" in output

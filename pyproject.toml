@@ -13,9 +13,14 @@ requires-python = ">=3.11"
 authors = [{ name = "Luuk Hopman", email = "github@luukhopman.nl" }]
 keywords = ["DPM", "DPM-XL", "EBA", "XBRL", "validation rules"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Office/Business :: Financial",
     "Typing :: Typed",
 ]
@@ -25,6 +30,7 @@ dependencies = []
 Homepage = "https://github.com/luukhopman/dpm-xl"
 Source = "https://github.com/luukhopman/dpm-xl"
 Issues = "https://github.com/luukhopman/dpm-xl/issues"
+Changelog = "https://github.com/luukhopman/dpm-xl/blob/main/CHANGELOG.md"
 
 [project.scripts]
 dpm-xl = "dpmxl.cli:main"

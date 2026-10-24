@@ -1,44 +1,158 @@
 # dpm-xl
 
 A Python parser and evaluator for **DPM-XL**, the expression language of EBA
-validation rules and similar checks. The core has no dependencies; the
-optional `columnar` extra adds a polars evaluator for reports with millions of
-open-table rows.
+validation rules and similar checks. Give it a rule and your report data; it
+tells you which records fail and explains each failure in plain numbers:
+
+```text
+1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision
+```
+
+- Parses every EBA validation rule and precondition of DPM releases 3.4–4.4
+  (14,000+ distinct expressions, about 0.1 ms each).
+- Evaluates them with EBA's interval arithmetic, null logic and key joins, and
+  points each failure at the cells involved.
+- Has no dependencies. The optional `columnar` extra adds a polars evaluator
+  for reports with millions of open-table rows.
+- Reads no files and knows no DPM release: data comes through a three-method
+  provider, so the same evaluator runs against a report upload, a database or
+  test fixtures. [dpm-xbrl](https://pypi.org/project/dpm-xbrl/) reads
+  xBRL-CSV and XBRL-XML reports.
+
+dpm-xl is an independent project, not affiliated with or endorsed by the
+European Banking Authority.
+
+## Installation
+
+```bash
+pip install dpm-xl               # Python 3.11+, no dependencies
+pip install "dpm-xl[columnar]"   # adds the polars evaluator
+```
+
+## Quickstart
 
 ```python
-from dpmxl import evaluate_rule, explain
+from dpmxl import MemoryProvider, Number, TableLayout, evaluate_rule, explain
+
+layout = TableLayout("C_01.00", rows=("0010", "0020", "0030"), columns=("0010", "0020"))
+values = {  # (table, row, column, sheet, open keys) -> value with XBRL decimals
+    ("C_01.00", "0010", "0010", None, ()): Number.of(100, 0),
+    ("C_01.00", "0020", "0010", None, ()): Number.of(60, 0),
+    ("C_01.00", "0030", "0010", None, ()): Number.of(40, 0),
+    ("C_01.00", "0010", "0020", None, ()): Number.of(1204, 0),
+    ("C_01.00", "0020", "0020", None, ()): Number.of(1180, 0),
+    ("C_01.00", "0030", "0020", None, ()): Number.of(31, 0),
+}
+provider = MemoryProvider([layout], values)
 
 expression = (
     "with {tC_01.00, c*, default: 0, interval: true}: {r0010} = {r0020} + {r0030}"
 )
 result = evaluate_rule(expression, provider, precondition="{v_C_01.00}")
+
+print(result.status, result.counts)
+# failed {'passed': 1, 'failed': 1, 'null': 0}
 for outcome in result.failures:
-    print(explain(result.evaluation, expression, outcome.key).summary)
-# 1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the
-# reported precision
+    print(outcome.key, explain(result.evaluation, expression, outcome.key).summary)
+# {'c': '0020'} 1,204 should equal 1,211 (1,180 + 31): difference 7, at least
+# 5.5 given the reported precision
 ```
 
-The package does not read report files and knows nothing about a particular
-DPM release. Data comes through a small provider protocol (see below), so the
-same evaluator works against an xBRL-CSV upload, a database, or test fixtures.
+[`examples/`](examples) holds this script, a custom provider over your own
+data ([`custom_provider.py`](examples/custom_provider.py)) and a rule file
+with data for the CLI. The tests run every example.
 
-dpm-xl is an independent project, not affiliated with or endorsed by the
-European Banking Authority.
+## Results
 
-## Modules
+`evaluate_rule(expression, provider, *, precondition=None)` never raises for a
+bad rule or bad data; it returns a `RuleResult`:
 
-| Module | Purpose |
+| Field | Meaning |
 | --- | --- |
-| `dpmxl.parser` | Tokenizer and recursive-descent parser. Nodes keep source spans. |
-| `dpmxl.ast` | Expression tree, selections, axis selectors and item literals. |
-| `dpmxl.values` | `Number` with interval tolerance, comparison and formatting. |
-| `dpmxl.recordset` | Keyed record sets and the natural join used by every operator. |
-| `dpmxl.evaluator` | Evaluation, preconditions and per-record outcomes. |
-| `dpmxl.explain` | Fills a failing record's formula with operand values. |
-| `dpmxl.references` | Static selections (with `with` context applied) and `{v_…}` templates. |
-| `dpmxl.provider` | `DataProvider` protocol and the in-memory `MemoryProvider`. |
-| `dpmxl.columnar` | The same semantics on polars frames (optional `columnar` extra). |
-| `dpmxl.cli` | `dpm-xl check` and `dpm-xl eval`. |
+| `status` | `passed`, `failed`, `not_applicable` (precondition not met, or no record could be evaluated), `error` (syntax error, unknown table, type mismatch, division by zero that reaches the result) or `unsupported` (`time_shift`) |
+| `message` | Why the status is `error`, `unsupported` or `not_applicable` |
+| `outcomes` | One `Outcome` per record: `key` (such as `{'c': '0020'}`), `passed` (`True`, `False` or `None` when not evaluated) and `points`, the cells it used |
+| `failures`, `counts` | The failing outcomes, and the number passed, failed and not evaluated |
+
+`DataPoint.ref` in `outcome.points` is whatever identity your provider gave
+the cell, so a user interface can highlight it. `explain(result.evaluation,
+expression, key)` returns an `Explanation`: `summary` (the sentence above),
+`filled` (the formula with values, `1,204 = 1,180 + 31`), `difference`, `gap`
+(the distance left after allowing for reported precision), `direction`
+(`too_high` or `too_low`) and the `left` and `right` sides with their
+intervals.
+
+`parse(expression)` returns the expression tree and raises
+`DpmXlSyntaxError` with a plain message, the `position` and a `pointer()`
+that marks it:
+
+```text
+$ dpm-xl check "with {tC_01.00, c0010}: {r0010} = {r0020} +* {r0030}"
+argument: unexpected '*' where an operand is expected
+with {tC_01.00, c0010}: {r0010} = {r0020} +* {r0030}
+                                           ^
+0/1 expressions parsed
+```
+
+## Connecting your data
+
+```python
+class DataProvider(Protocol):
+    def select(self, query: CellQuery) -> Sequence[DataPoint]: ...
+    def table_reported(self, table: str) -> bool | None: ...
+    def parameter(self, name: str) -> Value: ...
+```
+
+`select` resolves the table and axis selectors (`axis_matcher` and
+`normalize_code` implement range and code matching) and returns all defined
+cells of the closed axes with `value=None` where nothing was reported, so
+`default` and `isnull` work. For an open table it returns one point per
+reported key combination, with the key components in `DataPoint.keys`; an
+optional `open_keys(table)` method names them for tables with no rows.
+`table_reported` answers `{v_TABLE}` and `parameter` answers `{vName}`.
+Values are `Number` (use `Number.of(value, decimals)` for reported facts),
+`str`, `bool`, `datetime.date`, `Item` or `None`.
+[`examples/custom_provider.py`](examples/custom_provider.py) is a complete
+provider in 40 lines.
+
+To evaluate many rules against one report, pass a shared `SelectionCache`
+(`evaluate_rule(..., cache=cache)`) so each selection is read once;
+`parse_cached` memoizes parsing.
+
+## CLI
+
+```bash
+dpm-xl check rules.json                     # parse every expression and precondition
+dpm-xl check "{tC_01.00, r0010} >=" --json  # syntax errors with positions, as JSON
+dpm-xl eval rules.json data.json            # evaluate and explain every rule
+dpm-xl eval "{tC_27.00, c0010} > 0" data.json --json
+```
+
+A rule source is one expression, a text file with one expression per line
+(`#` starts a comment), or a JSON list of objects with `code`, `expression`
+and an optional `precondition` ([`examples/rules.json`](examples/rules.json)).
+`data.json` ([`examples/data.json`](examples/data.json)) holds `tables`
+(`code`, `rows`, `columns`, `sheets`, `open_keys`), `facts` (`table`, `row`,
+`column`, `sheet`, `keys`, `value`, `decimals` as an integer or `INF`, `type`),
+`reported` and `parameters`. The exit status is 0 when everything parsed or
+held, 1 when an expression does not parse or a rule fails, and 2 for an
+evaluation error or unreadable input.
+
+```text
+$ dpm-xl eval examples/rules.json examples/data.json
+v0001: failed
+  records: 1 passed, 1 failed, 0 not evaluated
+  - c=0020: 1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision
+v0002: failed
+  records: 1 passed, 1 failed, 0 not evaluated
+  - qCPI=LEI-B: -5 should exceed 0: difference 5
+v0003: passed
+  records: 1 passed, 0 failed, 0 not evaluated
+v0004: not_applicable
+  message: precondition not met
+  records: 0 passed, 0 failed, 0 not evaluated
+4 rules: 2 failed, 1 passed, 1 not_applicable
+```
 
 ## Supported language
 
@@ -94,8 +208,8 @@ European Banking Authority.
   not).
 - **Conditionals.** `if` takes the `else` branch when the condition is null;
   without `else`, a Boolean `then` (`{v_…}` and Boolean facts included)
-  yields true where the condition is false or null. The result has the condition's record structure; branch keys the
-  condition lacks widen it, so each condition record applies to every branch
+  yields true where the condition is false or null. The result has the
+  condition's record structure; branch keys the condition lacks widen it, so each condition record applies to every branch
   record sharing its keys (the columnar evaluator hands that case to the
   reference evaluator).
 - **Aggregates** over no records are null, except `count`, which is 0;
@@ -139,36 +253,31 @@ a row budget; rules evaluated on several threads build each selection once.
 Anything the module does not implement, including values that do not fit
 `Decimal(38, 12)`, arithmetic that would overflow, record errors (such as a
 zero divisor) and text that may be an item, raises `ColumnarUnsupported` so
-the caller falls back to the reference evaluator. `tests/test_columnar.py` checks both evaluators agree
-case by case. `PointsFrameProvider` adapts any `DataProvider`.
+the caller falls back to the reference evaluator. `tests/test_columnar.py`
+checks both evaluators agree case by case. `PointsFrameProvider` adapts any `DataProvider`.
 
-## Provider contract
+## Modules
 
-```python
-class DataProvider(Protocol):
-    def select(self, query: CellQuery) -> Sequence[DataPoint]: ...
-    def table_reported(self, table: str) -> bool | None: ...
-    def parameter(self, name: str) -> Value: ...
-```
+| Module | Purpose |
+| --- | --- |
+| `dpmxl.parser` | Tokenizer and recursive-descent parser. Nodes keep source spans. |
+| `dpmxl.ast` | Expression tree, selections, axis selectors and item literals. |
+| `dpmxl.values` | `Number` with interval tolerance, comparison and formatting. |
+| `dpmxl.recordset` | Keyed record sets and the natural join used by every operator. |
+| `dpmxl.evaluator` | Evaluation, preconditions and per-record outcomes. |
+| `dpmxl.explain` | Fills a failing record's formula with operand values. |
+| `dpmxl.references` | Static selections (with `with` context applied) and `{v_…}` templates. |
+| `dpmxl.provider` | `DataProvider` protocol and the in-memory `MemoryProvider`. |
+| `dpmxl.columnar` | The same semantics on polars frames (optional `columnar` extra). |
+| `dpmxl.cli` | `dpm-xl check` and `dpm-xl eval`. |
 
-`select` resolves the table and axis selectors (`axis_matches` and
-`normalize_code` implement range and code matching) and returns all defined
-cells of the closed axes with `value=None` where nothing was reported. For an
-open table it returns one point per reported key combination, with the key
-components in `DataPoint.keys`. `DataPoint.ref` is an opaque identity that
-comes back in outcomes, so a caller can highlight cells.
+## Stability
 
-## CLI
-
-```bash
-dpm-xl check rules.json            # parse every expression/precondition in a rule list
-dpm-xl check "with {tC_01.00}: {r0010} >= 0" --references
-dpm-xl eval "with {tC_01.00, c0010, default: 0, interval: true}: {r0010} = {r0020} + {r0030}" data.json
-```
-
-`data.json` holds `tables` (`code`, `rows`, `columns`, `sheets`, `open_keys`),
-`facts` (`table`, `row`, `column`, `sheet`, `keys`, `value`, `decimals` as an
-integer or `INF`, `type`), `reported` and `parameters`.
+Releases follow [semantic versioning](https://semver.org). The public API is
+what this README documents: the names exported by `dpmxl` and
+`dpmxl.columnar`, the provider protocol, the result and explanation fields,
+the CLI and its exit codes. Explanation and error wording may improve in minor
+releases. See [CHANGELOG.md](CHANGELOG.md) for each release.
 
 ## Development
 

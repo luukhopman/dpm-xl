@@ -32,6 +32,8 @@ All notable changes to this project are documented here. The project follows
   `[sub]` as status `error` instead of raising.
 - Arithmetic no longer depends on the caller's decimal context.
 - Explanations show the right values after `[rename]`.
+- Explanations of values around 1e33 and larger with `interval: true` no
+  longer raise.
 - `if` without `else` treats filing indicators (`{v_…}`) and Boolean facts as
   Boolean, as for other conditions.
 - Items built with an `eba_` category match parsed items.

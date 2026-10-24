@@ -536,3 +536,14 @@ def test_explanations_follow_keys_through_rename() -> None:
     explanation = explain(_traced(result), rule, result.failures[0].key)
     assert explanation.summary == "1 should exceed 100: difference 99"
     assert len(explanation.operands[0].points) == 1
+
+
+def test_explanations_of_huge_values_with_intervals() -> None:
+    for value in ("1e33", "123456789012345678901234567890123", "1e40"):
+        provider = closed({("0010", "0010"): value, ("0020", "0010"): 1})
+        rule = "with {tC_01.00, c0010, interval: true}: {r0020} = {r0010}"
+        result = evaluate_rule(rule, provider)
+        explanation = explain(_traced(result), rule, result.failures[0].key)
+        assert explanation.summary.startswith("1 should equal ")
+        assert explanation.right is not None
+        assert explanation.right.low is not None

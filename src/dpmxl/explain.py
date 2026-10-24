@@ -19,7 +19,13 @@ from __future__ import annotations
 
 from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
-from decimal import ROUND_DOWN, ROUND_HALF_EVEN, Decimal, localcontext
+from decimal import (
+    ROUND_DOWN,
+    ROUND_HALF_EVEN,
+    Decimal,
+    InvalidOperation,
+    localcontext,
+)
 from functools import lru_cache
 from typing import Literal, cast
 
@@ -249,9 +255,25 @@ def _round_threshold(width: Decimal, *, gap: bool = False) -> Decimal:
         return width
     rounding = ROUND_DOWN if gap else ROUND_HALF_EVEN
     if gap and abs(width) >= 1:
-        return width.quantize(Decimal("0.1"), rounding).normalize()
-    places = max(1, 1 - width.adjusted())
-    return width.quantize(Decimal(1).scaleb(-places), rounding)
+        return _quantize(width, 1, rounding).normalize()
+    return _quantize(width, max(1, 1 - width.adjusted()), rounding)
+
+
+def _quantize(value: Decimal, places: int, rounding: str = ROUND_HALF_EVEN) -> Decimal:
+    """Round to ``places`` decimals for display.
+
+    A value with more digits than :data:`DECIMAL_CONTEXT` holds after
+    rounding (about 1e33 and up) already has fewer decimals: it stays as is.
+
+    Returns:
+        Decimal: The rounded value.
+    """
+    try:
+        return value.quantize(
+            Decimal(1).scaleb(-places), rounding, context=DECIMAL_CONTEXT
+        )
+    except InvalidOperation:
+        return value
 
 
 def _gap(op: str, left: Number, right: Number) -> Decimal | None:
@@ -392,8 +414,8 @@ class _Formatter:
             threshold = format_decimal(shown)
             exponent = shown.as_tuple().exponent
             places = max(-exponent, 0) if isinstance(exponent, int) else 0
-            low = format_decimal(round(number.low, places))
-            high = format_decimal(round(number.high, places))
+            low = format_decimal(_quantize(number.low, places))
+            high = format_decimal(_quantize(number.high, places))
         return Side(
             formula=self.render(node, filled=False),
             filled=self.render(node, filled=True),

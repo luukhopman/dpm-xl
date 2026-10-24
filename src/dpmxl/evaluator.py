@@ -1014,9 +1014,12 @@ def _shift_key(data: Recordset, key: str, period: str, count: int) -> Recordset:
             found = type_name(_value_of_key(moment))
             raise EvaluationError(f"time_shift needs dates in key {key}, found {found}")
         shifted = _shift_date(moment, period, count)
-        result.records[*record_key[:position], shifted, *record_key[position + 1 :]] = (
-            record
-        )
+        moved = (*record_key[:position], shifted, *record_key[position + 1 :])
+        if moved in result.records:
+            raise EvaluationError(
+                f"time_shift moves several {key} dates to {shifted.isoformat()}"
+            )
+        result.records[moved] = record
     return result
 
 

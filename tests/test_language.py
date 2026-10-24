@@ -806,3 +806,16 @@ def test_operations_do_not_share_temporaries_or_assignments() -> None:
     result = evaluate_rule("x := 1; {vOuter} <- {o_sets_x}; x = 1", provider)
     assert result.status == "passed"
     assert list(result.assignments) == ["{vOuter}"]
+
+
+def test_time_shift_rejects_dates_that_collide() -> None:
+    provider = MemoryProvider(
+        [TableLayout("D", columns=("0010",), open_keys=("qDAT",))],
+        {
+            ("D", None, "0010", None, (("qDAT", day),)): Number.of(1, 0)
+            for day in (date(2026, 1, 30), date(2026, 1, 31))
+        },
+    )
+    result = evaluate_rule("time_shift({tD, c0010}, M, 1, qDAT) > 0", provider)
+    assert result.status == "error"
+    assert "moves several qDAT dates to 2026-02-28" in (result.message or "")

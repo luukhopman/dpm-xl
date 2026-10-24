@@ -643,6 +643,10 @@ class Evaluator:
             return self._annualise(node, context, bindings)
         if name in _SET_FUNCTIONS:
             return self._set_function(node, context, bindings)
+        if name in AGGREGATES and (
+            not node.args or (len(node.args) > 1 and name not in {"max", "min"})
+        ):
+            raise EvaluationError(f"{name} takes one operand")
         if name in AGGREGATES and (len(node.args) == 1 or node.group_by is not None):
             if len(node.args) != 1:
                 raise EvaluationError(f"{name} with group by takes one operand")

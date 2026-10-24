@@ -861,3 +861,15 @@ def test_walk_reaches_selection_and_parameter_defaults() -> None:
 )
 def test_percentages_inside_braces(expression: str, expected: Value) -> None:
     assert value(expression) == expected
+
+
+@pytest.mark.parametrize("expression", ["sum() > 0", "count() > 0", "max() > 0"])
+def test_aggregates_without_an_operand_are_errors(expression: str) -> None:
+    result = evaluate_rule(expression, report())
+    assert result.status == "error"
+    assert "takes one operand" in (result.message or "")
+
+
+def test_variable_names_may_contain_dots() -> None:
+    assert parse("{vTotal.A}") == Parameter("Total.A")
+    assert value("{vTotal.A}", report(**{"Total.A": "x"})) == "x"

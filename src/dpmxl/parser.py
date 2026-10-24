@@ -1053,7 +1053,7 @@ class _Parser:
             body = first.text
             if re.fullmatch(r"v_[A-Za-z0-9_.\-]+", body):
                 return TableReported(body[2:], span=span)
-            if re.fullmatch(r"v[A-Za-z][A-Za-z0-9_]*", body):
+            if re.fullmatch(r"v[A-Za-z](?:[A-Za-z0-9_.]*[A-Za-z0-9])?", body):
                 return Parameter(body[1:], span=span)
             if body[1:2] == "`":
                 return Parameter(_reference_name(body), span=span)

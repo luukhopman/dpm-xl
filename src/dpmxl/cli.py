@@ -99,6 +99,22 @@ class _Rule:
     precondition: str | None = None
 
 
+_RULE_FILE_SUFFIXES = frozenset({".json", ".txt"})
+
+
+def _looks_like_path(source: str) -> bool:
+    """Tell a mistyped rule file path from an expression.
+
+    Returns:
+        bool: Whether ``source`` reads as a path rather than an expression.
+    """
+    if Path(source).suffix.casefold() in _RULE_FILE_SUFFIXES:
+        return True
+    return ("/" in source or "\\" in source) and not any(
+        char in source for char in "{}()[]=<> "
+    )
+
+
 def _rules(source: str) -> list[_Rule]:
     """Read rules from an expression or a rule file.
 
@@ -107,9 +123,12 @@ def _rules(source: str) -> list[_Rule]:
 
     Raises:
         ValueError: If a JSON rule file is malformed.
+        FileNotFoundError: If the source names a file that does not exist.
     """
     path = Path(source)
     if not path.is_file():
+        if _looks_like_path(source):
+            raise FileNotFoundError(f"no such rule file: {source}")
         return [_Rule("expression", source)]
     text = path.read_text(encoding="utf-8")
     if path.suffix.casefold() != ".json":
@@ -161,7 +180,12 @@ def _check(source: str, *, show_references: bool, as_json: bool = False) -> int:
             node = parse_program(expression)
         except DpmXlSyntaxError as error:
             errors.append(
-                {"source": label, "message": error.message, "position": error.position}
+                {
+                    "source": label,
+                    "message": error.message,
+                    "position": error.position,
+                    "end": error.end,
+                }
             )
             if not as_json:
                 print(f"{label}: {error.message}\n{error.pointer()}", file=sys.stderr)
@@ -384,3 +408,6 @@ def _typed(
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
+
+
+__all__ = ["INVALID_INPUT", "JSON_SCHEMA_VERSION", "load_memory_provider", "main"]

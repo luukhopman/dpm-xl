@@ -122,3 +122,20 @@ def test_eval_reads_groups_operations_and_set_parameters(tmp_path, capsys) -> No
     rules = "{g_G, r0010, c0010} in {p_Allowed, set-number} and {o_v1} = 4"
     assert main(["eval", rules, str(data)]) == 0
     assert "status: passed" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("source", ["rules/v4.2.json", "missing.txt", "rules/v4"])
+def test_a_missing_rule_file_is_not_read_as_an_expression(source, capsys) -> None:
+    assert main(["check", source]) == 3
+    assert f"no such rule file: {source}" in capsys.readouterr().err
+
+
+def test_expressions_with_a_slash_are_still_expressions(capsys) -> None:
+    assert main(["check", "1/2 = 0.5"]) == 0
+    assert main(["check", "{tA, r0010} / 2 > 0"]) == 0
+
+
+def test_check_json_errors_carry_the_end_offset(capsys) -> None:
+    assert main(["check", "{tA} >=", "--json"]) == 1
+    error = json.loads(capsys.readouterr().out)["errors"][0]
+    assert error["position"] <= error["end"]

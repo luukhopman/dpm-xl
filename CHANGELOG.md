@@ -106,6 +106,8 @@ All notable changes to this project are documented here. The project follows
 
 ### Fixed
 
+- `dpm-xl check` and `eval` report a rule file path that does not exist
+  instead of reading it as an expression; `check --json` errors carry `end`.
 - A division by zero or type error fails only its own record: a rule is an
   error only if that record reaches the result, so guards such as
   `if {x} != 0 then {y} / {x} > 1 endif` work.

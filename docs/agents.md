@@ -126,7 +126,6 @@ v1 failed
 | Writing `a<-1` to compare with -1 | Parsed as a persistent assignment | `a < -1` |
 | `{vX}` for a filing indicator | Reads parameter `X` | `{v_X}` tests the filing indicator |
 | A new `SelectionCache` per rule | Every selection is read again | One cache per report |
-| Passing a path that does not exist to `dpm-xl check` | It is parsed as an expression and may "pass" | Check the file exists first |
 
 ## Where to look next
 

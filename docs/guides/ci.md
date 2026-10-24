@@ -45,18 +45,18 @@ $ dpm-xl check "if {tC_01.00, r0010} > 0 then true" --json
     {
       "source": "argument",
       "message": "expected 'endif', found end of expression",
-      "position": 34
+      "position": 34,
+      "end": 34
     }
   ]
 }
 ```
 
-!!! warning "A missing file is read as an expression"
-    The rule source is a file only if that file exists; otherwise the
-    argument itself is parsed as an expression. Many paths are valid
-    expressions: `dpm-xl check rules/v4.2.json` reports "1/1 expressions
-    parsed" when that file does not exist. A CI job should check that the
-    file exists first, as the workflow below does.
+!!! note "A missing rule file is an error"
+    An argument that reads as a path (it ends in `.json` or `.txt`, or
+    holds a `/` without any brackets, operators or spaces) but names no
+    file fails with `error: no such rule file: ...` and exit status 3, so a
+    mistyped path cannot pass as an expression.
 
 ## A GitHub Actions job
 

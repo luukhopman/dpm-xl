@@ -52,6 +52,7 @@ def test_cli_check_json_reports_positions(capsys) -> None:
             "source": "argument",
             "message": "expression ends where an operand is expected",
             "position": 7,
+            "end": 7,
         }
     ]
 

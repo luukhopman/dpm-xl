@@ -21,8 +21,9 @@ dpm-xl [COMMAND] --help
   ([format](data-formats.md#rule-files));
 - the path of any other existing file: one expression per line, `#` starts a
   comment line, blank lines are ignored;
-- otherwise, the argument itself as one expression. A path to a file that
-  does not exist is therefore parsed as an expression.
+- otherwise, the argument itself as one expression. An argument that reads
+  as a path (ending in `.json` or `.txt`, or holding a `/` without brackets,
+  operators or spaces) but names no file is an error (exit status 3).
 
 Each expression and precondition is labelled in the output: `argument` for
 an expression given directly, `<code>:expression` and `<code>:precondition`
@@ -78,7 +79,7 @@ $ dpm-xl check "with {tC_01.00}: {r0010} >= 0" --references --json
 | `schema_version` | integer | `1`. Changes only with a new major release. |
 | `parsed` | integer | Expressions and preconditions that parsed. |
 | `total` | integer | Expressions and preconditions checked. |
-| `errors` | list | One object per syntax error: `source` (the label), `message` (plain words), `position` (zero-based character offset in that expression). |
+| `errors` | list | One object per syntax error: `source` (the label), `message` (plain words), `position` and `end` (zero-based character offsets of the problem in that expression). |
 | `selections` | list | Only with `--references`: `source` and `selection` (normalized DPM-XL text) per selection. |
 
 ## `dpm-xl eval`

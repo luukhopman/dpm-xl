@@ -50,7 +50,7 @@ All notable changes to this project are documented here. The project follows
 - `tests/test_grammar_coverage.py`: an example for every alternative of the
   DPM-XL grammar, each parsed and, where it yields a value, evaluated.
 - `dpmxl.grammar`: keywords, operators, function names and parameter types as
-  frozensets, `canonical_function` and `CALL_NAMES` for the `Call.name` of
+  frozensets (`AXIS_LETTERS` for `r`, `c`, `s`), `canonical_function` and `CALL_NAMES` for the `Call.name` of
   each spelling, and a TextMate grammar in `editors/dpm-xl.tmLanguage.json`.
 
 ### Changed
@@ -68,8 +68,9 @@ All notable changes to this project are documented here. The project follows
   requested report reports it with a new message. The columnar evaluator
   hands every `time_shift` rule to the reference evaluator (raising
   `ColumnarUnsupported`) instead of reporting `unsupported` itself.
-- A `_` after a selection prefix is cosmetic, as the DPM-XL grammar says:
-  `{t_T1}` selects table `T1`, not `_T1`. `SelectionSpec` has
+- A `_` after the `t`, `g`, `o` and `p` prefixes is cosmetic, as the
+  DPM-XL grammar says: `{t_T1}` selects table `T1`, not `_T1`. `{v_X}`
+  stays a filing-indicator test. `SelectionSpec` has
   `table_group` and `operation` fields.
 - `children()` and `walk()` reach the `default` of a selection, a `with`
   context and a typed parameter.

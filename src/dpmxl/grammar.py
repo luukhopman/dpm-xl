@@ -184,7 +184,7 @@ REFERENCE_PREFIXES = {
 }
 """Selection reference prefix to token kind, such as ``tC_01.00``."""
 
-AXIS_PREFIXES = frozenset({"r", "c", "s"})
+AXIS_LETTERS = frozenset({"r", "c", "s"})
 """Prefixes of row, column and sheet coordinates inside a selection."""
 
 TOKEN_KINDS = frozenset(
@@ -342,7 +342,7 @@ def textmate_grammar() -> dict[str, Any]:
 __all__ = [
     "AGGREGATE_FUNCTIONS",
     "ANALYTIC_FUNCTIONS",
-    "AXIS_PREFIXES",
+    "AXIS_LETTERS",
     "CALL_NAMES",
     "FUNCTIONS",
     "FUNCTION_ALIASES",

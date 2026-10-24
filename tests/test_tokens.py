@@ -10,6 +10,7 @@ from dpmxl.evaluator import AGGREGATES
 from dpmxl.grammar import (
     AGGREGATE_FUNCTIONS,
     ANALYTIC_FUNCTIONS,
+    AXIS_LETTERS,
     CALL_NAMES,
     FUNCTIONS,
     KEYWORDS,
@@ -166,6 +167,8 @@ def test_tokenizer_knows_selection_words_literals_and_prefixes() -> None:
     for word in LITERAL_WORDS:
         assert tokenize(word)[0].kind == ("null" if word == "null" else "boolean")
         assert tokenize(f"{{default: {word}}}")[3].kind == tokenize(word)[0].kind
+    for letter in AXIS_LETTERS:
+        assert tokenize(f"{{{letter}0010}}")[1].kind == "axis"
     for prefix, kind in REFERENCE_PREFIXES.items():
         assert tokenize(f"{{{prefix}_X}}")[1].kind == kind
     for period in TIME_PERIODS:

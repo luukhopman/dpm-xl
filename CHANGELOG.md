@@ -41,7 +41,9 @@ All notable changes to this project are documented here. The project follows
 - `time_shift` evaluates its operand on another period's report from the
   optional `earlier_report(period, count)` provider method (or
   `MemoryProvider(earlier_reports=...)`, or `earlier` in the CLI data file),
-  or moves a date key; `annualise(x, fiscalYearEnd, key)`.
+  or moves a date key; its points carry `provider.EarlierRef` refs, and
+  explanations show the earlier report's values;
+  `annualise(x, fiscalYearEnd, key)`.
 - Analytic functions: `rank` and aggregates with `over (partition by …
   order by … window)`, parsed to the `Analytic` node with `Window` and
   `WindowBound`.

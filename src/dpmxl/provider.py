@@ -17,7 +17,7 @@ tests and by tools that build reports programmatically.
 from __future__ import annotations
 
 from collections.abc import Hashable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from typing import Any, Protocol, TypeAlias, runtime_checkable
 
@@ -125,6 +125,77 @@ class DataProvider(Protocol):
         Returns ``None`` when the parameter is unknown.
         """
         ...
+
+
+@dataclass(frozen=True, slots=True)
+class EarlierRef:
+    """The ``ref`` of a data point that ``time_shift`` read from another report.
+
+    It wraps the earlier report's own ``ref`` with the shift, so the point
+    stays distinct from the current report's cell with the same ``ref``.
+    """
+
+    period: str
+    count: int
+    ref: Hashable
+
+
+class EarlierReport:
+    """The report ``time_shift`` reads, marking its points' refs.
+
+    Every data point it selects carries an :class:`EarlierRef` instead of the
+    provider's ``ref`` (points without a ``ref`` keep ``None``); every other
+    method, optional ones included, is the wrapped provider's.
+    """
+
+    def __init__(self, provider: DataProvider, period: str, count: int) -> None:
+        """Wrap a provider.
+
+        Args:
+            provider: The earlier report.
+            period: The ``time_shift`` period, such as ``Q``.
+            count: The number of periods.
+        """
+        self.provider = provider
+        self.period = period
+        self.count = count
+
+    def select(self, query: CellQuery) -> Sequence[DataPoint]:
+        """Return the earlier report's points with marked refs.
+
+        Returns:
+            Sequence[DataPoint]: The points.
+        """
+        return [
+            point
+            if point.ref is None
+            else replace(point, ref=EarlierRef(self.period, self.count, point.ref))
+            for point in self.provider.select(query)
+        ]
+
+    def table_reported(self, table: str) -> bool | None:
+        """Return the earlier report's filing indicator.
+
+        Returns:
+            bool | None: Filing-indicator state.
+        """
+        return self.provider.table_reported(table)
+
+    def parameter(self, name: str) -> Value:
+        """Return an earlier report parameter.
+
+        Returns:
+            Value: The parameter or ``None``.
+        """
+        return self.provider.parameter(name)
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate optional provider methods.
+
+        Returns:
+            Any: The wrapped provider's attribute.
+        """
+        return getattr(self.provider, name)
 
 
 def declared_open_keys(provider: object, table: str) -> tuple[str, ...]:
@@ -400,6 +471,8 @@ __all__ = [
     "CellQuery",
     "DataPoint",
     "DataProvider",
+    "EarlierRef",
+    "EarlierReport",
     "MemoryProvider",
     "TableLayout",
     "axis_matcher",

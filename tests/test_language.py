@@ -42,7 +42,7 @@ from dpmxl.ast import (
 from dpmxl.evaluator import Evaluator
 from dpmxl.explain import TIMES
 from dpmxl.parser import tokenize
-from dpmxl.provider import CellKey
+from dpmxl.provider import CellKey, EarlierRef
 from dpmxl.values import ValueSet
 
 
@@ -765,3 +765,29 @@ def test_range_window_offsets_over_dates_count_days_without_a_period() -> None:
         ("b", date(2026, 6, 30)): "2",
         ("c", date(2026, 9, 30)): "1",
     }
+
+
+def test_time_shift_explanations_show_the_earlier_report() -> None:
+    previous = quarterly(100, date(2026, 3, 31))
+    current = MemoryProvider(
+        list(quarterly(0, date(2026, 6, 30)).tables.values()),
+        {
+            ("F", "0010", "0010", None, ()): Number.of(7, 0),
+            ("F", "0210", "0010", None, ()): Number.of(9, 0),
+        },
+        parameters={"refPeriod": date(2026, 6, 30)},
+        earlier_reports={("Q", 1): previous},
+    )
+    rule = "{tF, r0010, c0010} = time_shift({tF, r0010, c0010}, Q, 1, refPeriod)"
+    result = evaluate_rule(rule, current)
+    assert result.status == "failed"
+    assert result.evaluation is not None
+    explanation = explain(result.evaluation, rule, result.failures[0].key)
+    assert explanation.summary == (
+        "7 should equal 100 (time_shift(100, Q, 1, refPeriod)): difference 93"
+    )
+    refs = [point.ref for point in result.failures[0].points]
+    assert refs == [
+        ("F", "0010", "0010", None, ()),
+        EarlierRef("Q", 1, ("F", "0010", "0010", None, ())),
+    ]

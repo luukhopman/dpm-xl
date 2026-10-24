@@ -117,7 +117,9 @@ optional `open_keys(table)` method names them for tables with no rows.
 resolve `{g_…}` table groups and `{o_…}` operation references, and
 `earlier_report(period, count)` returns another period's report for
 `time_shift` (`MemoryProvider` takes them as `table_groups`, `operations` and
-`earlier_reports`). In
+`earlier_reports`). Points read from an earlier report carry
+`EarlierRef(period, count, ref)` as their `ref`, so they stay distinct from
+the current report's cell. In
 `references(node)`, a group or operation read has `spec.table` `None`, with
 `kind` (`table`, `table_group` or `operation`) and `code`;
 `tables(node, provider)` counts a group read as reading every table

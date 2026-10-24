@@ -75,6 +75,7 @@ from .provider import (
     CellQuery,
     DataPoint,
     DataProvider,
+    EarlierReport,
     axis_matcher,
     declared_open_keys,
     normalize_code,
@@ -680,12 +681,18 @@ class Evaluator:
         if key is not None and not isinstance(key, Name):
             raise EvaluationError("time_shift needs a key name as its fourth operand")
         if key is not None:
+            # A trial on this report: its trace is kept only if the key turns
+            # out to be one of the operand's, so that explanations of the
+            # other case show the earlier report's values.
+            saved, self._trace = self._trace, {}
             try:
                 current = self.evaluate(operand, context, bindings)
             except EvaluationError:
                 current = None
+            trial, self._trace = self._trace, saved
             found = resolve_key(key.name, current.keys) if current else None
             if current is not None and found is not None:
+                self._trace.update(trial)
                 return _shift_key(current, found, period, count)
         method = getattr(self.provider, "earlier_report", None)
         if not callable(method):
@@ -699,12 +706,20 @@ class Evaluator:
         cache = None
         if self.cache is not None:
             cache = self.cache.earlier.setdefault((period, count), SelectionCache())
-        inner = Evaluator(earlier, trace=False, cache=cache, only_keys=self.only_keys)
+        inner = Evaluator(
+            EarlierReport(earlier, period, count),
+            trace=self.trace_enabled,
+            cache=cache,
+            only_keys=self.only_keys,
+        )
         inner._context_conditions = list(self._context_conditions)
         inner._overrides = self._overrides
         inner._temporaries = dict(self._temporaries)
         inner._operations = list(self._operations)
-        return inner.evaluate(operand, context, bindings)
+        result = inner.evaluate(operand, context, bindings)
+        self._trace.update(inner._trace)
+        self._notes.extend(inner._notes)
+        return result
 
     def _annualise(
         self,

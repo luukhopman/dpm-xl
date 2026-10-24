@@ -58,8 +58,8 @@ for outcome in result.failures:
 # 5.5 given the reported precision
 ```
 
-[`examples/`](examples) holds this script, a custom provider over your own
-data ([`custom_provider.py`](examples/custom_provider.py)) and a rule file
+[`examples/`](https://github.com/luukhopman/dpm-xl/tree/main/examples) holds this script, a custom provider over your own
+data ([`custom_provider.py`](https://github.com/luukhopman/dpm-xl/blob/main/examples/custom_provider.py)) and a rule file
 with data for the CLI. The tests run every example.
 
 ## Results
@@ -112,7 +112,7 @@ optional `open_keys(table)` method names them for tables with no rows.
 `table_reported` answers `{v_TABLE}` and `parameter` answers `{vName}`.
 Values are `Number` (use `Number.of(value, decimals)` for reported facts),
 `str`, `bool`, `datetime.date`, `Item` or `None`.
-[`examples/custom_provider.py`](examples/custom_provider.py) is a complete
+[`examples/custom_provider.py`](https://github.com/luukhopman/dpm-xl/blob/main/examples/custom_provider.py) is a complete
 provider in 40 lines.
 
 To evaluate many rules against one report, pass a shared `SelectionCache`
@@ -130,8 +130,8 @@ dpm-xl eval "{tC_27.00, c0010} > 0" data.json --json
 
 A rule source is one expression, a text file with one expression per line
 (`#` starts a comment), or a JSON list of objects with `code`, `expression`
-and an optional `precondition` ([`examples/rules.json`](examples/rules.json)).
-`data.json` ([`examples/data.json`](examples/data.json)) holds `tables`
+and an optional `precondition` ([`examples/rules.json`](https://github.com/luukhopman/dpm-xl/blob/main/examples/rules.json)).
+`data.json` ([`examples/data.json`](https://github.com/luukhopman/dpm-xl/blob/main/examples/data.json)) holds `tables`
 (`code`, `rows`, `columns`, `sheets`, `open_keys`), `facts` (`table`, `row`,
 `column`, `sheet`, `keys`, `value`, `decimals` as an integer or `INF`, `type`),
 `reported` and `parameters`. The exit status is 0 when everything parsed or
@@ -277,7 +277,7 @@ Releases follow [semantic versioning](https://semver.org). The public API is
 what this README documents: the names exported by `dpmxl` and
 `dpmxl.columnar`, the provider protocol, the result and explanation fields,
 the CLI and its exit codes. Explanation and error wording may improve in minor
-releases. See [CHANGELOG.md](CHANGELOG.md) for each release.
+releases. See [CHANGELOG.md](https://github.com/luukhopman/dpm-xl/blob/main/CHANGELOG.md) for each release.
 
 ## Development
 

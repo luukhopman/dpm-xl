@@ -430,17 +430,31 @@ def parse(expression: str) -> Node:
         return node
     program = parse_program(expression)
     first = program.statements[0]
+    # The messages speak to someone typing a rule; parse_program is the
+    # entry point for scripts with several statements or assignments.
     if len(program.statements) > 1:
         second = program.statements[1]
         raise DpmXlSyntaxError(
-            "several statements need parse_program",
+            "a rule is one expression; ';' separates the statements of a "
+            "script (parse_program)",
             expression,
             second.span[0],
             second.span[1],
         )
-    if isinstance(first, Assignment | PersistentAssignment):
+    if isinstance(first, PersistentAssignment):
+        arrow = expression.find("<-", first.target.span[1])
         raise DpmXlSyntaxError(
-            "assignments need parse_program", expression, *first.span
+            "'<-' assigns a value; to compare with a negative number, write '< -'",
+            expression,
+            arrow,
+            arrow + 2,
+        )
+    if isinstance(first, Assignment):
+        raise DpmXlSyntaxError(
+            "':=' names a value for later statements of a script "
+            "(parse_program); a rule is one expression",
+            expression,
+            *first.span,
         )
     return first
 

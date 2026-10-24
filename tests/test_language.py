@@ -367,10 +367,14 @@ def test_parse_program_reads_statements_and_assignments() -> None:
 def test_parse_keeps_returning_single_expressions() -> None:
     assert parse("{tT, r0010} > 0;") == parse("{tT, r0010} > 0")
     assert parse_program("1 = 1").statements == (parse("1 = 1"),)
-    with pytest.raises(DpmXlSyntaxError, match="several statements need parse_program"):
+    with pytest.raises(
+        DpmXlSyntaxError, match="a rule is one expression; ';' separates"
+    ):
         parse("a := 1; a > 0")
-    with pytest.raises(DpmXlSyntaxError, match="assignments need parse_program"):
+    with pytest.raises(DpmXlSyntaxError, match="to compare with a negative number"):
         parse("{tT, r0010} <- 1")
+    with pytest.raises(DpmXlSyntaxError, match="':=' names a value"):
+        parse("a := 1")
     with pytest.raises(DpmXlSyntaxError, match="assignment target"):
         parse_program("{p_X, number} <- 1")
 
@@ -646,8 +650,9 @@ def test_arrow_is_always_a_persistent_assignment() -> None:
     assert [token.text for token in tokenize("{tA} <- {tB} + 1")][3] == "<-"
     program = parse_program("{tA, r0010} <- {tB, r0010} + 1")
     assert isinstance(program.statements[0], PersistentAssignment)
-    with pytest.raises(DpmXlSyntaxError, match="assignments need parse_program"):
+    with pytest.raises(DpmXlSyntaxError, match="write '< -'") as error:
         parse("{tA} <- {tB} + 1")
+    assert (error.value.position, error.value.end) == (5, 7)
     with pytest.raises(DpmXlSyntaxError, match="found '<-'"):
         parse("1 + {tA}<-{tB}")
     # With a space, it is a comparison with a negated operand.

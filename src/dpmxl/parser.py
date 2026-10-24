@@ -733,8 +733,7 @@ class _Parser:
         return left
 
     def parse_set_operand(self) -> Node:
-        if self.at("{") and self.starts_set(self.index + 1):
-            return self.parse_set()
+        # As in the grammar, the right of in is a whole operand: {1, 2} - x.
         return self.parse_concat()
 
     def starts_set(self, index: int) -> bool:

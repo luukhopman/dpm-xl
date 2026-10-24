@@ -207,3 +207,13 @@ def test_items_may_be_escaped_property_codes() -> None:
     assert node.condition == Binary(
         "=", Literal_(Item(None, "x.y"), "item"), Literal_(Item("qEC", "qx1"), "item")
     )
+
+
+def test_the_right_of_in_is_a_whole_operand() -> None:
+    node = parse("1 in {1, 2} & {3}")
+    assert isinstance(node, In) and isinstance(node.values, Binary)
+    assert node.values.op == "&"
+    clause = parse("[qC:a] in {[qC:a]} [where qX = 1]")
+    assert isinstance(clause, In) and isinstance(clause.values, Where)
+    plain = parse("x in {[qC:a], [qC:b]}")
+    assert isinstance(plain, In) and isinstance(plain.values, SetLiteral)

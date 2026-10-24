@@ -264,3 +264,18 @@ def test_rules_evaluated_concurrently_build_each_selection_once() -> None:
     assert {(result.status, result.failed) for result in results} == {("failed", 1)}
     # One provider query per distinct selection, however many rules ask.
     assert len(calls) == len(set(calls)) == 3
+
+
+def test_polars_failures_go_to_the_reference_engine() -> None:
+    import polars as pl
+
+    class Panicking(PointsFrameProvider):
+        def select_frame(self, query):
+            raise pl.exceptions.PanicException("unwrap on an Err value")
+
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar("{tT, r0010, c0010} > 0", Panicking(data()))
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(
+            "{tT, r0010, c0010} * 1e24 > 0", PointsFrameProvider(data())
+        )

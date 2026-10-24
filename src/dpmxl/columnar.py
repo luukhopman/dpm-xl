@@ -468,10 +468,18 @@ class ColumnarEvaluator:
                 raise ColumnarUnsupported("bare names outside where clauses")
             case Unary(op=op, operand=operand):
                 return _unary(op, self.evaluate(operand, context))
-            case Binary(op=op, left=left, right=right):
-                return _binary(
-                    op, self.evaluate(left, context), self.evaluate(right, context)
-                )
+            case Binary():
+                # A left-deep chain (a long sum) in a loop, as in the
+                # reference evaluator.
+                spine = [node]
+                while isinstance(spine[-1].left, Binary):
+                    spine.append(spine[-1].left)
+                frame = self.evaluate(spine[-1].left, context)
+                for current in reversed(spine):
+                    frame = _binary(
+                        current.op, frame, self.evaluate(current.right, context)
+                    )
+                return frame
             case In(operand=operand, values=values):
                 return _membership(
                     self.evaluate(operand, context), values, self, context
@@ -1200,7 +1208,7 @@ def _match(frame: Frame, pattern: Frame) -> Frame:
         result = pl.col(TXT).str.contains(anchored)
         out = _with_values(frame, flag=result)
         out.df.head(1)
-    except pl.exceptions.ComputeError as error:  # pragma: no cover - regex flavour
+    except pl.exceptions.PolarsError as error:  # pragma: no cover - regex flavour
         raise ColumnarUnsupported(f"regex {text!r}") from error
     return out
 
@@ -1451,8 +1459,14 @@ def evaluate_rule_columnar(
         return ColumnarResult("unsupported", message=str(error))
     except (EvaluationError, DpmXlSyntaxError) as error:
         return ColumnarResult("error", message=str(error))
-    except pl.exceptions.ComputeError as error:
-        raise ColumnarUnsupported(f"polars: {error}") from error
+    except (
+        pl.exceptions.PolarsError,
+        pl.exceptions.PanicException,
+        ArithmeticError,
+        RecursionError,
+    ) as error:
+        # Overflow beyond Decimal(38, 12) and anything else polars rejects.
+        raise ColumnarUnsupported(f"{type(error).__name__}: {error}") from error
     df = frame.df
     if frame.kinds & {NUM, TXT}:
         return ColumnarResult("error", message="rule yields values, not booleans")

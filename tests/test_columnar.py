@@ -370,3 +370,29 @@ def test_record_type_errors_dropped_by_where_go_to_the_reference(
     assert evaluate_rule(expression, provider).status == "not_applicable"
     with pytest.raises(ColumnarUnsupported):
         evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ("{tB, r0010, c0010} < {tB, r0020, c0010}", "error"),
+        ("{tB, r0010, c0010} < [b]", "error"),
+        ("{tB, r0030, c0010} >= [qT:a]", "error"),
+        ("{tB, r0010, c0010} = [b]", "failed"),
+    ],
+)
+def test_items_without_a_category_go_to_the_reference(
+    expression: str, expected: str
+) -> None:
+    table = TableLayout("B", rows=("0010", "0020", "0030"), columns=("0010",))
+    provider = MemoryProvider(
+        [table],
+        {
+            ("B", "0010", "0010", None, ()): Item(None, "a"),
+            ("B", "0020", "0010", None, ()): Item(None, "b"),
+            ("B", "0030", "0010", None, ()): "a",
+        },
+    )
+    assert evaluate_rule(expression, provider).status == expected
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))

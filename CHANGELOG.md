@@ -44,6 +44,9 @@ All notable changes to this project are documented here. The project follows
   numbers, `and`/`not`/`abs` on the wrong type, mixed `max`/`min` groups) to
   the reference evaluator, which fails only the records concerned.
 - A non-Boolean condition of a keyed `if` fails only its records.
+- The columnar evaluator no longer orders items without a category as text;
+  item literals in `<`, `<=`, `>`, `>=` and such items in the data go to the
+  reference evaluator, which reports the error.
 
 ### Performance
 

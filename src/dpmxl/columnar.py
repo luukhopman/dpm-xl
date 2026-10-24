@@ -246,8 +246,8 @@ def frame_from_points(
         pl.DataFrame: One row per point.
 
     Raises:
-        ColumnarUnsupported: For numeric or Boolean key values, or numbers
-            ``Decimal(38, 12)`` does not hold.
+        ColumnarUnsupported: For numeric or Boolean key values, items
+            without a category, or numbers ``Decimal(38, 12)`` does not hold.
     """
     key_names: list[str] = list(open_keys)
     for point in points:
@@ -266,6 +266,10 @@ def frame_from_points(
                 # Key columns are text, which would compare "10" with 10.
                 raise ColumnarUnsupported(f"{type_name(value)} key {name}")
             row[_key(name)] = _key_text(value)
+        if isinstance(point.value, Item) and point.value.category is None:
+            # Its text has no category separator, so nothing would stop the
+            # txt column from ordering it as text.
+            raise ColumnarUnsupported("item without a category")
         row.update(value_columns(point.value))
         rows.append(row)
     schema: dict[str, Any] = {
@@ -534,6 +538,7 @@ class ColumnarEvaluator:
                     spine.append(spine[-1].left)
                 frame = self.evaluate(spine[-1].left, context)
                 for current in reversed(spine):
+                    _binary_nodes(current)
                     frame = _binary(
                         current.op, frame, self.evaluate(current.right, context)
                     )
@@ -1017,6 +1022,20 @@ def _binary(op: str, left: Frame, right: Frame) -> Frame:
     raise ColumnarUnsupported(f"operator {op}")
 
 
+def _binary_nodes(node: Binary) -> None:
+    """Leave ordering an item literal to the reference evaluator.
+
+    Raises:
+        _RecordError: For ``<``, ``<=``, ``>`` or ``>=`` with an item
+            literal, which the ``txt`` column would order as text.
+    """
+    if node.op in {"<", "<=", ">", ">="} and any(
+        isinstance(side, Literal_) and side.kind == "item"
+        for side in (node.left, node.right)
+    ):
+        raise _RecordError(f"items do not support {node.op!r}")
+
+
 def _divide(frames: Sequence[Frame]) -> Frame:
     keys, df = _joined(frames)
     if df.height == 0:
@@ -1117,7 +1136,8 @@ def _compare(op: str, frames: Sequence[Frame]) -> Frame:
         _require_text_or_items(df, [_item_ambiguity(ta, tb)])
     else:
         # Items are not ordered; text and dates are. The txt column holds all
-        # three, so only text without a category separator is safe here.
+        # three: values with a category separator may be items. Items without
+        # a category never get here (see _binary_nodes and frame_from_points).
         colon = (ta.str.contains(":", literal=True)) | tb.str.contains(
             ":", literal=True
         )

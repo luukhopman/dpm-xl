@@ -1,15 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="dpm-xl">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#4F46E5"/>
-      <stop offset="1" stop-color="#7C3AED"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="14" fill="url(#g)"/>
-  <g fill="#fff" fill-opacity=".18">
-    <rect x="14" y="14" width="10" height="10" rx="2.5"/><rect x="27" y="14" width="10" height="10" rx="2.5"/><rect x="40" y="14" width="10" height="10" rx="2.5"/>
-    <rect x="14" y="27" width="10" height="10" rx="2.5"/><rect x="27" y="27" width="10" height="10" rx="2.5"/><rect x="40" y="27" width="10" height="10" rx="2.5"/>
-    <rect x="14" y="40" width="10" height="10" rx="2.5"/><rect x="27" y="40" width="10" height="10" rx="2.5"/><rect x="40" y="40" width="10" height="10" rx="2.5"/>
+  <style>.m{stroke:#4F46E5}.f{fill:#4F46E5}@media (prefers-color-scheme:dark){.m{stroke:#818CF8}.f{fill:#818CF8}}</style>
+  <g class="m" fill="none" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 10c-5 0-7 3-7 7v8c0 4-2 7-6 7 4 0 6 3 6 7v8c0 4 2 7 7 7"/>
+    <path d="M46 10c5 0 7 3 7 7v8c0 4 2 7 6 7-4 0-6 3-6 7v8c0 4-2 7-7 7"/>
+    <path d="M23 33l6 6 12-13"/>
   </g>
-  <path d="M19 33.5l8.5 8.5L45.5 23" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

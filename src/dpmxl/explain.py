@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
-from decimal import Decimal, localcontext
+from decimal import ROUND_DOWN, ROUND_HALF_EVEN, Decimal, localcontext
 from functools import lru_cache
 from typing import Literal, cast
 
@@ -45,7 +45,7 @@ from .ast import (
 )
 from .evaluator import AGGREGATES, Evaluation
 from .provider import DataPoint
-from .recordset import unique_points
+from .recordset import resolve_key, unique_points
 from .values import (
     DECIMAL_CONTEXT,
     Number,
@@ -213,7 +213,7 @@ def _comparison(
             tolerance = format_decimal(_round_threshold(width))
             distance = _gap(node.op, left_value, right_value)
             if distance is not None and distance > 0:
-                gap = format_decimal(_round_threshold(distance, at_least=distance))
+                gap = format_decimal(_round_threshold(distance, gap=True))
                 summary += f", at least {gap} given the reported precision"
     return Explanation(
         formula=formula,
@@ -233,23 +233,25 @@ def _comparison(
     )
 
 
-def _round_threshold(width: Decimal, *, at_least: Decimal | None = None) -> Decimal:
+def _round_threshold(width: Decimal, *, gap: bool = False) -> Decimal:
     """Round an interval width for display: 82.477425 reads 82.5, 0.0001 stays.
 
     Args:
         width: The exact width.
-        at_least: Keep at least this value's integer part (for gaps).
+        gap: Round a gap, which the summary calls a minimum: down, keeping
+            every integer digit, so that 5.46 reads 5.4, never 5.5.
 
     Returns:
-        Decimal: The width to two significant digits, at least one decimal.
+        Decimal: The width to two significant digits (one decimal for a gap
+        of at least one), at least one decimal.
     """
     if not width:
         return width
-    if at_least is not None and abs(at_least) >= 1:
-        return round(width, 1).normalize()
-    exponent = width.adjusted()
-    places = max(1, 1 - exponent)
-    return round(width, places)
+    rounding = ROUND_DOWN if gap else ROUND_HALF_EVEN
+    if gap and abs(width) >= 1:
+        return width.quantize(Decimal("0.1"), rounding).normalize()
+    places = max(1, 1 - width.adjusted())
+    return width.quantize(Decimal(1).scaleb(-places), rounding)
 
 
 def _gap(op: str, left: Number, right: Number) -> Decimal | None:
@@ -324,14 +326,40 @@ class _Formatter:
         self._rendered: dict[tuple[int, bool], str] = {}
         # What follows from the tree alone, shared by the rule's failures.
         self._shapes = evaluation.shapes
+        renames = self._shapes.get(("renames", id(evaluation.root)))
+        if renames is None:
+            renames = self._shapes["renames", id(evaluation.root)] = _renames(
+                evaluation.root
+            )
+        self._renames: dict[int, tuple[Rename, ...]] = renames
 
     # Values -------------------------------------------------------------
 
     def records(self, node: Node) -> list:
         records = self._records.get(id(node))
         if records is None:
-            records = self._records[id(node)] = self.evaluation.value_at(node, self.key)
+            records = self._records[id(node)] = self.evaluation.value_at(
+                node, self._binding(node)
+            )
         return records
+
+    def _binding(self, node: Node) -> Mapping[str, Hashable]:
+        """Return the failing record's key as the node names it.
+
+        Below ``[rename a to b]`` the key ``b`` is still called ``a``.
+
+        Returns:
+            Mapping[str, Hashable]: The key binding.
+        """
+        binding = self.key
+        for rename in self._renames.get(id(node), ()):
+            operand = self.evaluation.trace.get(id(rename.operand))
+            keys = operand.keys if operand is not None else ()
+            binding = dict(binding)
+            for old, new in reversed(rename.pairs):
+                if new in binding:
+                    binding[resolve_key(old, keys) or old] = binding.pop(new)
+        return binding
 
     def value(self, node: Node) -> Value | None:
         records = self.records(node)
@@ -555,10 +583,56 @@ class _Formatter:
         parenthesized = self._shapes.get(("parenthesized", id(node)))
         if parenthesized is None:
             start, end = node.span
-            text = self.expression[start:end].strip()
-            parenthesized = text.startswith("(") and text.endswith(")")
+            parenthesized = _grouped(self.expression[start:end].strip())
             self._shapes["parenthesized", id(node)] = parenthesized
         return parenthesized
+
+
+def _renames(root: Node) -> dict[int, tuple[Rename, ...]]:
+    """Map each node below a rename to the renames above it, outermost first.
+
+    Returns:
+        dict[int, tuple[Rename, ...]]: Renames by node id; nodes without any
+        are left out.
+    """
+    found: dict[int, tuple[Rename, ...]] = {}
+    pending: list[tuple[Node, tuple[Rename, ...]]] = [(root, ())]
+    while pending:
+        node, above = pending.pop()
+        if above:
+            found[id(node)] = above
+        if isinstance(node, Rename):
+            above = (*above, node)
+        pending.extend((child, above) for child in children(node))
+    return found
+
+
+def _grouped(text: str) -> bool:
+    """Whether parentheses enclose the whole text.
+
+    ``(a + b) * (c - d)`` starts and ends with a parenthesis without being
+    enclosed: the first one closes after ``b``.
+
+    Returns:
+        bool: True for ``(...)`` around the whole text.
+    """
+    if not text.startswith("(") or not text.endswith(")"):
+        return False
+    depth = 0
+    quote: str | None = None
+    for index, char in enumerate(text):
+        if quote:
+            if char == quote:
+                quote = None
+        elif char in "\"'":
+            quote = char
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return index == len(text) - 1
+    return False
 
 
 def _flatten_additive(node: Node) -> list[tuple[int, Node]]:

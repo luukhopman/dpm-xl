@@ -13,6 +13,7 @@ from dpmxl import (
     evaluate_rule,
     explain,
 )
+from dpmxl.explain import MINUS, TIMES
 from dpmxl.provider import CellKey
 from dpmxl.recordset import unique_points
 from dpmxl.values import format_decimal
@@ -496,3 +497,38 @@ def test_where_and_widening_if_scale_with_distinct_keys() -> None:
     rule = "count({tO, r0010, c0010} [where qA = wanted and qA in {'a1', 'a2'}]) = 100"
     assert evaluate_rule(rule, provider).status == "passed"
     assert calls == ["wanted"] * 3
+
+
+def test_explanations_round_gaps_down_and_keep_source_parentheses() -> None:
+    provider = closed({("0010", "0010"): "10.00", ("0020", "0010"): "4.53"}, decimals=2)
+    rule = "with {tC_01.00, c0010, interval: true}: {r0010} = {r0020}"
+    result = evaluate_rule(rule, provider)
+    explanation = explain(_traced(result), rule, result.failures[0].key)
+    # The intervals are 5.46 apart: "at least 5.5" would overstate it.
+    assert explanation.gap == "5.4"
+
+    provider = closed({("0010", "0010"): 100, ("0020", "0010"): 60})
+    rule = (
+        "with {tC_01.00, c0010, default: 0}: "
+        "{r0010} = ({r0020} + {r0030}) * ({r0010} - {r0030})"
+    )
+    result = evaluate_rule(rule, provider)
+    explanation = explain(_traced(result), rule, result.failures[0].key)
+    assert explanation.filled == f"100 = (60 + 0) {TIMES} (100 {MINUS} 0)"
+
+
+def test_explanations_follow_keys_through_rename() -> None:
+    table = TableLayout("O", rows=("0010",), columns=("0010",), open_keys=("qKEY",))
+    provider = MemoryProvider(
+        [table],
+        {
+            ("O", "0010", "0010", None, (("qKEY", key),)): Number.of(value, 0)
+            for key, value in (("a", 1), ("b", 200))
+        },
+    )
+    rule = "with {tO, c0010}: {r0010} [rename KEY to qX] > 100"
+    result = evaluate_rule(rule, provider)
+    assert [failure.key for failure in result.failures] == [{"qX": "a"}]
+    explanation = explain(_traced(result), rule, result.failures[0].key)
+    assert explanation.summary == "1 should exceed 100: difference 99"
+    assert len(explanation.operands[0].points) == 1

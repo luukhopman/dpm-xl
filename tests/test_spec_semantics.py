@@ -204,3 +204,20 @@ def test_clauses_on_a_selection_override_the_context_where_on_their_key() -> Non
         result = evaluate_rule(context + body, data)
         assert result.status == expected, body
         assert len(result.outcomes) == 1, body
+
+
+def test_if_without_else_knows_more_boolean_then_branches() -> None:
+    # 8.1.6: without else, a Boolean thenExpression gives true where the
+    # condition is not true.
+    tables = [
+        TableLayout("A", rows=("0010",), columns=("0010",)),
+        TableLayout("B", rows=("0010",), columns=("0010",)),
+    ]
+    flags = MemoryProvider(tables, {("B", "0010", "0010", None, ()): False})
+    for rule in [
+        "if {v_A} then {v_B} endif",
+        "if {v_A} then nvl({tB, r0010, c0010}, false) endif",
+        "if {v_A} then {tB, r0010, c0010} endif",
+    ]:
+        result = evaluate_rule(rule, flags)
+        assert result.counts == {"passed": 1, "failed": 0, "null": 0}, rule

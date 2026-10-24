@@ -534,11 +534,13 @@ class ColumnarEvaluator:
                     self.evaluate(operand, context), values, self, context
                 )
             case If(condition=condition, then=then, otherwise=otherwise):
+                verdicts = self.evaluate(condition, context)
+                outcome = self._branch(then, context)
                 return _conditional(
-                    self.evaluate(condition, context),
-                    self._branch(then, context),
+                    verdicts,
+                    outcome,
                     self._branch(otherwise, context) if otherwise is not None else None,
-                    boolean_then=is_boolean(then),
+                    boolean_then=is_boolean(then) or FLAG in outcome.kinds,
                 )
             case Call():
                 return self._call(node, context)

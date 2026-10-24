@@ -72,6 +72,8 @@ EXPRESSIONS = [
     "not(isnull({tT, r0010, c0010})) and isnull({tT, r0010, c0020, default: null}) = false",
     "{tO, r0010, c0010} in {0, 10}",
     "true > false",
+    "if {v_T} then {v_E} endif",
+    "if {tT, r0010, c0010} > 500 then isnull({tE, r0010, c0010}) endif",
     "with {tE, default: 0, interval: true}: {r0010, c0010} = sum({r0020, c0010} group by GCC)",
     "if not isnull({tE, r0010, c0010}) then {tE, r0020, c0010} > 0 endif",
     "{tT, r0010, c0010} = time_shift({tT, r0010, c0010}, A, 1, refPeriod)",

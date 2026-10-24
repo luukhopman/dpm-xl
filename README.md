@@ -93,8 +93,8 @@ European Banking Authority.
   that record reaches the result (`if {x} != 0 then {y} / {x} > 1 endif` is
   not).
 - **Conditionals.** `if` takes the `else` branch when the condition is null;
-  without `else`, a Boolean `then` yields true where the condition is false or
-  null. The result has the condition's record structure; branch keys the
+  without `else`, a Boolean `then` (`{v_…}` and Boolean facts included)
+  yields true where the condition is false or null. The result has the condition's record structure; branch keys the
   condition lacks widen it, so each condition record applies to every branch
   record sharing its keys (the columnar evaluator hands that case to the
   reference evaluator).

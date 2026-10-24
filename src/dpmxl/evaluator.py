@@ -315,13 +315,23 @@ class Evaluator:
             case SetLiteral():
                 raise EvaluationError("a set can only follow 'in'")
             case If(condition=condition, then=then, otherwise=otherwise):
+                verdicts = self.evaluate(condition, context, bindings)
+                outcome = self.evaluate(then, context, bindings)
                 return conditional(
-                    self.evaluate(condition, context, bindings),
-                    self.evaluate(then, context, bindings),
+                    verdicts,
+                    outcome,
                     self.evaluate(otherwise, context, bindings)
                     if otherwise is not None
                     else None,
-                    boolean_then=is_boolean(then),
+                    # A selection of Boolean facts is Boolean too.
+                    boolean_then=is_boolean(then)
+                    or (
+                        otherwise is None
+                        and any(
+                            isinstance(record.value, bool)
+                            for record in outcome.records.values()
+                        )
+                    ),
                 )
             case Call():
                 return self._call(node, context, bindings)
@@ -772,13 +782,19 @@ def is_boolean(node: Node) -> bool:
 
     Returns:
         bool: True for comparisons, logical operators, ``in``, ``isnull``,
-        ``match``, Boolean literals and conditionals of those.
+        ``match``, ``{v_TABLE}``, Boolean literals, and conditionals, ``nvl``,
+        ``filter`` and clauses of those. A selection's type depends on the
+        data, which :func:`conditional` callers check instead.
     """
     match node:
         case Binary(op=op):
             return op in _COMPARISONS or op in _BOOLEAN
-        case Unary(op="not") | In():
+        case Unary(op="not") | In() | TableReported():
             return True
+        case Call(name="nvl", args=args):
+            return any(is_boolean(arg) for arg in args)
+        case Call(name="filter", args=(data, *_)):
+            return is_boolean(data)
         case Call(name=name):
             return name in {"isnull", "match"}
         case Literal_(kind="boolean"):
@@ -787,6 +803,8 @@ def is_boolean(node: Node) -> bool:
             return is_boolean(then)
         case With(body=body):
             return is_boolean(body)
+        case Where(operand=operand) | Sub(operand=operand) | Rename(operand=operand):
+            return is_boolean(operand)
     return False
 
 

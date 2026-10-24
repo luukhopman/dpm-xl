@@ -13,6 +13,9 @@ collapse to ``+ 0 (x13)``.
 Failures that are not comparisons (a value that must be reported, must be
 empty, must be one of a set, or must match a pattern) get a sentence of their
 own.
+
+Explanation and error wording may improve in minor releases; field names and
+``kind`` values may not.
 """
 
 from __future__ import annotations
@@ -93,6 +96,7 @@ VERBS = {
     ">": "should exceed",
     ">=": "should be at least",
 }
+"""The verb of a failing comparison's summary, by comparison operator."""
 _ZERO_RUN = 3
 
 Kind = Literal[
@@ -103,7 +107,13 @@ Direction = Literal["too_high", "too_low"]
 
 @dataclass(frozen=True, slots=True)
 class Operand:
-    """One leaf operand of a failing record with its value and cells."""
+    """One leaf operand of a failing record with its value and cells.
+
+    Attributes:
+        source: The operand's text, such as ``{r0020}``.
+        value: Its formatted value, such as ``1,180``.
+        points: The cells it read.
+    """
 
     source: str
     value: str
@@ -112,7 +122,14 @@ class Operand:
 
 @dataclass(frozen=True, slots=True)
 class Side:
-    """One side of the failing comparison."""
+    """One side of the failing comparison.
+
+    Attributes:
+        formula: The side's formula, such as ``{r0020} + {r0030}``.
+        filled: The formula with values, such as ``1,180 + 17``.
+        value: The side's formatted value.
+        points: The cells it read.
+    """
 
     formula: str
     filled: str
@@ -133,7 +150,30 @@ class Side:
 
 @dataclass(frozen=True, slots=True)
 class Explanation:
-    """Human-readable account of one evaluated record."""
+    """Human-readable account of one evaluated record.
+
+    Fields whose value is formatted text (``difference``, ``gap``,
+    ``tolerance``, the sides' values) are strings, ready for display.
+
+    Attributes:
+        formula: The rule body as rendered from the tree, such as
+            ``{r0010} = {r0020} + {r0030}``.
+        filled: The formula with the record's values, such as
+            ``1,204 = 1,180 + 17``.
+        summary: One sentence for a person, such as
+            ``1,204 should equal 1,197 (1,180 + 17): difference 7``.
+        operands: Every leaf operand with its value and cells.
+        difference: For a comparison, the absolute difference of the sides.
+        kind: ``comparison``, ``missing`` (a value must be reported),
+            ``not_empty`` (a value must be empty), ``membership`` (a value
+            must be one of a set), ``format`` (a value must match a pattern)
+            or ``condition`` (anything else).
+        relation: The failing comparison operator, such as ``=``.
+        verb: The summary's verb from [`VERBS`][dpmxl.explain.VERBS].
+        left: The left side of a failing comparison.
+        right: The right side of a failing comparison.
+        tolerance: The sum of both sides' thresholds; ``None`` when exact.
+    """
 
     formula: str
     filled: str
@@ -162,12 +202,38 @@ def explain(
     """Explain the record of ``evaluation`` identified by ``key``.
 
     Args:
-        evaluation: A traced evaluation from :class:`dpmxl.evaluator.Evaluator`.
+        evaluation: A traced evaluation, such as
+            [`RuleResult.evaluation`][dpmxl.evaluator.RuleResult] from
+            [`evaluate_rule`][dpmxl.evaluator.evaluate_rule] (with the default
+            ``trace=True``).
         expression: The source text the tree was parsed from.
-        key: The record key, as in :attr:`dpmxl.evaluator.Outcome.key`.
+        key: The record key, as in [`Outcome.key`][dpmxl.evaluator.Outcome].
 
     Returns:
         Explanation: Summary sentence, formula, filled formula and operands.
+
+    Examples:
+        >>> from dpmxl import MemoryProvider, Number, TableLayout, evaluate_rule
+        >>> layout = TableLayout("T", rows=("0010", "0020", "0030"), columns=("0010",))
+        >>> provider = MemoryProvider([layout], {
+        ...     ("T", "0010", "0010", None, ()): Number.of(1204, 0),
+        ...     ("T", "0020", "0010", None, ()): Number.of(1180, 0),
+        ...     ("T", "0030", "0010", None, ()): Number.of(17, 0),
+        ... })
+        >>> expression = (
+        ...     "with {tT, c0010, interval: true}: {r0010} = {r0020} + {r0030}"
+        ... )
+        >>> result = evaluate_rule(expression, provider)
+        >>> explanation = explain(result.evaluation, expression, result.failures[0].key)
+        >>> print(explanation.summary)  # doctest: +NORMALIZE_WHITESPACE
+        1,204 should equal 1,197 (1,180 + 17): difference 7, at least 5.5 given the
+        reported precision
+        >>> explanation.filled, explanation.gap, explanation.direction
+        ('1,204 = 1,180 + 17', '5.5', 'too_high')
+        >>> explanation.right.low, explanation.right.high
+        ('1,196', '1,198')
+        >>> [point.label() for point in explanation.primary]
+        ['{tT, r0010, c0010}']
     """
     with localcontext(DECIMAL_CONTEXT):
         return _explain(evaluation, expression, key)

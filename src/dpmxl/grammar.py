@@ -1,7 +1,7 @@
 """Machine-readable vocabulary of DPM-XL for editors and other tooling.
 
 The sets below are the words and symbols the tokenizer recognizes; the tests
-check that :func:`dpmxl.parser.tokenize` agrees with them. Words are lower
+check that [`tokenize`][dpmxl.parser.tokenize] agrees with them. Words are lower
 case; the tokenizer matches keywords in any case.
 """
 
@@ -138,6 +138,10 @@ def canonical_function(name: str) -> str:
     Returns:
         str: The lower-case name, with ``max_aggr`` and ``min_aggr`` read as
         ``max`` and ``min``.
+
+    Examples:
+        >>> canonical_function("max_aggr"), canonical_function("SUM")
+        ('max', 'sum')
     """
     folded = name.casefold()
     return FUNCTION_ALIASES.get(folded, folded)
@@ -149,7 +153,7 @@ CALL_NAMES = frozenset(
 """Every ``Call.name`` a known function parses to. Aggregates among them are
 ``{canonical_function(name) for name in AGGREGATE_FUNCTIONS}``, which equals
 ``dpmxl.evaluator.AGGREGATES``. Analytic functions (``rank``, and aggregates
-with ``over``) parse to :class:`dpmxl.ast.Analytic` instead of a call."""
+with ``over``) parse to [`Analytic`][dpmxl.ast.Analytic] instead of a call."""
 
 OPERATORS = frozenset(
     {
@@ -212,7 +216,7 @@ TOKEN_KINDS = frozenset(
         "variable",
     }
 )
-"""Every ``Token.kind`` that :func:`dpmxl.parser.tokenize` produces."""
+"""Every ``Token.kind`` that [`tokenize`][dpmxl.parser.tokenize] produces."""
 
 
 def _words(words: frozenset[str]) -> str:
@@ -230,6 +234,10 @@ def textmate_grammar() -> dict[str, Any]:
 
     Returns:
         dict[str, Any]: The grammar, ready for ``json.dump``.
+
+    Examples:
+        >>> textmate_grammar()["scopeName"]
+        'source.dpm-xl'
     """
     boundary = r"(?<![A-Za-z0-9_.])"
     end = r"(?![A-Za-z0-9_])"

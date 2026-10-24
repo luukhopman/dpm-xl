@@ -1,26 +1,87 @@
 """Vectorized DPM-XL evaluation on polars data frames.
 
-The record-by-record evaluator (:mod:`dpmxl.evaluator`) is the reference
-implementation; this module evaluates the same language with the same
-semantics on columnar data, so open tables with millions of rows evaluate in
-milliseconds per rule. A record set becomes a data frame:
+Needs the ``columnar`` extra (``pip install "dpm-xl[columnar]"``). The
+record-by-record evaluator ([`dpmxl.evaluator`][dpmxl.evaluator]) is the
+reference implementation; this module evaluates the same language with the
+same semantics on columnar data, so open tables with millions of rows evaluate
+in milliseconds per rule.
 
-* key columns ``k:<name>`` (``k:r``, ``k:c``, ``k:s`` for varying closed axes,
-  ``k:qEBB`` and the like for open keys), as canonical strings;
-* ``num`` and ``thr``: a ``Decimal(38, 12)`` value and its interval
-  threshold (Eurofiling ``iaf`` semantics, see :mod:`dpmxl.values`); sums
-  and differences are exact, products and quotients round to 12 decimals;
-* ``txt``: text, item (``category:code`` without ``eba_``) or ISO date values;
-* ``flag``: boolean values.
+Anything this module does not implement raises
+[`ColumnarUnsupported`][dpmxl.columnar.ColumnarUnsupported], and callers of
+[`evaluate_rule_columnar`][dpmxl.columnar.evaluate_rule_columnar] then fall
+back to the reference evaluator, so coverage never trades off correctness.
+That covers statements and assignments, set operators such as ``union``,
+analytic functions, the ``&`` operator, functions other than the aggregates,
+``filter``, ``abs``, ``isnull``, ``nvl``, ``match``, ``len`` and
+``min``/``max`` (so ``time_shift``, ``annualise``, ``substr``, the
+mathematical and the date functions), typed parameter, operation and
+table-group references, values that do not fit
+``Decimal(38, 12)``, arithmetic that would overflow it, any record error (a
+zero divisor or a type error, which the reference evaluator confines to its
+record) and ordering items and text that may be an item.
 
-A null value has all four value columns null. Operators natural-join their
-operands on shared keys exactly like :func:`dpmxl.recordset.combine`.
+Values are ``Decimal(38, 12)``: sums and differences are exact, products and
+quotients round to 12 decimals (thresholds of quotients round up), where the
+reference evaluator keeps 34 significant digits, so an exact comparison that
+hinges on the 13th decimal can differ.
 
-Anything this module does not implement raises :class:`ColumnarUnsupported`;
-:func:`evaluate_rule_columnar` callers then fall back to the reference
-evaluator, so coverage never trades off correctness. Values that do not fit
-``Decimal(38, 12)`` and arithmetic that would overflow it fall back the same
-way.
+## Frame schema
+
+A [`FrameProvider`][dpmxl.columnar.FrameProvider] returns one row per selected
+data point (closed cells times reported open key combinations) with these
+columns:
+
+| Column | Type | Content |
+| --- | --- | --- |
+| ``cell`` (``CELL``) | any | Opaque cell reference, returned in outcomes |
+| ``r``, ``c``, ``s`` | text or null | Raw closed coordinates |
+| ``k:<code>`` | text, may be categorical | One per open key (see below) |
+| ``num`` (``NUM``) | ``DEC`` = ``Decimal(38, 12)`` | Numeric value |
+| ``thr`` (``THR``) | ``DEC`` | Threshold, ``0.5·10^-decimals`` (0 if exact) |
+| ``txt`` (``TXT``) | text | Text, canonical item or ISO date value |
+| ``flag`` (``FLAG``) | Boolean | Boolean value |
+
+Open key columns hold text, canonical items (``category:code``, see
+[`canonical_item`][dpmxl.columnar.canonical_item]) or ISO dates.
+
+[`VALUE_COLUMNS`][dpmxl.columnar.VALUE_COLUMNS] is ``(num, thr, txt, flag)``;
+all four are null for a cell with no fact, and
+[`value_columns`][dpmxl.columnar.value_columns] maps one Python value to them.
+A cell and open-key combination appears at most once, and a cell's
+coordinates are the same on every row. String columns may be categorical,
+which keeps large selections compact.
+[`PointsFrameProvider`][dpmxl.columnar.PointsFrameProvider] builds such frames
+from any [`DataProvider`][dpmxl.provider.DataProvider].
+
+Inside the evaluator a record set is a [`Frame`][dpmxl.columnar.Frame]: key
+columns ``k:<name>`` (``k:r``, ``k:c``, ``k:s`` for varying closed axes, open
+keys such as ``k:qEBB``) as canonical strings, plus the same value columns.
+Operators natural-join their operands on shared keys exactly like
+[`combine`][dpmxl.recordset.combine].
+
+## Threads
+
+[`evaluate_rule_columnar`][dpmxl.columnar.evaluate_rule_columnar] may run
+concurrently on one report from several threads (polars releases the GIL).
+[`FrameCache`][dpmxl.columnar.FrameCache] is thread-safe and builds each
+selection once while other threads asking for it wait for that build. A
+provider shared across threads must be safe to read concurrently;
+[`PointsFrameProvider`][dpmxl.columnar.PointsFrameProvider] over a
+[`MemoryProvider`][dpmxl.provider.MemoryProvider] is.
+
+Examples:
+    >>> from dpmxl import MemoryProvider, Number, TableLayout
+    >>> from dpmxl.columnar import PointsFrameProvider, evaluate_rule_columnar
+    >>> layout = TableLayout("T", rows=("0010", "0020"), columns=("0010",))
+    >>> provider = MemoryProvider([layout], {
+    ...     ("T", "0010", "0010", None, ()): Number.of(5, 0),
+    ...     ("T", "0020", "0010", None, ()): Number.of(-2, 0),
+    ... })
+    >>> result = evaluate_rule_columnar(
+    ...     "{tT, r*, c0010} >= 0", PointsFrameProvider(provider)
+    ... )
+    >>> result.status, result.passed, result.failed, result.failing_keys
+    ('failed', 1, 1, [{'r': '0020'}])
 """
 
 from __future__ import annotations
@@ -78,12 +139,20 @@ from .recordset import STANDARD_KEYS, EvaluationError, UnsupportedError, resolve
 from .values import Number, Value, type_name
 
 DEC = pl.Decimal(38, 12)
+"""The polars type of the ``num`` and ``thr`` columns: ``Decimal(38, 12)``."""
 NUM = "num"
+"""Name of the numeric value column."""
 THR = "thr"
+"""Name of the column holding the interval threshold of ``num``."""
 TXT = "txt"
+"""Name of the text column: text, canonical items and ISO dates."""
 FLAG = "flag"
+"""Name of the Boolean value column."""
 VALUE_COLUMNS = (NUM, THR, TXT, FLAG)
+"""The four value columns, ``("num", "thr", "txt", "flag")``; all null for a
+cell with no fact."""
 CELL = "cell"
+"""Name of the opaque cell-reference column."""
 ZERO = Decimal(0)
 _SCALE = Decimal("1e-12")
 
@@ -91,7 +160,13 @@ Status = Literal["passed", "failed", "not_applicable", "error", "unsupported"]
 
 
 class ColumnarUnsupported(Exception):
-    """The expression needs the reference evaluator."""
+    """The expression needs the reference evaluator.
+
+    Raised by [`evaluate_rule_columnar`][dpmxl.columnar.evaluate_rule_columnar]
+    and the frame helpers for anything this module does not evaluate exactly;
+    catch it and call [`evaluate_rule`][dpmxl.evaluator.evaluate_rule]
+    instead.
+    """
 
 
 class _RecordError(ColumnarUnsupported):
@@ -104,8 +179,9 @@ class _RecordError(ColumnarUnsupported):
 
 
 class FrameProvider(Protocol):
-    """Columnar report data for :class:`ColumnarEvaluator`.
+    """Columnar report data for the columnar evaluator.
 
+    The columnar counterpart of [`DataProvider`][dpmxl.provider.DataProvider].
     ``select_frame`` returns one row per selected data point (closed cells
     times reported open key combinations) with columns ``cell`` (an opaque
     cell reference), ``r``, ``c``, ``s`` (raw coordinates or null),
@@ -113,25 +189,39 @@ class FrameProvider(Protocol):
     columns ``num``, ``thr``, ``txt``, ``flag`` (all null when the cell was
     not reported). A cell and open key combination appears at most once, and
     a cell's coordinates are the same on every row. String columns may be
-    categorical, which keeps large selections compact.
+    categorical, which keeps large selections compact. See the frame schema
+    in the [`dpmxl.columnar`][dpmxl.columnar] module documentation.
     """
 
     def select_frame(self, query: CellQuery) -> pl.DataFrame:
-        """Return the selected data points as a frame."""
+        """Return the selected data points as a frame.
+
+        Raises:
+            LookupError: If the table does not exist in the release.
+        """
         ...
 
     def table_reported(self, table: str) -> bool | None:
-        """Answer ``{v_TABLE}``."""
+        """Answer ``{v_TABLE}``: whether the report's filing indicators include it.
+
+        Returns ``None`` when the provider cannot tell.
+        """
         ...
 
     def parameter(self, name: str) -> Value:
-        """Return a report parameter."""
+        """Return a report parameter such as ``refPeriod``, or ``None``."""
         ...
 
 
 @dataclass(frozen=True)
 class Frame:
-    """A record set: key names plus a frame of key and value columns."""
+    """A record set: key names plus a frame of key and value columns.
+
+    Attributes:
+        keys: Key names, such as ``("c",)`` or ``("qCPI",)``.
+        df: One row per record: a ``k:<name>`` column per key and the value
+            columns ``num``, ``thr``, ``txt`` and ``flag``.
+    """
 
     keys: tuple[str, ...]
     df: pl.DataFrame
@@ -165,6 +255,11 @@ def canonical_item(item: Item) -> str:
 
     Returns:
         str: The canonical form used in ``txt`` and open key columns.
+
+    Examples:
+        >>> from dpmxl import Item
+        >>> canonical_item(Item.parse("eba_qEC:qx01"))
+        'qEC:qx01'
     """
     return f"{item.category}:{item.code}" if item.category else item.code
 
@@ -172,8 +267,19 @@ def canonical_item(item: Item) -> str:
 def value_columns(value: Value) -> dict[str, Any]:
     """Split a scalar value into the four value columns.
 
+    Numbers fill ``num`` and ``thr``; Booleans ``flag``; text, items
+    (canonical, see [`canonical_item`][dpmxl.columnar.canonical_item]) and
+    dates (ISO) ``txt``. ``None`` leaves all four null.
+
     Returns:
         dict[str, Any]: ``num``, ``thr``, ``txt`` and ``flag`` entries.
+
+    Examples:
+        >>> from dpmxl import Number
+        >>> value_columns(Number.of("1.5", 1))
+        {'num': Decimal('1.5'), 'thr': Decimal('0.05'), 'txt': None, 'flag': None}
+        >>> value_columns(True)
+        {'num': None, 'thr': None, 'txt': None, 'flag': True}
 
     Raises:
         ColumnarUnsupported: For a number or threshold that ``Decimal(38, 12)``
@@ -224,10 +330,11 @@ def _exact(value: Decimal) -> Decimal:
 
 
 def scalar_frame(value: Value) -> Frame:
-    """Build a key-less one-row frame.
+    """Build a key-less one-row frame holding one value.
 
     Returns:
-        Frame: The scalar.
+        Frame: The scalar, with the columns of
+        [`value_columns`][dpmxl.columnar.value_columns].
     """
     return Frame((), pl.DataFrame([value_columns(value)], schema=_VALUE_SCHEMA))
 
@@ -238,7 +345,12 @@ _VALUE_SCHEMA = {NUM: DEC, THR: DEC, TXT: pl.String, FLAG: pl.Boolean}
 def frame_from_points(
     points: Sequence[DataPoint], open_keys: Sequence[str] = ()
 ) -> pl.DataFrame:
-    """Adapt :class:`DataPoint` objects to the :class:`FrameProvider` layout.
+    """Adapt data points to the frame layout of a ``FrameProvider``.
+
+    Builds the columns described by
+    [`FrameProvider`][dpmxl.columnar.FrameProvider] from
+    [`DataPoint`][dpmxl.provider.DataPoint] objects; ``cell`` holds
+    ``repr(point.ref)``.
 
     Args:
         points: Selected data points.
@@ -339,13 +451,31 @@ def _key_text(value: Any) -> str | None:
 
 
 class PointsFrameProvider:
-    """Adapt any :class:`dpmxl.DataProvider` to :class:`FrameProvider`."""
+    """Adapt any ``DataProvider`` to ``FrameProvider``.
+
+    Each ``select_frame`` call converts the wrapped
+    [`DataProvider`][dpmxl.provider.DataProvider]'s points with
+    [`frame_from_points`][dpmxl.columnar.frame_from_points]; the other methods
+    delegate. It is as thread-safe as the wrapped provider.
+
+    Examples:
+        >>> from dpmxl import CellQuery, MemoryProvider, Number, TableLayout
+        >>> layout = TableLayout("T", columns=("0010",), open_keys=("qCPI",))
+        >>> provider = MemoryProvider(
+        ...     [layout], {("T", None, "0010", None, (("qCPI", "A"),)): Number.of(7, 0)}
+        ... )
+        >>> frame = PointsFrameProvider(provider).select_frame(CellQuery("T"))
+        >>> frame.columns
+        ['cell', 'r', 'c', 's', 'k:qCPI', 'num', 'thr', 'txt', 'flag']
+        >>> frame.select("k:qCPI", "num", "thr").row(0)
+        ('A', Decimal('7.000000000000'), Decimal('0.500000000000'))
+    """
 
     def __init__(self, provider: Any) -> None:
         """Wrap a record provider.
 
         Args:
-            provider: A :class:`dpmxl.DataProvider`.
+            provider: A [`DataProvider`][dpmxl.provider.DataProvider].
         """
         self.provider = provider
 
@@ -384,10 +514,11 @@ class FrameCache:
     can hold millions of rows, so the cache keeps at most ``max_rows`` rows
     and evicts the least recently used selections beyond that.
 
-    Rules may be evaluated concurrently from several threads (polars releases
-    the GIL): the cache is thread-safe, and :meth:`raw_frame` and
-    :meth:`selection` build each missing entry once while other threads
-    asking for it wait for that build.
+    Rules may be evaluated concurrently from several threads (polars
+    releases the GIL): the cache is thread-safe, and
+    [`raw_frame`][dpmxl.columnar.FrameCache.raw_frame] and
+    [`selection`][dpmxl.columnar.FrameCache.selection] build each missing
+    entry once while other threads asking for it wait for that build.
     """
 
     def __init__(self, max_rows: int = 20_000_000) -> None:
@@ -521,7 +652,15 @@ class FrameCache:
 
 
 class ColumnarEvaluator:
-    """Evaluate one expression tree on frames."""
+    """Evaluate one expression tree on frames.
+
+    Most callers want
+    [`evaluate_rule_columnar`][dpmxl.columnar.evaluate_rule_columnar], which
+    also applies the precondition and turns the result into counts.
+    ``evaluate`` raises [`ColumnarUnsupported`][dpmxl.columnar.ColumnarUnsupported]
+    for anything it does not implement. Use one evaluator per expression; the
+    [`FrameCache`][dpmxl.columnar.FrameCache] is what rules share.
+    """
 
     def __init__(
         self, provider: FrameProvider, cache: FrameCache | None = None
@@ -787,7 +926,7 @@ def _literal_value(node: Literal_) -> Value:
 
 
 def normalize_code_expr(column: pl.Expr) -> pl.Expr:
-    """Vectorized :func:`dpmxl.provider.normalize_code`.
+    """Vectorized [`normalize_code`][dpmxl.provider.normalize_code].
 
     Returns:
         pl.Expr: Numeric codes zero-padded to four digits, others upper-case.
@@ -1615,7 +1754,22 @@ def _key_text_column(key: str) -> pl.Expr:
 
 @dataclass
 class ColumnarResult:
-    """Outcome of one rule evaluated on frames."""
+    """Outcome of one rule evaluated on frames.
+
+    Unlike [`RuleResult`][dpmxl.evaluator.RuleResult] it carries no
+    evaluation trace: to explain a failure, evaluate the rule with
+    [`evaluate_rule`][dpmxl.evaluator.evaluate_rule] (``only_keys`` limits it
+    to the failing keys) and call [`explain`][dpmxl.explain.explain].
+
+    Attributes:
+        status: ``passed``, ``failed``, ``not_applicable``, ``error`` or
+            ``unsupported``, as for [`RuleResult`][dpmxl.evaluator.RuleResult].
+        message: Why the status is ``error``, ``unsupported`` or
+            ``not_applicable``.
+        passed: Number of records that hold.
+        failed: Number of records that fail.
+        null: Number of records whose result is null (not evaluated).
+    """
 
     status: Status
     message: str | None = None
@@ -1639,11 +1793,47 @@ def evaluate_rule_columnar(
 ) -> ColumnarResult:
     """Evaluate a validation rule on frames, honouring its precondition.
 
+    The columnar counterpart of [`evaluate_rule`][dpmxl.evaluator.evaluate_rule]:
+    the same statuses and counts, and failing keys in canonical form (see
+    [`canonical_key`][dpmxl.columnar.canonical_key]). Syntax and evaluation
+    errors are returned as status ``error``, not raised. It may run
+    concurrently from several threads with a shared ``cache``.
+
+    Args:
+        expression: Rule expression text or a parsed tree.
+        provider: Columnar report data.
+        precondition: Optional precondition; the rule is not applicable
+            unless it yields at least one true record.
+        cache: Selections shared by the rules of one report; a new cache per
+            call when omitted.
+        max_failing_keys: How many failing keys to list in
+            ``failing_keys``; ``failing_frame`` has them all.
+
     Returns:
         ColumnarResult: Status, record counts and the keys of failing records.
 
     Raises:
         ColumnarUnsupported: When the reference evaluator must run instead.
+
+    Examples:
+        Fall back to the reference evaluator when needed:
+
+        >>> from dpmxl import MemoryProvider, Number, TableLayout, evaluate_rule
+        >>> provider = MemoryProvider(
+        ...     [TableLayout("T", rows=("0010",), columns=("0010",))],
+        ...     {("T", "0010", "0010", None, ()): Number.of(3, 0)},
+        ... )
+        >>> def run(expression):
+        ...     try:
+        ...         return evaluate_rule_columnar(
+        ...             expression, PointsFrameProvider(provider)
+        ...         ).status
+        ...     except ColumnarUnsupported:
+        ...         return evaluate_rule(expression, provider).status
+        >>> run("{tT, r0010, c0010} > 0")
+        'passed'
+        >>> run("year(#2026-12-31#) = 2026")  # dates: reference evaluator
+        'passed'
     """
     from .parser import DpmXlSyntaxError
 
@@ -1695,8 +1885,16 @@ def evaluate_rule_columnar(
 def canonical_key(key: Mapping[str, Any]) -> dict[str, str | None]:
     """Canonicalize a reference outcome key for comparison with columnar keys.
 
+    Closed coordinates are normalized with
+    [`normalize_code`][dpmxl.provider.normalize_code]; other key values become
+    the text the columnar evaluator uses (items as ``category:code``).
+
     Returns:
         dict[str, str | None]: Key name to canonical string.
+
+    Examples:
+        >>> canonical_key({"r": "10", "qCPI": "LEI-A"})
+        {'r': '0010', 'qCPI': 'LEI-A'}
     """
     result: dict[str, str | None] = {}
     for name, value in key.items():

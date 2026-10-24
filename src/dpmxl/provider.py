@@ -1,17 +1,17 @@
 """Data access contract between the evaluator and a report.
 
-The evaluator never reads report files. It asks a :class:`DataProvider` for
-the data points a selection covers and for report-level facts such as filing
-indicators. A provider is responsible for:
+The evaluator never reads report files. It asks a
+[`DataProvider`][dpmxl.provider.DataProvider] for the data points a selection covers and
+for report-level facts such as filing indicators. A provider is responsible for:
 
 * resolving table codes and axis selectors against the table definitions;
 * returning **every defined cell** of a closed selection, with ``value=None``
   when the report has no fact for it, so ``default`` and ``isnull`` work;
 * returning one data point per reported key combination for open axes, with
-  the open key components in :attr:`DataPoint.keys`.
+  the open key components in [`DataPoint.keys`][dpmxl.provider.DataPoint.keys].
 
-:class:`MemoryProvider` is a complete in-memory implementation used by the
-tests and by tools that build reports programmatically.
+[`MemoryProvider`][dpmxl.provider.MemoryProvider] is a complete in-memory implementation
+used by the tests and by tools that build reports programmatically.
 """
 
 from __future__ import annotations
@@ -27,7 +27,20 @@ from .values import Value
 
 @dataclass(frozen=True, slots=True)
 class CellQuery:
-    """A fully resolved selection: table plus optional axis selectors."""
+    """A fully resolved selection: table plus optional axis selectors.
+
+    The evaluator passes one to
+    [`DataProvider.select`][dpmxl.provider.DataProvider.select] after applying
+    the ``with`` context. Match coordinates with
+    [`axis_matcher`][dpmxl.provider.axis_matcher].
+
+    Attributes:
+        table: The table code, such as ``C_01.00``.
+        rows: The row selector; ``None`` when the selection names no rows,
+            which selects every row.
+        columns: The column selector, likewise.
+        sheets: The sheet selector, likewise.
+    """
 
     table: str
     rows: AxisSelector | None = None
@@ -41,6 +54,18 @@ class DataPoint:
 
     ``ref`` is an opaque provider identity (for example a cell ID) that is
     passed back in evaluation results so callers can highlight the cell.
+
+    Attributes:
+        table: The table code.
+        row: The row code, or ``None`` for a table without rows.
+        column: The column code, or ``None``.
+        sheet: The sheet code, or ``None``.
+        keys: Open key components by name (such as ``{"qCPI": "LEI-A"}``);
+            empty for closed tables.
+        value: The reported value, or ``None`` when nothing was reported.
+        ref: Any hashable identity of the cell; points read by ``time_shift``
+            from another report carry an
+            [`EarlierRef`][dpmxl.provider.EarlierRef].
     """
 
     table: str
@@ -73,6 +98,12 @@ class DataPoint:
 
         Returns:
             str: For example ``{tC_01.00, r0010, c0010}``.
+
+        Examples:
+            >>> DataPoint("C_01.00", row="0010", column="0010").label()
+            '{tC_01.00, r0010, c0010}'
+            >>> DataPoint("C_27.00", column="0010", keys={"qCPI": "LEI-B"}).label()
+            '{tC_27.00, c0010, qCPI=LEI-B}'
         """
         parts = [f"t{self.table}"]
         for prefix, value in (("r", self.row), ("c", self.column), ("s", self.sheet)):
@@ -86,22 +117,43 @@ class DataPoint:
 class DataProvider(Protocol):
     """Source of report data for one evaluation.
 
+    Three methods are required. ``select`` resolves a
+    [`CellQuery`][dpmxl.provider.CellQuery] against the table definitions
+    ([`axis_matcher`][dpmxl.provider.axis_matcher] and
+    [`normalize_code`][dpmxl.provider.normalize_code] implement range and
+    code matching) and returns:
+
+    * for a closed table, **every defined cell** the selection covers, with
+      ``value=None`` where the report has no fact, so ``default`` and
+      ``isnull`` work;
+    * for an open table, one point per reported key combination (times the
+      selected closed coordinates), with the key components in
+      [`DataPoint.keys`][dpmxl.provider.DataPoint];
+
+    and raises ``LookupError`` for a table the release does not define (the
+    rule's status is then ``error``). ``table_reported`` answers ``{v_TABLE}``
+    and ``parameter`` answers ``{vName}`` and ``{p_Name, type}``.
+
     A provider may also define these optional methods:
 
-    * ``open_keys(table) -> Sequence[str]``: the open key names of a table.
-      Without it, an open table with no reported rows yields a selection
-      without keys; with it, the selection keeps the table's key structure
-      and is empty, as the specification requires.
-    * ``table_group(code) -> Sequence[str] | None``: the table codes of a
+    * ``open_keys(table: str) -> Sequence[str]``: the open key names of a
+      table. Without it, an open table with no reported rows yields a
+      selection without keys; with it, the selection keeps the table's key
+      structure and is empty, as the specification requires.
+    * ``table_group(code: str) -> Sequence[str] | None``: the table codes of a
       table group, for ``{g_Group, ...}`` selections.
-    * ``operation(code) -> str | None``: the expression of another
+    * ``operation(code: str) -> str | None``: the expression of another
       operation, for ``{o_Code, ...}`` references.
-    * ``earlier_report(period, count) -> DataProvider | None``: the report
-      ``count`` periods earlier (later when negative), where ``period`` is
-      ``A``, ``S``, ``Q``, ``M``, ``W`` or ``D``, for ``time_shift``.
+    * ``earlier_report(period: str, count: int) -> DataProvider | None``: the
+      report ``count`` periods earlier (later when negative), where
+      ``period`` is ``A``, ``S``, ``Q``, ``M``, ``W`` or ``D``, for
+      ``time_shift``.
 
-    Without the method, or when it returns ``None``, rules that need it are
-    ``unsupported``.
+    Without the optional method, or when it returns ``None``, rules that need
+    it are ``unsupported``. ``DataProvider`` is ``runtime_checkable``:
+    ``isinstance`` checks the three required methods only.
+
+    A provider shared by several threads must be safe to read concurrently.
     """
 
     def select(self, query: CellQuery) -> Sequence[DataPoint]:
@@ -115,14 +167,19 @@ class DataProvider(Protocol):
     def table_reported(self, table: str) -> bool | None:
         """Return whether the report's filing indicators include ``table``.
 
-        Returns ``None`` when the provider cannot tell.
+        ``table`` is the code written in ``{v_...}``, usually a template code
+        such as ``C_01.00``. Returns ``None`` when the provider cannot tell,
+        which makes ``{v_...}`` null.
         """
         ...
 
     def parameter(self, name: str) -> Value:
         """Return a report-level parameter such as ``refPeriod``.
 
-        Returns ``None`` when the parameter is unknown.
+        Returns ``None`` when the parameter is unknown. Typed parameters
+        (``{p_Name, type}``) convert the value: Python numbers become
+        [`Number`][dpmxl.values.Number], text becomes an item or date for
+        those types, and a list or set becomes a set.
         """
         ...
 
@@ -133,6 +190,11 @@ class EarlierRef:
 
     It wraps the earlier report's own ``ref`` with the shift, so the point
     stays distinct from the current report's cell with the same ``ref``.
+
+    Attributes:
+        period: The ``time_shift`` period, such as ``Q``.
+        count: The number of periods.
+        ref: The earlier report's own ``ref`` for the cell.
     """
 
     period: str
@@ -143,9 +205,9 @@ class EarlierRef:
 class EarlierReport:
     """The report ``time_shift`` reads, marking its points' refs.
 
-    Every data point it selects carries an :class:`EarlierRef` instead of the
-    provider's ``ref`` (points without a ``ref`` keep ``None``); every other
-    method, optional ones included, is the wrapped provider's.
+    Every data point it selects carries an [`EarlierRef`][dpmxl.provider.EarlierRef]
+    instead of the provider's ``ref`` (points without a ``ref`` keep ``None``); every
+    other method, optional ones included, is the wrapped provider's.
     """
 
     def __init__(self, provider: DataProvider, period: str, count: int) -> None:
@@ -219,6 +281,10 @@ def normalize_code(code: str) -> str:
 
     Returns:
         str: A canonical code.
+
+    Examples:
+        >>> normalize_code("310"), normalize_code("0310"), normalize_code("x01")
+        ('0310', '0310', 'X01')
     """
     text = code.strip()
     if text.isdigit():
@@ -228,7 +294,17 @@ def normalize_code(code: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class AxisMatcher:
-    """A compiled axis selector: exact codes plus inclusive ranges."""
+    """A compiled axis selector: exact codes plus inclusive ranges.
+
+    Build one with [`axis_matcher`][dpmxl.provider.axis_matcher] and call it
+    with a coordinate code.
+
+    Attributes:
+        codes: Normalized single codes.
+        numeric_ranges: Inclusive ranges with numeric bounds.
+        text_ranges: Inclusive ranges with text bounds, compared as text.
+        wildcard: Whether every coordinate is selected.
+    """
 
     codes: frozenset[str]
     numeric_ranges: tuple[tuple[int, int], ...]
@@ -271,6 +347,12 @@ def axis_matcher(selector: AxisSelector | None) -> AxisMatcher:
 
     Returns:
         AxisMatcher: A callable matcher; ``None`` and wildcards select all.
+
+    Examples:
+        >>> from dpmxl import AxisSelector
+        >>> rows = axis_matcher(AxisSelector(parts=(("0010", "0050"), "0100")))
+        >>> rows("0030"), rows("100"), rows("0060"), rows(None)
+        (True, True, False, False)
     """
     if selector is None or selector.wildcard:
         return _ALL
@@ -297,6 +379,13 @@ def axis_matches(code: str | None, selector: AxisSelector | None) -> bool:
 
     Returns:
         bool: Whether ``code`` is covered by ``selector``.
+
+    Examples:
+        >>> from dpmxl import AxisSelector
+        >>> axis_matches("0020", AxisSelector(parts=("0010", "0020")))
+        True
+        >>> axis_matches("0020", None)
+        True
     """
     return axis_matcher(selector)(code)
 
@@ -306,7 +395,18 @@ CellKey: TypeAlias = tuple[str, str | None, str | None, str | None, tuple[Any, .
 
 @dataclass(frozen=True, slots=True)
 class TableLayout:
-    """Closed coordinates and open key names of one table for MemoryProvider."""
+    """Closed coordinates and open key names of one table for MemoryProvider.
+
+    Attributes:
+        code: The table code, such as ``C_01.00``.
+        rows: Row codes; empty for a table without rows.
+        columns: Column codes; empty for a table without columns.
+        sheets: Sheet codes; empty for a table without sheets.
+        open_keys: Open key names, such as ``("qCPI",)``; empty for a closed
+            table.
+        template: The template code when it differs from ``code``, so
+            ``{v_TEMPLATE}`` holds when any of its tables was reported.
+    """
 
     code: str
     rows: tuple[str, ...] = ()
@@ -332,7 +432,30 @@ class MemoryProvider:
 
     Values are keyed by ``(table, row, column, sheet, keys)`` where ``keys`` is
     a tuple of ``(name, value)`` pairs for open tables (empty for closed ones).
-    Absent tables in ``reported`` are treated as not reported.
+    Absent tables in ``reported`` are treated as not reported. Every optional
+    [`DataProvider`][dpmxl.provider.DataProvider] method is implemented. Each
+    point's ``ref`` is its value key.
+
+    A ``MemoryProvider`` is safe to read from several threads at once.
+
+    Examples:
+        >>> from dpmxl import CellQuery, Number
+        >>> closed = TableLayout("C_01.00", rows=("0010", "0020"), columns=("0010",))
+        >>> open_ = TableLayout("C_27.00", columns=("0010",), open_keys=("qCPI",))
+        >>> provider = MemoryProvider(
+        ...     [closed, open_],
+        ...     {
+        ...         ("C_01.00", "0010", "0010", None, ()): Number.of(100, 0),
+        ...         ("C_27.00", None, "0010", None, (("qCPI", "A"),)): Number.of(1, 0),
+        ...     },
+        ...     parameters={"refPeriod": "2026-12-31"},
+        ... )
+        >>> [(p.row, p.value) for p in provider.select(CellQuery("C_01.00"))][1]
+        ('0020', None)
+        >>> [p.keys for p in provider.select(CellQuery("C_27.00"))]
+        [{'qCPI': 'A'}]
+        >>> provider.table_reported("C_27.00"), provider.parameter("refPeriod")
+        (True, '2026-12-31')
     """
 
     def __init__(

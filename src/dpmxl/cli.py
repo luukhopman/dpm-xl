@@ -287,7 +287,7 @@ def _print_result(
 
 
 def load_memory_provider(document: dict[str, Any]) -> MemoryProvider:
-    """Build a :class:`MemoryProvider` from a JSON document.
+    """Build a [`MemoryProvider`][dpmxl.provider.MemoryProvider] from a JSON document.
 
     The document has ``tables`` (code, rows, columns, sheets, open_keys),
     ``facts`` (table, row, column, sheet, keys, value, decimals, type),

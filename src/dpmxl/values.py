@@ -12,8 +12,8 @@ are equal when ``|a - b| <= ta + tb``, i.e. when their intervals overlap.
 Selections evaluated with ``interval: false`` drop the threshold, so their
 comparisons are exact.
 
-Arithmetic uses :data:`DECIMAL_CONTEXT` (34 significant digits, as IEEE
-decimal128), whatever the caller's thread decimal context.
+Arithmetic uses [`DECIMAL_CONTEXT`][dpmxl.values.DECIMAL_CONTEXT] (34 significant
+digits, as IEEE decimal128), whatever the caller's thread decimal context.
 """
 
 from __future__ import annotations
@@ -52,7 +52,23 @@ _divide = DECIMAL_CONTEXT.divide
 
 @dataclass(frozen=True, slots=True)
 class Number:
-    """A decimal value with a symmetric tolerance for interval arithmetic."""
+    """A decimal value with a symmetric tolerance for interval arithmetic.
+
+    A number stands for the interval
+    ``[value - tolerance, value + tolerance]``. Build reported facts with
+    [`Number.of`][dpmxl.values.Number.of], which derives the tolerance from
+    XBRL ``decimals``. Arithmetic operators
+    (``+``, ``-``, ``*``, ``/``, unary ``-`` and ``abs``) follow the interval
+    rules in the module documentation.
+
+    Attributes:
+        value: The amount.
+        tolerance: Half-width of the interval; 0 for an exact number.
+
+    Examples:
+        >>> Number.of(2, 0) + Number.of(3, 1)
+        Number(value=Decimal('5'), tolerance=Decimal('0.55'))
+    """
 
     value: Decimal
     tolerance: Decimal = ZERO
@@ -75,7 +91,15 @@ class Number:
         Raises:
             ValueError: If ``decimals`` is text other than ``INF`` or an
                 integer, or puts the tolerance outside the range of
-                :data:`DECIMAL_CONTEXT` (beyond about ±6,100).
+                [`DECIMAL_CONTEXT`][dpmxl.values.DECIMAL_CONTEXT] (beyond about ±6,100).
+
+        Examples:
+            >>> Number.of(1204, 0)
+            Number(value=Decimal('1204'), tolerance=Decimal('0.5'))
+            >>> Number.of("250.4", 1).tolerance, Number.of(1000, -3).tolerance
+            (Decimal('0.05'), Decimal('5E+2'))
+            >>> Number.of(5, "INF").tolerance
+            Decimal('0')
         """
         amount = value if isinstance(value, Decimal) else Decimal(value)
         if decimals is None:
@@ -102,12 +126,17 @@ class Number:
 
     @property
     def low(self) -> Decimal:
-        """Lower interval bound."""
+        """Lower interval bound, ``value - tolerance``.
+
+        Examples:
+            >>> Number.of(1204, 0).low, Number.of(1204, 0).high
+            (Decimal('1203.5'), Decimal('1204.5'))
+        """
         return _subtract(self.value, self.tolerance)
 
     @property
     def high(self) -> Decimal:
-        """Upper interval bound."""
+        """Upper interval bound, ``value + tolerance``."""
         return _add(self.value, self.tolerance)
 
     def __add__(self, other: Number) -> Number:
@@ -197,13 +226,14 @@ class Number:
 class ValueSet:
     """A set of distinct scalar values.
 
-    Set literals, ``set-*`` parameters and set operators yield sets. Members
-    are kept in first-seen order; numbers are exact, so ``1`` and
-    ``1.0`` are one member. Build sets with :meth:`of`, which removes
-    duplicates by DPM-XL equality.
+    Set literals, ``set-*`` parameters and set operators yield sets. Members are kept in
+    first-seen order; numbers are exact, so ``1`` and ``1.0`` are one member. Build sets
+    with [`ValueSet.of`][dpmxl.values.ValueSet.of], which removes duplicates by DPM-XL
+    equality.
     """
 
     members: tuple[Value, ...] = ()
+    """The members in first-seen order."""
 
     @classmethod
     def of(cls, values: Iterable[Value]) -> ValueSet:
@@ -214,6 +244,11 @@ class ValueSet:
 
         Raises:
             TypeError: If a value is itself a set.
+
+        Examples:
+            >>> values = ValueSet.of([Number.of(1), Number.of("1.0"), None, "a"])
+            >>> len(values), Number.of(1) in values, "b" in values
+            (2, True, False)
         """
         members: list[Value] = []
         for value in values:
@@ -252,6 +287,9 @@ def _same(left: Value, right: Value) -> bool:
 
 
 Value: TypeAlias = Number | Item | str | bool | date | ValueSet | None
+"""A runtime value: [`Number`][dpmxl.values.Number], [`Item`][dpmxl.ast.Item],
+text, Boolean, date (or date-time), [`ValueSet`][dpmxl.values.ValueSet] or
+``None`` (null)."""
 
 
 def compare(op: str, left: Value, right: Value) -> bool | None:
@@ -267,6 +305,16 @@ def compare(op: str, left: Value, right: Value) -> bool | None:
     Raises:
         TypeError: When the operands cannot be compared.
         ValueError: When ``op`` is not a comparison operator.
+
+    Examples:
+        >>> compare("=", Number.of(1204, 0), Number.of(1205, 0))  # overlap
+        True
+        >>> compare("=", Number.of(1204, 0), Number.of(1206, 0))
+        False
+        >>> compare("<", None, Number.of(1)) is None
+        True
+        >>> compare("=", Item.parse("eba_qEC:qx01"), Item.parse("qx01"))
+        True
     """
     if left is None or right is None:
         return None
@@ -374,6 +422,10 @@ def type_name(value: Value) -> str:
 
     Returns:
         str: For example ``number`` or ``item``.
+
+    Examples:
+        >>> type_name(Number.of(1)), type_name("x"), type_name(None)
+        ('number', 'string', 'null')
     """
     match value:
         case None:
@@ -399,6 +451,15 @@ def format_value(value: Value) -> str:
 
     Returns:
         str: Human-readable text.
+
+    Examples:
+        >>> from datetime import date
+        >>> format_value(Number.of("1234567.50")), format_value(Item.parse("a:b"))
+        ('1,234,567.5', '[a:b]')
+        >>> format_value(date(2026, 12, 31)), format_value(True), format_value(None)
+        ('2026-12-31', 'true', 'null')
+        >>> format_value("text")
+        '"text"'
     """
     match value:
         case None:
@@ -421,6 +482,10 @@ def format_decimal(value: Decimal) -> str:
 
     Returns:
         str: For example ``1,204`` or ``-0.075``.
+
+    Examples:
+        >>> format_decimal(Decimal("1234567.8900"))
+        '1,234,567.89'
     """
     try:
         normalized = value.normalize(DECIMAL_CONTEXT)
@@ -447,6 +512,12 @@ def format_computed(value: Decimal) -> str:
 
     Returns:
         str: The formatted number.
+
+    Examples:
+        >>> format_computed(Decimal("1.852935352358765123"))
+        '1.85294'
+        >>> format_computed(Decimal("12345.67890123456"))
+        '12,345.68'
     """
     try:
         normalized = value.normalize(DECIMAL_CONTEXT)

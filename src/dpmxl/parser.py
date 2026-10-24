@@ -1,9 +1,10 @@
 """Tokenizer and recursive-descent parser for DPM-XL expressions.
 
-:func:`tokenize` splits an expression into typed :class:`Token` objects that
-suit syntax highlighting as well as parsing: selections are split into their
-table, axis and option tokens rather than captured whole. :func:`parse` builds
-the expression tree of :mod:`dpmxl.ast` from those tokens.
+[`tokenize`][dpmxl.parser.tokenize] splits an expression into typed
+[`Token`][dpmxl.parser.Token] objects that suit syntax highlighting as well as parsing:
+selections are split into their table, axis and option tokens rather than captured
+whole. [`parse`][dpmxl.parser.parse] builds the expression tree of
+[`dpmxl.ast`][dpmxl.ast] from those tokens.
 """
 
 from __future__ import annotations
@@ -59,7 +60,21 @@ from .values import DECIMAL_CONTEXT
 
 
 class DpmXlSyntaxError(ValueError):
-    """Raised when an expression does not match the DPM-XL grammar."""
+    """Raised when an expression does not match the DPM-XL grammar.
+
+    Attributes:
+        message: What was expected or found, in plain words.
+        expression: The complete source expression.
+        position: Zero-based offset where the offending text starts.
+        end: Offset just past the offending text.
+
+    Examples:
+        >>> try:
+        ...     parse("{tA} >=")
+        ... except DpmXlSyntaxError as error:
+        ...     print(error.message, error.position)
+        expression ends where an operand is expected 7
+    """
 
     def __init__(
         self, message: str, expression: str, position: int, end: int | None = None
@@ -89,6 +104,14 @@ class DpmXlSyntaxError(ValueError):
             str: Two lines suitable for terminal output: the source line and a
             ``^`` under the error's start, followed by ``~`` under the rest of
             the offending text on that line.
+
+        Examples:
+            >>> try:
+            ...     parse("{tA, r0010} +* 1")
+            ... except DpmXlSyntaxError as error:
+            ...     print(error.pointer())
+            {tA, r0010} +* 1
+                         ^
         """
         start = self.expression.rfind("\n", 0, self.position) + 1
         end = self.expression.find("\n", self.position)
@@ -102,7 +125,7 @@ class Token(NamedTuple):
     """One lexical token: its kind, source text and half-open offsets.
 
     ``text`` is exactly ``expression[start:end]``, quotes, brackets and
-    backticks included. ``kind`` is one of :data:`dpmxl.grammar.TOKEN_KINDS`:
+    backticks included. ``kind`` is one of [`TOKEN_KINDS`][dpmxl.grammar.TOKEN_KINDS]:
 
     * ``keyword``: ``if``, ``and``, ``with``, ``where``, ``group by``, window
       keywords inside ``over (...)``, and ``default``/``interval`` in a
@@ -122,6 +145,12 @@ class Token(NamedTuple):
     * ``identifier``: a key, temporary or other name, including escaped
       names such as ```x.y```;
     * ``eof``: the empty token that ends every token list.
+
+    Attributes:
+        kind: The token kind, as above.
+        text: The exact source text.
+        start: Offset of the first character.
+        end: Offset just past the last character.
     """
 
     kind: str
@@ -245,7 +274,7 @@ def tokenize(expression: str) -> list[Token]:
     ``{...}`` it reads selection components (table, axis and option tokens,
     parameter types), elsewhere expression tokens. Whitespace is skipped;
     concatenating the token texts with the source between them gives the
-    expression back. See :class:`Token` for the kinds.
+    expression back. See [`Token`][dpmxl.parser.Token] for the kinds.
 
     Returns:
         list[Token]: Tokens ending with an ``eof`` token.
@@ -253,6 +282,12 @@ def tokenize(expression: str) -> list[Token]:
     Raises:
         DpmXlSyntaxError: On an unterminated literal, brace or item, or an
             unknown character.
+
+    Examples:
+        >>> [(token.kind, token.text) for token in tokenize("{tT, r0010} > 0")]
+        ... # doctest: +NORMALIZE_WHITESPACE
+        [('brace', '{'), ('table', 'tT'), ('punctuation', ','), ('axis', 'r0010'),
+         ('brace', '}'), ('operator', '>'), ('number', '0'), ('eof', '')]
     """
     return _scan(expression)
 
@@ -440,13 +475,20 @@ def parse(expression: str) -> Node:
     """Parse a complete DPM-XL expression.
 
     A trailing ``;`` is allowed. Several statements and assignments need
-    :func:`parse_program`.
+    [`parse_program`][dpmxl.parser.parse_program].
 
     Returns:
-        Node: The expression tree.
+        Node: The expression tree; every node keeps its source ``span``.
 
     Raises:
         DpmXlSyntaxError: If the text is not a valid expression.
+
+    Examples:
+        >>> node = parse("{tT, r0010} > 0")
+        >>> type(node).__name__, node.op, node.span
+        ('Binary', '>', (0, 15))
+        >>> node.left.spec.text()
+        '{tT, r0010}'
     """
     if not expression or not expression.strip():
         raise DpmXlSyntaxError("empty expression", expression or "", 0)
@@ -503,6 +545,13 @@ def parse_program(source: str) -> Program:
 
     Raises:
         DpmXlSyntaxError: If the text is not a valid program.
+
+    Examples:
+        >>> program = parse_program("x := {tT, r0010}; x > 0")
+        >>> [type(statement).__name__ for statement in program.statements]
+        ['Assignment', 'Binary']
+        >>> program.statements[0].name
+        'x'
     """
     if not source or not source.strip():
         raise DpmXlSyntaxError("empty expression", source or "", 0)
@@ -537,6 +586,11 @@ def parse_selection(
 
     Raises:
         DpmXlSyntaxError: On an unknown selection component.
+
+    Examples:
+        >>> spec = parse_selection("tC_01.00, r0010-0050, c*")
+        >>> spec.table, spec.rows.parts, spec.columns.wildcard
+        ('C_01.00', (('0010', '0050'),), True)
     """
     source = expression or body
     if not expression:

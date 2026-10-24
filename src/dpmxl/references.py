@@ -21,9 +21,13 @@ class Reference:
 
     ``spec.table`` is the table code of a cell selection; for a table group
     (``{g_Group, ...}``) or operation (``{o_Code, ...}``) reference it is
-    ``None`` and :attr:`kind` and :attr:`code` say what is referenced.
-    Typed parameters (``{p_Name, ...}``) are not selections and are not
-    listed.
+    ``None`` and [`kind`][dpmxl.references.Reference.kind] and
+    [`code`][dpmxl.references.Reference.code] say what is referenced. Typed
+    parameters (``{p_Name, ...}``) are not selections and are not listed.
+
+    Attributes:
+        spec: The selection with its ``with`` context applied.
+        span: The selection's source span.
     """
 
     spec: SelectionSpec
@@ -47,15 +51,24 @@ class Reference:
 def references(node: Node) -> tuple[Reference, ...]:
     """Return every selection with its inherited context applied.
 
-    Table-group and operation references are included with
-    ``spec.table`` set to ``None``: check :attr:`Reference.kind` and read the
-    group or operation code from :attr:`Reference.code`. A group read reads
-    every table the provider's ``table_group(code)`` lists; :func:`tables`
-    expands groups that way when given the provider. Targets of persistent
-    assignments are included too.
+    Table-group and operation references are included with ``spec.table`` set to
+    ``None``: check [`Reference.kind`][dpmxl.references.Reference.kind] and read the
+    group or operation code from [`Reference.code`][dpmxl.references.Reference.code]. A
+    group read reads every table the provider's ``table_group(code)`` lists;
+    [`tables`][dpmxl.references.tables] expands groups that way when given the provider.
+    Targets of persistent assignments are included too.
 
     Returns:
         tuple[Reference, ...]: Selections in source order.
+
+    Examples:
+        >>> from dpmxl import parse
+        >>> node = parse("with {tC_01.00, c0010}: {r0010} = {r0020} + {g_G1, r0010}")
+        >>> [(ref.spec.text(), ref.kind, ref.code) for ref in references(node)]
+        ... # doctest: +NORMALIZE_WHITESPACE
+        [('{tC_01.00, r0010, c0010}', 'table', 'C_01.00'),
+         ('{tC_01.00, r0020, c0010}', 'table', 'C_01.00'),
+         ('{gG1, r0010, c0010}', 'table_group', 'G1')]
     """
     found: list[Reference] = []
     # An explicit stack, not a recursive closure: a closure that refers to
@@ -85,6 +98,14 @@ def tables(node: Node, provider: object | None = None) -> tuple[str, ...]:
 
     Returns:
         tuple[str, ...]: Table codes in first-seen order.
+
+    Examples:
+        >>> from dpmxl import MemoryProvider, parse
+        >>> node = parse("{tC_01.00, r0010} = {g_G1, r0010}")
+        >>> tables(node)
+        ('C_01.00',)
+        >>> tables(node, MemoryProvider([], {}, table_groups={"G1": ("C_05.01",)}))
+        ('C_01.00', 'C_05.01')
     """
     method = getattr(provider, "table_group", None)
     found: list[str] = []
@@ -101,6 +122,11 @@ def reported_templates(node: Node) -> tuple[str, ...]:
 
     Returns:
         tuple[str, ...]: Template codes in first-seen order.
+
+    Examples:
+        >>> from dpmxl import parse
+        >>> reported_templates(parse("{v_C_01.00} and not {v_C_02.00}"))
+        ('C_01.00', 'C_02.00')
     """
     pending = [node]
     found: list[str] = []

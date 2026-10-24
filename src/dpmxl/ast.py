@@ -13,9 +13,13 @@ from decimal import Decimal
 from typing import Literal, TypeAlias
 
 Span: TypeAlias = tuple[int, int]
+"""Half-open ``(start, end)`` character offsets into the parsed source."""
 AxisName: TypeAlias = Literal["rows", "columns", "sheets"]
+"""Name of a closed axis field of [`SelectionSpec`][dpmxl.ast.SelectionSpec]."""
 AXIS_PREFIXES: dict[str, AxisName] = {"r": "rows", "c": "columns", "s": "sheets"}
+"""Axis letter (``r``, ``c``, ``s``) to its ``SelectionSpec`` field name."""
 AXIS_KEYS: dict[AxisName, str] = {"rows": "r", "columns": "c", "sheets": "s"}
+"""``SelectionSpec`` axis field name to the record key it produces."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +28,10 @@ class AxisSelector:
 
     ``parts`` holds single codes (``"0010"``) and inclusive ranges
     (``("0010", "0050")``) exactly as written, without the axis prefix.
+
+    Attributes:
+        wildcard: Whether the selector is ``*`` (every coordinate).
+        parts: Single codes and ``(low, high)`` ranges.
     """
 
     wildcard: bool = False
@@ -78,6 +86,8 @@ class _Missing:
 
 
 MISSING = _Missing()
+"""Marker for a ``default`` that was not written; it is falsy and differs from
+a written ``default: null``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +97,16 @@ class SelectionSpec:
     The source is one of ``table`` (``tC_01.00``), ``table_group``
     (``gG_01``) or ``operation`` (``o_v1234``, another operation's result);
     the others are ``None``.
+
+    Attributes:
+        table: Table code, such as ``C_01.00``.
+        rows: Row selector, or ``None`` when not written.
+        columns: Column selector, or ``None``.
+        sheets: Sheet selector, or ``None``.
+        default: The ``default:`` literal, or ``MISSING`` when not written.
+        interval: The ``interval:`` option, or ``None`` when not written.
+        table_group: Table group code of a ``{g_...}`` selection.
+        operation: Operation code of an ``{o_...}`` reference.
     """
 
     table: str | None = None
@@ -104,6 +124,12 @@ class SelectionSpec:
         Returns:
             SelectionSpec: Components written here win over the context; a
             source written here replaces the context's source.
+
+        Examples:
+            >>> from dpmxl import parse_selection
+            >>> context = parse_selection("tC_01.00, c0010, interval: true")
+            >>> parse_selection("r0020").merged_into(context).text()
+            '{tC_01.00, r0020, c0010, interval: true}'
         """
         if self.table is None and self.table_group is None and self.operation is None:
             table, group, operation = (
@@ -137,6 +163,11 @@ class SelectionSpec:
 
         Returns:
             str: A normalized ``{...}`` selection.
+
+        Examples:
+            >>> from dpmxl import parse_selection
+            >>> parse_selection("t_C_01.00 , r10-50, default: 0").text()
+            '{tC_01.00, r10-50, default: 0}'
         """
         parts: list[str] = []
         if self.table:
@@ -173,7 +204,13 @@ class Node:
 
 @dataclass(frozen=True, slots=True)
 class Literal_(Node):
-    """A constant: number, string, boolean, date, item or null."""
+    """A constant: number, string, boolean, date, item or null.
+
+    Attributes:
+        value: The constant: ``Decimal``, ``str``, ``bool``, ``date`` (or
+            ``datetime``), [`Item`][dpmxl.ast.Item] or ``None``.
+        kind: ``number``, ``string``, ``boolean``, ``date``, ``item`` or ``null``.
+    """
 
     value: Decimal | str | bool | date | Item | None
     kind: Literal["number", "string", "boolean", "date", "item", "null"]
@@ -185,6 +222,10 @@ class Item:
 
     ``category`` is the namespace part without the ``eba_`` prefix; it is
     ``None`` for a bare legacy element reference such as ``[ei86]``.
+
+    Attributes:
+        category: Category without ``eba_``, such as ``qEC``, or ``None``.
+        code: Item code, such as ``qx01``.
     """
 
     category: str | None
@@ -201,7 +242,13 @@ class Item:
         """Parse ``prefix:code`` or a bare code.
 
         Returns:
-            Item: Normalized item identity.
+            Item: Normalized item identity; the ``eba_`` prefix is dropped.
+
+        Examples:
+            >>> Item.parse("eba_qEC:qx01")
+            Item(category='qEC', code='qx01')
+            >>> Item.parse("eba_qEC:qx01").matches(Item.parse("qx01"))
+            True
         """
         value = text.strip()
         if ":" not in value:
@@ -234,21 +281,34 @@ class Item:
 
 @dataclass(frozen=True, slots=True)
 class Selection(Node):
-    """A ``{...}`` cell selection."""
+    """A ``{...}`` cell selection.
+
+    Attributes:
+        spec: The selection's components as written (without the ``with``
+            context; see [`references`][dpmxl.references.references]).
+    """
 
     spec: SelectionSpec
 
 
 @dataclass(frozen=True, slots=True)
 class TableReported(Node):
-    """``{v_TABLE}``: true when the report declares the template."""
+    """``{v_TABLE}``: true when the report declares the template.
+
+    Attributes:
+        table: The template or table code.
+    """
 
     table: str
 
 
 @dataclass(frozen=True, slots=True)
 class Parameter(Node):
-    """``{vName}``: a report-level parameter such as ``ReportingLevel``."""
+    """``{vName}``: a report-level parameter such as ``ReportingLevel``.
+
+    Attributes:
+        name: Parameter name without the ``v`` prefix.
+    """
 
     name: str
 
@@ -257,7 +317,12 @@ class Parameter(Node):
 class TypedParameter(Node):
     """``{p_Name, type[, default: value]}``: a typed report parameter.
 
-    ``type`` is one of :data:`dpmxl.grammar.PARAMETER_TYPES` in lower case.
+    ``type`` is one of [`PARAMETER_TYPES`][dpmxl.grammar.PARAMETER_TYPES] in lower case.
+
+    Attributes:
+        name: Parameter name without the ``p_`` prefix.
+        type: The declared type.
+        default: The ``default:`` value, or ``MISSING``.
     """
 
     name: str
@@ -267,21 +332,34 @@ class TypedParameter(Node):
 
 @dataclass(frozen=True, slots=True)
 class Name(Node):
-    """A bare identifier: a key component, period unit or parameter name."""
+    """A bare identifier: a key component, period unit or parameter name.
+
+    Attributes:
+        name: The identifier, without backticks.
+    """
 
     name: str
 
 
 @dataclass(frozen=True, slots=True)
 class SetLiteral(Node):
-    """A set literal ``{a, b, ...}`` or the empty set ``{}``."""
+    """A set literal ``{a, b, ...}`` or the empty set ``{}``.
+
+    Attributes:
+        items: The member expressions.
+    """
 
     items: tuple[Node, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Unary(Node):
-    """Prefix ``+``, ``-`` or ``not``."""
+    """Prefix ``+``, ``-`` or ``not``.
+
+    Attributes:
+        op: The operator.
+        operand: The operand.
+    """
 
     op: Literal["+", "-", "not"]
     operand: Node
@@ -289,7 +367,14 @@ class Unary(Node):
 
 @dataclass(frozen=True, slots=True)
 class Binary(Node):
-    """Arithmetic, comparison or boolean operator."""
+    """Arithmetic, comparison or boolean operator.
+
+    Attributes:
+        op: The operator as written canonically: ``+ - * / & = != < <= > >=``,
+            ``and``, ``or`` or ``xor`` (``<>`` is read as ``!=``).
+        left: Left operand.
+        right: Right operand.
+    """
 
     op: str
     left: Node
@@ -300,8 +385,12 @@ class Binary(Node):
 class In(Node):
     """``operand in set``.
 
-    ``values`` is a :class:`SetLiteral` for ``in {...}``, otherwise any
+    ``values`` is a [`SetLiteral`][dpmxl.ast.SetLiteral] for ``in {...}``, otherwise any
     set-valued expression such as a ``set-*`` parameter or ``union(...)``.
+
+    Attributes:
+        operand: The tested value.
+        values: The set.
     """
 
     operand: Node
@@ -310,7 +399,13 @@ class In(Node):
 
 @dataclass(frozen=True, slots=True)
 class If(Node):
-    """``if c then a [else b] endif``."""
+    """``if c then a [else b] endif``.
+
+    Attributes:
+        condition: The condition.
+        then: Value when the condition is true.
+        otherwise: Value of the ``else`` branch, or ``None`` without one.
+    """
 
     condition: Node
     then: Node
@@ -319,7 +414,14 @@ class If(Node):
 
 @dataclass(frozen=True, slots=True)
 class Call(Node):
-    """Function or aggregate call, optionally with ``group by`` keys."""
+    """Function or aggregate call, optionally with ``group by`` keys.
+
+    Attributes:
+        name: Canonical function name (see
+            [`canonical_function`][dpmxl.grammar.canonical_function]).
+        args: Arguments in order.
+        group_by: Key names of ``group by``, or ``None`` without it.
+    """
 
     name: str
     args: tuple[Node, ...]
@@ -334,6 +436,11 @@ class WindowBound:
     point``, ``following`` or ``unbounded following``; ``offset`` counts
     data points, or for a ``range`` window units of the order key, or of
     ``period`` (``A``, ``S``, ``Q``, ``M``, ``W``, ``D``) for a date key.
+
+    Attributes:
+        kind: The bound kind, as above.
+        offset: Number of data points or order-key units.
+        period: Period code of a date offset, or ``None``.
     """
 
     kind: Literal[
@@ -349,7 +456,13 @@ class WindowBound:
 
 @dataclass(frozen=True, slots=True)
 class Window:
-    """``data points|range between start and end``."""
+    """``data points|range between start and end``.
+
+    Attributes:
+        unit: ``data points`` or ``range``.
+        start: The lower bound.
+        end: The upper bound.
+    """
 
     unit: Literal["data points", "range"]
     start: WindowBound
@@ -363,6 +476,13 @@ class Analytic(Node):
     ``name`` is ``rank`` or an aggregate's call name (``sum``, ``count``,
     ``avg``, ``max``, ``min``, ``median``). ``order_by`` pairs each key with
     whether it sorts descending. The result keeps the operand's records.
+
+    Attributes:
+        name: ``rank`` or the aggregate's call name.
+        operand: The aggregated expression.
+        partition_by: Partition key names.
+        order_by: ``(key, descending)`` pairs.
+        window: The window clause, or ``None`` when not written.
     """
 
     name: str
@@ -374,7 +494,12 @@ class Analytic(Node):
 
 @dataclass(frozen=True, slots=True)
 class Where(Node):
-    """``operand [where condition]`` filters records by key components."""
+    """``operand [where condition]`` filters records by key components.
+
+    Attributes:
+        operand: The filtered expression.
+        condition: Condition on key components.
+    """
 
     operand: Node
     condition: Node
@@ -382,7 +507,12 @@ class Where(Node):
 
 @dataclass(frozen=True, slots=True)
 class Get(Node):
-    """``operand [get name]`` replaces values by a key component."""
+    """``operand [get name]`` replaces values by a key component.
+
+    Attributes:
+        operand: The expression.
+        name: Key component whose value becomes the record's value.
+    """
 
     operand: Node
     name: str
@@ -390,7 +520,13 @@ class Get(Node):
 
 @dataclass(frozen=True, slots=True)
 class Sub(Node):
-    """``operand [sub name = value]`` fixes and removes a key component."""
+    """``operand [sub name = value]`` fixes and removes a key component.
+
+    Attributes:
+        operand: The expression.
+        name: Key component to fix.
+        value: The value it must have.
+    """
 
     operand: Node
     name: str
@@ -399,7 +535,12 @@ class Sub(Node):
 
 @dataclass(frozen=True, slots=True)
 class Rename(Node):
-    """``operand [rename a to b, ...]`` renames key components."""
+    """``operand [rename a to b, ...]`` renames key components.
+
+    Attributes:
+        operand: The expression.
+        pairs: ``(old, new)`` key names.
+    """
 
     operand: Node
     pairs: tuple[tuple[str, str], ...]
@@ -410,6 +551,11 @@ class With(Node):
     """``with {context} [where condition]: body``.
 
     The optional condition filters every selection evaluated in the body.
+
+    Attributes:
+        context: Selection components inherited by every selection in the body.
+        body: The expression.
+        condition: The context's ``where`` condition, or ``None``.
     """
 
     context: SelectionSpec
@@ -419,7 +565,12 @@ class With(Node):
 
 @dataclass(frozen=True, slots=True)
 class Assignment(Node):
-    """``name := value``: a temporary result later statements refer to."""
+    """``name := value``: a temporary result later statements refer to.
+
+    Attributes:
+        name: The temporary's name.
+        value: The assigned expression.
+    """
 
     name: str
     value: Node
@@ -429,8 +580,12 @@ class Assignment(Node):
 class PersistentAssignment(Node):
     """``{target} <- value``: a computed result for a cell or variable.
 
-    ``target`` is a :class:`Selection` (``{tT, r0010, c0010}``) or a
-    :class:`Parameter` (``{vX}``, also written ``{v_X}``).
+    ``target`` is a [`Selection`][dpmxl.ast.Selection] (``{tT, r0010, c0010}``) or a
+    [`Parameter`][dpmxl.ast.Parameter] (``{vX}``, also written ``{v_X}``).
+
+    Attributes:
+        target: The assigned cell or variable.
+        value: The computed expression.
     """
 
     target: Node
@@ -441,8 +596,11 @@ class PersistentAssignment(Node):
 class Program(Node):
     """Statements separated by ``;``; the last one gives the result.
 
-    :func:`dpmxl.parser.parse_program` returns one; :func:`dpmxl.parser.parse`
-    returns a single expression instead.
+    [`parse_program`][dpmxl.parser.parse_program] returns one;
+    [`parse`][dpmxl.parser.parse] returns a single expression instead.
+
+    Attributes:
+        statements: The statements in order.
     """
 
     statements: tuple[Node, ...]
@@ -452,10 +610,15 @@ def children(node: Node) -> tuple[Node, ...]:
     """Return a node's direct child expressions in source order.
 
     A selection's or ``with`` context's ``default`` and a typed parameter's
-    ``default`` are children too, so :func:`walk` reaches every literal.
+    ``default`` are children too, so [`walk`][dpmxl.ast.walk] reaches every literal.
 
     Returns:
         tuple[Node, ...]: Child nodes; literals and other leaves have none.
+
+    Examples:
+        >>> from dpmxl import parse
+        >>> [type(child).__name__ for child in children(parse("{tT} + 1"))]
+        ['Selection', 'Literal_']
     """
     match node:
         case With(context=context, body=body, condition=condition):
@@ -504,6 +667,18 @@ def walk(node: Node) -> list[Node]:
 
     Returns:
         list[Node]: Every node of the tree.
+
+    Examples:
+        >>> from dpmxl import parse
+        >>> expression = "with {tT, default: 0}: {r0010} > {r0020} * 1.1"
+        >>> [type(node).__name__ for node in walk(parse(expression))]
+        ['With', 'Literal_', 'Binary', 'Selection', 'Binary', 'Selection', 'Literal_']
+        >>> [
+        ...     expression[slice(*node.span)]
+        ...     for node in walk(parse(expression))
+        ...     if type(node).__name__ == "Selection"
+        ... ]
+        ['{r0010}', '{r0020}']
     """
     result: list[Node] = []
     pending = [node]

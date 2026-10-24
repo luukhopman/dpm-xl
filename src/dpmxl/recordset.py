@@ -25,23 +25,40 @@ from .provider import DataPoint
 from .values import Value
 
 MAX_JOIN_RECORDS = 2_000_000
+"""Largest number of records a join may produce before it is an error."""
 
 
 class EvaluationError(Exception):
-    """Raised when an expression cannot be evaluated against the data."""
+    """Raised when an expression cannot be evaluated against the data.
+
+    For example a type mismatch, an unknown table or incompatible keys.
+    [`evaluate_rule`][dpmxl.evaluator.evaluate_rule] catches it and returns
+    status ``error`` with the message.
+    """
 
 
 class UnsupportedError(EvaluationError):
-    """Raised for valid DPM-XL that this evaluator does not implement."""
+    """Raised for valid DPM-XL that this evaluator cannot resolve.
+
+    Raised when a rule needs an optional provider method (``time_shift``,
+    ``{o_...}``, ``{g_...}``) that the provider lacks or that returns
+    ``None``, and for a function name the evaluator does not know.
+    [`evaluate_rule`][dpmxl.evaluator.evaluate_rule] catches it and returns
+    status ``unsupported``.
+    """
 
 
 @dataclass(frozen=True, slots=True)
 class Record:
     """One keyed value and the data points it was computed from.
 
-    ``points`` may nest the operands' point tuples instead of copying them:
-    joins over large open tables would otherwise copy every record's growing
-    point list at each operator. Use :func:`unique_points` to flatten.
+    ``points`` may nest the operands' point tuples instead of copying them: joins over
+    large open tables would otherwise copy every record's growing point list at each
+    operator. Use [`unique_points`][dpmxl.recordset.unique_points] to flatten.
+
+    Attributes:
+        value: The record's value.
+        points: The data points it was computed from, possibly nested.
     """
 
     value: Value
@@ -50,7 +67,12 @@ class Record:
 
 @dataclass(slots=True)
 class Recordset:
-    """Records indexed by a tuple of key values aligned with ``keys``."""
+    """Records indexed by a tuple of key values aligned with ``keys``.
+
+    Attributes:
+        keys: Key names, such as ``("r", "qCPI")``; empty for a scalar.
+        records: Records by key values, aligned with ``keys``.
+    """
 
     keys: tuple[str, ...]
     records: dict[tuple[Hashable, ...], Record] = field(default_factory=dict)
@@ -178,6 +200,7 @@ def combine(
 
 
 STANDARD_KEYS = frozenset({"r", "c", "s"})
+"""Keys of the closed axes: rows, columns and sheets."""
 
 
 def check_structure(operands: Sequence[Recordset]) -> None:
@@ -295,7 +318,7 @@ def _combine_aligned(
 
 
 def iter_points(points: Iterable[Any]) -> Iterator[DataPoint]:
-    """Flatten nested point tuples (see :class:`Record`) in order.
+    """Flatten nested point tuples (see [`Record`][dpmxl.recordset.Record]) in order.
 
     Yields:
         DataPoint: Each point, duplicates included.
@@ -346,6 +369,12 @@ def resolve_key(name: str, keys: Iterable[str]) -> str | None:
 
     Returns:
         str | None: The matching key, or ``None`` when absent or ambiguous.
+
+    Examples:
+        >>> resolve_key("EBB", ["qEBB", "r"]), resolve_key("qebb", ["qEBB"])
+        ('qEBB', 'qEBB')
+        >>> resolve_key("CPI", ["r"]) is None
+        True
     """
     available = list(keys)
     if name in available:

@@ -1,10 +1,15 @@
-"""Evaluate DPM-XL expressions against a :class:`~dpmxl.provider.DataProvider`.
+"""Evaluate DPM-XL expressions against a report's data provider.
+
+[`evaluate_rule`][dpmxl.evaluator.evaluate_rule] evaluates a rule against a
+[`DataProvider`][dpmxl.provider.DataProvider] and returns a
+[`RuleResult`][dpmxl.evaluator.RuleResult]; it never raises for a bad rule or
+bad data.
 
 The evaluator implements every construct of the DPM-XL grammar; constructs
 that need data beyond one report (``time_shift``, operation and table-group
 references) use optional provider methods. It keeps every intermediate
 record set so that a failing record can be explained operand by operand (see
-:mod:`dpmxl.explain`).
+[`dpmxl.explain`][dpmxl.explain]).
 
 Semantics in brief:
 
@@ -16,7 +21,33 @@ Semantics in brief:
 * Null propagates through arithmetic and comparisons; ``and``/``or`` use
   three-valued (Kleene) logic. A null rule result is "not evaluated", never a
   failure.
-* Aggregates over no records are null.
+* Aggregates over no records are null, except ``count``, which is 0.
+
+## Threads
+
+[`evaluate_rule`][dpmxl.evaluator.evaluate_rule] may run concurrently on one
+report from several threads. [`parse_cached`][dpmxl.evaluator.parse_cached]
+is thread-safe. A shared [`SelectionCache`][dpmxl.evaluator.SelectionCache] is
+safe too, though two threads that miss the same selection at once may both
+build it. Providers shared across threads must be safe to read concurrently;
+[`MemoryProvider`][dpmxl.provider.MemoryProvider] is. An
+[`Evaluator`][dpmxl.evaluator.Evaluator] instance is not meant to be shared:
+create one per evaluation.
+
+Examples:
+    >>> from dpmxl import MemoryProvider, Number, TableLayout, evaluate_rule
+    >>> provider = MemoryProvider(
+    ...     [TableLayout("T", rows=("0010", "0020"), columns=("0010",))],
+    ...     {
+    ...         ("T", "0010", "0010", None, ()): Number.of(5, 0),
+    ...         ("T", "0020", "0010", None, ()): Number.of(-2, 0),
+    ...     },
+    ... )
+    >>> result = evaluate_rule("{tT, r*, c0010} >= 0", provider)
+    >>> result.status, result.counts
+    ('failed', {'passed': 1, 'failed': 1, 'null': 0})
+    >>> [outcome.key for outcome in result.failures]
+    [{'r': '0020'}]
 """
 
 from __future__ import annotations
@@ -92,6 +123,10 @@ from .recordset import (
 from .values import Number, Value, ValueSet, compare, type_name
 
 AGGREGATES = frozenset({"sum", "count", "avg", "max", "min", "median"})
+"""Canonical names of the aggregate functions (``Call.name`` values).
+
+``rank`` and aggregates with ``over (...)`` are
+[`Analytic`][dpmxl.ast.Analytic] nodes and are not listed."""
 _COMPARISONS = frozenset({"=", "!=", "<", "<=", ">", ">="})
 _ARITHMETIC = frozenset({"+", "-", "*", "/"})
 _BOOLEAN = frozenset({"and", "or", "xor"})
@@ -174,7 +209,18 @@ Status = Literal["passed", "failed", "not_applicable", "error", "unsupported"]
 
 @dataclass
 class Evaluation:
-    """Raw evaluation result with intermediate record sets for explanation."""
+    """Raw evaluation result with intermediate record sets for explanation.
+
+    Pass it to [`explain`][dpmxl.explain.explain] (it is
+    [`RuleResult.evaluation`][dpmxl.evaluator.RuleResult]).
+
+    Attributes:
+        root: The evaluated tree.
+        result: The record set of the last statement.
+        trace: Each node's record set by ``id(node)``; empty when evaluated
+            with ``trace=False``.
+        notes: Remarks gathered during evaluation.
+    """
 
     root: Node
     result: Recordset
@@ -219,7 +265,14 @@ class SelectionCache:
 
 
 class Evaluator:
-    """Evaluates one expression tree against one provider."""
+    """Evaluates one expression tree against one provider.
+
+    The engine behind [`evaluate_rule`][dpmxl.evaluator.evaluate_rule], which
+    most callers want instead: ``Evaluator.run`` raises
+    [`EvaluationError`][dpmxl.recordset.EvaluationError] where
+    ``evaluate_rule`` returns status ``error``. Create one per evaluation;
+    share a [`SelectionCache`][dpmxl.evaluator.SelectionCache] between them.
+    """
 
     def __init__(
         self,
@@ -257,10 +310,15 @@ class Evaluator:
         self._assignments: dict[str, Recordset] = {}
 
     def run(self, node: Node) -> Evaluation:
-        """Evaluate a complete expression.
+        """Evaluate a complete expression or program.
 
         Returns:
             Evaluation: The result and its trace.
+
+        Raises:
+            EvaluationError: For a type error, an unknown table and the like;
+                [`UnsupportedError`][dpmxl.recordset.UnsupportedError] when the
+                provider cannot resolve a reference.
         """
         self._trace = {}
         self._notes = []
@@ -1973,6 +2031,15 @@ class Outcome:
 
     ``points`` are flattened from the evaluation on first access: most
     outcomes pass, and nobody reads their points.
+
+    Attributes:
+        key: The record key, such as ``{'c': '0020'}`` or ``{'qCPI': 'LEI-B'}``;
+            empty for a rule without keys. Pass it to
+            [`explain`][dpmxl.explain.explain].
+        passed: ``True``, ``False``, or ``None`` when the record's result is
+            null (not evaluated).
+        raw_points: The points as the evaluation keeps them (possibly
+            nested); read ``points`` instead.
     """
 
     key: Mapping[str, Hashable]
@@ -1987,7 +2054,22 @@ class Outcome:
 
 @dataclass
 class RuleResult:
-    """The outcome of evaluating a rule and its optional precondition."""
+    """The outcome of evaluating a rule and its optional precondition.
+
+    Attributes:
+        status: ``passed``, ``failed``, ``not_applicable`` (precondition not
+            met, or no record could be evaluated), ``error`` (syntax error,
+            unknown table, type mismatch, division by zero that reaches the
+            result) or ``unsupported`` (a ``time_shift``, ``{o_...}`` or
+            ``{g_...}`` the provider cannot resolve, or an unknown function).
+        outcomes: One [`Outcome`][dpmxl.evaluator.Outcome] per record.
+        message: Why the status is ``error``, ``unsupported`` or
+            ``not_applicable``.
+        evaluation: The traced [`Evaluation`][dpmxl.evaluator.Evaluation] for
+            [`explain`][dpmxl.explain.explain]; ``None`` when evaluation did not
+            complete.
+        notes: Remarks gathered during evaluation.
+    """
 
     status: Status
     outcomes: list[Outcome] = field(default_factory=list)
@@ -1996,8 +2078,8 @@ class RuleResult:
     notes: list[str] = field(default_factory=list)
     assignments: dict[str, Recordset] = field(default_factory=dict)
     """Results of persistent assignments by target (see
-    :attr:`Evaluation.assignments`); the verdict comes from the last
-    statement."""
+    [`Evaluation.assignments`][dpmxl.evaluator.Evaluation.assignments]); the verdict
+    comes from the last statement."""
 
     @property
     def failures(self) -> list[Outcome]:
@@ -2019,10 +2101,18 @@ def parse_cached(expression: str) -> Node:
     """Parse an expression once and reuse the tree.
 
     Trees are immutable and traces key nodes per evaluation, so one parsed
-    tree can serve every report a rule is evaluated against.
+    tree can serve every report a rule is evaluated against. The cache is
+    thread-safe and holds up to 32,768 expressions.
 
     Returns:
         Node: The expression tree.
+
+    Raises:
+        DpmXlSyntaxError: If the text is not a valid expression.
+
+    Examples:
+        >>> parse_cached("{tT, r0010} > 0") is parse_cached("{tT, r0010} > 0")
+        True
     """
     return parse(expression)
 
@@ -2066,16 +2156,34 @@ def evaluate_rule(
         provider: Report data.
         precondition: Optional precondition; the rule is not applicable
             unless it yields at least one true record.
-        trace: Keep intermediate values for :func:`dpmxl.explain.explain`.
+        trace: Keep intermediate values for [`explain`][dpmxl.explain.explain].
         cache: Selections shared by the rules of one report.
         only_keys: Keep only records with these closed-axis key codes in
-            every selection (see :class:`Evaluator`); the precondition is
-            evaluated on all records. Not meaningful with aggregates, whose
-            totals would cover only the kept records.
+            every selection (see [`Evaluator`][dpmxl.evaluator.Evaluator]); the
+            precondition is evaluated on all records. Not meaningful with aggregates,
+            whose totals would cover only the kept records.
 
     Returns:
         RuleResult: Status, per-record outcomes and the evaluation trace.
         Syntax errors are reported as status ``error``, not raised.
+
+    Examples:
+        >>> from dpmxl import MemoryProvider, Number, TableLayout, explain
+        >>> provider = MemoryProvider(
+        ...     [TableLayout("T", rows=("0010", "0020"), columns=("0010",))],
+        ...     {
+        ...         ("T", "0010", "0010", None, ()): Number.of(10, 0),
+        ...         ("T", "0020", "0010", None, ()): Number.of(12, 0),
+        ...     },
+        ... )
+        >>> expression = "with {tT, c0010}: {r0010} >= {r0020}"
+        >>> result = evaluate_rule(expression, provider, precondition="{v_T}")
+        >>> result.status
+        'failed'
+        >>> explain(result.evaluation, expression, result.failures[0].key).summary
+        '10 should be at least 12: difference 2'
+        >>> evaluate_rule("{tT, r0010} >", provider).status
+        'error'
     """
     from .parser import DpmXlSyntaxError
 

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Callable, Collection, Hashable, Iterator, Mapping
+from collections.abc import Callable, Collection, Hashable, Mapping
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
@@ -223,6 +223,7 @@ class Evaluator:
         # Keys named by where and sub clauses written on the selection being
         # evaluated; they override the context's where on those keys.
         self._overrides: tuple[str, ...] = ()
+        self._members: dict[int, list[Value]] = {}
 
     def run(self, node: Node) -> Evaluation:
         """Evaluate a complete expression.
@@ -298,9 +299,16 @@ class Evaluator:
             case Binary():
                 return self._chain(node, context, bindings)
             case In(operand=operand, values=values):
-                members = [
-                    self._set_member(item, context, bindings) for item in values.items
-                ]
+                members = self._members.get(id(values))
+                if members is None:
+                    members = [
+                        self._set_member(item, context, bindings)
+                        for item in values.items
+                    ]
+                    if not _key_names(values):
+                        # Constant members, as nearly always: once, not once
+                        # per record of a where clause.
+                        self._members[id(values)] = members
                 return self.evaluate(operand, context, bindings).map(
                     _unary_per_record(lambda value: _membership(value, members))
                 )
@@ -514,13 +522,24 @@ class Evaluator:
         if data.records and not data.keys:
             raise EvaluationError("where needs a keyed operand")
         result = Recordset(data.keys)
+        # The verdict depends only on the keys the condition names, and many
+        # records share them (qEBB has a few values over thousands of rows).
+        named = {resolve_key(name, data.keys) for name in _key_names(condition)}
+        positions = [index for index, name in enumerate(data.keys) if name in named]
+        verdicts: dict[tuple[Hashable, ...], bool] = {}
         for key, record in data.records.items():
-            bindings = {
-                name: _value_of_key(value)
-                for name, value in zip(data.keys, key, strict=True)
-            }
-            verdict = self.evaluate(condition, context, bindings).single()
-            if verdict is not None and _checked(verdict.value) is True:
+            part = tuple([key[position] for position in positions])
+            kept = verdicts.get(part)
+            if kept is None:
+                bindings = {
+                    name: _value_of_key(value)
+                    for name, value in zip(data.keys, key, strict=True)
+                }
+                verdict = self.evaluate(condition, context, bindings).single()
+                kept = verdicts[part] = (
+                    verdict is not None and _checked(verdict.value) is True
+                )
+            if kept:
                 result.records[key] = record
         return result
 
@@ -830,6 +849,31 @@ def conditional(
             if name not in condition.keys
         )
     )
+    # Index each branch's widening parts by the keys it shares with the
+    # condition, rather than scanning the branch for every condition record.
+    indexes: list[tuple[list[int], dict[tuple[Hashable, ...], list]]] = []
+    for candidate in (then, otherwise) if extra else ():
+        if candidate is None:
+            continue
+        shared = [name for name in candidate.keys if name in condition.keys]
+        sources = [candidate.keys.index(name) for name in shared]
+        parts = [
+            candidate.keys.index(name) if name in candidate.keys else None
+            for name in extra
+        ]
+        index: dict[tuple[Hashable, ...], list] = {}
+        for candidate_key in candidate.records:
+            index.setdefault(
+                tuple([candidate_key[position] for position in sources]), []
+            ).append(
+                tuple(
+                    [
+                        None if position is None else candidate_key[position]
+                        for position in parts
+                    ]
+                )
+            )
+        indexes.append(([condition.keys.index(name) for name in shared], index))
     result = Recordset(condition.keys + extra)
     for key, record in condition.records.items():
         value = verdict(record.value)
@@ -844,10 +888,11 @@ def conditional(
         widenings: Collection[tuple[Hashable, ...]] = [()]
         if extra:
             widenings = dict.fromkeys(
-                tuple(keys.get(name) for name in extra)
-                for candidate in (then, otherwise)
-                if candidate is not None
-                for keys in _matching_keys(candidate, binding)
+                widening
+                for positions, index in indexes
+                for widening in index.get(
+                    tuple([key[position] for position in positions]), ()
+                )
             ).keys()
         for widening in widenings:
             if branch is None:
@@ -865,20 +910,6 @@ def conditional(
                 (record.points, chosen.points) if chosen else record.points,
             )
     return result
-
-
-def _matching_keys(
-    records: Recordset, binding: Mapping[str, Hashable]
-) -> Iterator[dict[str, Hashable]]:
-    """Yield the keys of records consistent with a partial binding."""
-    bound = [
-        (position, binding[name])
-        for position, name in enumerate(records.keys)
-        if name in binding
-    ]
-    for key in records.records:
-        if all(key[position] == part for position, part in bound):
-            yield dict(zip(records.keys, key, strict=True))
 
 
 def _membership(value: Value, members: list[Value]) -> Value:

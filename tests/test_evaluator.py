@@ -469,3 +469,30 @@ def test_unique_points_flatten_nested_points_in_order() -> None:
     assert unique_points((a, b, a)) == (a, b)
     assert unique_points(((a, (b,)), c, (b, a))) == (a, b, c)
     assert unique_points(point for point in (c, c)) == (c,)
+
+
+def test_where_and_widening_if_scale_with_distinct_keys() -> None:
+    table = TableLayout(
+        "O", rows=("0010", "0020"), columns=("0010",), open_keys=("qA", "qB")
+    )
+    values: dict[CellKey, Value] = {
+        ("O", row, "0010", None, (("qA", f"a{i % 3}"), ("qB", f"b{i}"))): Number.of(
+            i, 0
+        )
+        for i in range(300)
+        for row in ("0010", "0020")
+    }
+    calls: list[str] = []
+
+    class Counting(MemoryProvider):
+        def parameter(self, name):
+            calls.append(name)
+            return "a1"
+
+    provider = Counting([table], values)
+    rule = "with {tO, c0010}: if sum({r0010} group by qA) > 5 then {r0020} >= 0 endif"
+    result = evaluate_rule(rule, provider, trace=False)
+    assert result.counts == {"passed": 300, "failed": 0, "null": 0}
+    rule = "count({tO, r0010, c0010} [where qA = wanted and qA in {'a1', 'a2'}]) = 100"
+    assert evaluate_rule(rule, provider).status == "passed"
+    assert calls == ["wanted"] * 3

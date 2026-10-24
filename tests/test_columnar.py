@@ -282,3 +282,66 @@ def test_polars_failures_go_to_the_reference_engine() -> None:
         evaluate_rule_columnar(
             "{tT, r0010, c0010} * 1e24 > 0", PointsFrameProvider(data())
         )
+
+
+def ambiguous_values() -> MemoryProvider:
+    row, keys = ("0010",), ("qK",)
+    tables = [
+        TableLayout("X", rows=row, columns=("0010", "0020"), open_keys=keys),
+        TableLayout("N", rows=row, columns=("0010",), open_keys=keys),
+        TableLayout("Y", rows=row, columns=("0010",)),
+    ]
+    values: dict[CellKey, Value] = {
+        ("X", "0010", "0010", None, (("qK", "a"),)): "12:30",
+        ("X", "0010", "0010", None, (("qK", "b"),)): "x:abc",
+        ("X", "0010", "0020", None, (("qK", "a"),)): Item("T", "b"),
+        ("X", "0010", "0020", None, (("qK", "b"),)): Item("T", "c"),
+        ("N", "0010", "0010", None, (("qK", Number.of(10, 0)),)): Number.of(1, 0),
+        ("N", "0010", "0010", None, (("qK", Number.of(9, 0)),)): Number.of(2, 0),
+        ("Y", "0010", "0010", None, ()): Number.of("0.0000000000004", 13),
+    }
+    return MemoryProvider(tables, values)
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        # Text with a colon is not an item; items are not ordered.
+        ('{tX, r0010, c0010} = "30"', "failed"),
+        ('{tX, r0010, c0010} in {"30"}', "failed"),
+        ("{tX, r0010, c0020} < [T:z]", "error"),
+        ("{tX, r0010, c0020} = [b]", "failed"),
+        # Numeric keys compare as numbers.
+        ("{tN, r0010, c0010} [where qK = 10.0] = 1", "passed"),
+        ("{tN, r0010, c0010} [get qK] > 5", "passed"),
+        ('{tN, r0010, c0010} [sub qK = "10"] = 1', "error"),
+        ("{tX, r0010, c0010} [where qK = 1] > 0", "error"),
+        # Values Decimal(38, 12) does not hold exactly.
+        ("{tY, r0010, c0010} > 0", "passed"),
+        ("{tY, r0010, c0010, interval: false} < 1e30", "passed"),
+    ],
+)
+def test_text_numeric_keys_and_wide_numbers_go_to_the_reference_engine(
+    expression: str, expected: str
+) -> None:
+    provider = ambiguous_values()
+    assert evaluate_rule(expression, provider).status == expected
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ('{tX, r0010, c0010} = "x:abc"', "failed"),
+        ("{tX, r0010, c0020} = [T:b]", "failed"),
+        ('{tX, r0010, c0010} != "zz"', "passed"),
+    ],
+)
+def test_unambiguous_text_and_items_stay_columnar(
+    expression: str, expected: str
+) -> None:
+    provider = ambiguous_values()
+    assert evaluate_rule(expression, provider).status == expected
+    columnar = evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    assert columnar.status == expected

@@ -7,8 +7,9 @@ milliseconds per rule. A record set becomes a data frame:
 
 * key columns ``k:<name>`` (``k:r``, ``k:c``, ``k:s`` for varying closed axes,
   ``k:qEBB`` and the like for open keys), as canonical strings;
-* ``num`` and ``thr``: an exact ``Decimal(38, 12)`` value and its interval
-  threshold (Eurofiling ``iaf`` semantics, see :mod:`dpmxl.values`);
+* ``num`` and ``thr``: a ``Decimal(38, 12)`` value and its interval
+  threshold (Eurofiling ``iaf`` semantics, see :mod:`dpmxl.values`); sums
+  and differences are exact, products and quotients round to 12 decimals;
 * ``txt``: text, item (``category:code`` without ``eba_``) or ISO date values;
 * ``flag``: boolean values.
 
@@ -17,8 +18,9 @@ operands on shared keys exactly like :func:`dpmxl.recordset.combine`.
 
 Anything this module does not implement raises :class:`ColumnarUnsupported`;
 :func:`evaluate_rule_columnar` callers then fall back to the reference
-evaluator, so coverage never trades off correctness. Arithmetic that would
-overflow ``Decimal(38, 12)`` raises inside polars and falls back the same way.
+evaluator, so coverage never trades off correctness. Values that do not fit
+``Decimal(38, 12)`` and arithmetic that would overflow it fall back the same
+way.
 """
 
 from __future__ import annotations
@@ -30,7 +32,7 @@ from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_CEILING, Context, Decimal
 from functools import cached_property
 from typing import Any, Literal, Protocol, cast
 
@@ -74,7 +76,7 @@ from .provider import (
     normalize_code,
 )
 from .recordset import STANDARD_KEYS, EvaluationError, UnsupportedError, resolve_key
-from .values import DECIMAL_CONTEXT, Number, Value
+from .values import Number, Value, type_name
 
 DEC = pl.Decimal(38, 12)
 NUM, THR, TXT, FLAG = "num", "thr", "txt", "flag"
@@ -96,11 +98,11 @@ class FrameProvider(Protocol):
     ``select_frame`` returns one row per selected data point (closed cells
     times reported open key combinations) with columns ``cell`` (an opaque
     cell reference), ``r``, ``c``, ``s`` (raw coordinates or null),
-    ``k:<code>`` for each open key, and the value columns ``num``, ``thr``,
-    ``txt``, ``flag`` (all null when the cell was not reported). A cell and
-    open key combination appears at most once, and a cell's coordinates are
-    the same on every row. String columns may be categorical, which keeps
-    large selections compact.
+    ``k:<code>`` for each open key (text, items or ISO dates), and the value
+    columns ``num``, ``thr``, ``txt``, ``flag`` (all null when the cell was
+    not reported). A cell and open key combination appears at most once, and
+    a cell's coordinates are the same on every row. String columns may be
+    categorical, which keeps large selections compact.
     """
 
     def select_frame(self, query: CellQuery) -> pl.DataFrame:
@@ -161,6 +163,10 @@ def value_columns(value: Value) -> dict[str, Any]:
 
     Returns:
         dict[str, Any]: ``num``, ``thr``, ``txt`` and ``flag`` entries.
+
+    Raises:
+        ColumnarUnsupported: For a number or threshold that ``Decimal(38, 12)``
+            does not hold exactly.
     """
     row: dict[str, Any] = {NUM: None, THR: None, TXT: None, FLAG: None}
     match value:
@@ -169,8 +175,8 @@ def value_columns(value: Value) -> dict[str, Any]:
         case bool():
             row[FLAG] = value
         case Number():
-            row[NUM] = value.value
-            row[THR] = value.tolerance
+            row[NUM] = _exact(value.value)
+            row[THR] = _exact(value.tolerance)
         case Item():
             row[TXT] = canonical_item(value)
         case date():
@@ -178,6 +184,32 @@ def value_columns(value: Value) -> dict[str, Any]:
         case _:
             row[TXT] = str(value)
     return row
+
+
+# Decimal(38, 12) holds 26 integer digits and 12 decimals.
+_LIMIT = Decimal("1e26")
+_WIDE = Context(prec=60)
+
+
+def _exact(value: Decimal) -> Decimal:
+    """Return a decimal that ``Decimal(38, 12)`` holds without rounding.
+
+    Returns:
+        Decimal: The value.
+
+    Raises:
+        ColumnarUnsupported: When the value is out of range or has more than
+            12 decimals; polars would make it null or round it.
+    """
+    exponent = value.normalize(_WIDE).as_tuple().exponent if value.is_finite() else 0
+    if not (
+        isinstance(exponent, int)
+        and value.is_finite()
+        and value.copy_abs() < _LIMIT
+        and exponent >= -12
+    ):
+        raise ColumnarUnsupported(f"{value} does not fit Decimal(38, 12)")
+    return value
 
 
 def scalar_frame(value: Value) -> Frame:
@@ -203,6 +235,10 @@ def frame_from_points(
 
     Returns:
         pl.DataFrame: One row per point.
+
+    Raises:
+        ColumnarUnsupported: For numeric or Boolean key values, or numbers
+            ``Decimal(38, 12)`` does not hold.
     """
     key_names: list[str] = list(open_keys)
     for point in points:
@@ -217,6 +253,9 @@ def frame_from_points(
         }
         for name in key_names:
             value = point.keys.get(name)
+            if isinstance(value, Number | bool):
+                # Key columns are text, which would compare "10" with 10.
+                raise ColumnarUnsupported(f"{type_name(value)} key {name}")
             row[_key(name)] = _key_text(value)
         row.update(value_columns(point.value))
         rows.append(row)
@@ -610,7 +649,9 @@ class ColumnarEvaluator:
             if frame.df.height:
                 raise EvaluationError("where needs a keyed operand")
             return frame
-        predicate = _key_predicate(condition, frame.keys, self.provider)
+        checks: list[pl.Expr] = []
+        predicate = _key_predicate(condition, frame.keys, self.provider, checks)
+        _require_text_or_items(frame.df, checks)
         return Frame(frame.keys, frame.df.filter(predicate.fill_null(False)))
 
     def _get(self, frame: Frame, name: str) -> Frame:
@@ -645,7 +686,10 @@ class ColumnarEvaluator:
         if key is None:
             raise EvaluationError(f"unknown key component {name!r}")
         fixed = _literal_key(value, self.provider)
-        df = frame.df.filter(_key_equals(_key_text_column(key), fixed)).drop(_key(key))
+        checks: list[pl.Expr] = []
+        test = _key_equals(_key_text_column(key), fixed, checks)
+        _require_text_or_items(frame.df, checks)
+        df = frame.df.filter(test).drop(_key(key))
         return Frame(tuple(item for item in frame.keys if item != key), df)
 
     def _rename(self, frame: Frame, pairs: tuple[tuple[str, str], ...]) -> Frame:
@@ -990,9 +1034,13 @@ def _divide(frames: Sequence[Frame]) -> Frame:
             nums.append(None)
             thrs.append(None)
             continue
+        # Quotients are rounded to the frame's 12 decimals, their thresholds
+        # up, so that rounding never narrows an interval.
         quotient = Number(a, ta or ZERO) / Number(b, tb or ZERO)
-        nums.append(quotient.value.quantize(_SCALE, context=DECIMAL_CONTEXT))
-        thrs.append(quotient.tolerance.quantize(_SCALE, context=DECIMAL_CONTEXT))
+        if quotient.value.copy_abs() >= _LIMIT or quotient.tolerance >= _LIMIT:
+            raise ColumnarUnsupported("quotient beyond Decimal(38, 12)")
+        nums.append(quotient.value.quantize(_SCALE, context=_WIDE))
+        thrs.append(quotient.tolerance.quantize(_SCALE, ROUND_CEILING, context=_WIDE))
     columns: dict[str, pl.Series] = {
         _key(key): df.get_column(_key(key)) for key in keys
     }
@@ -1017,10 +1065,9 @@ def _compare(op: str, frames: Sequence[Frame]) -> Frame:
         ">=": diff >= -width,
     }[op]
     ta, tb = _c(TXT, 0), _c(TXT, 1)
-    text_equal = _text_equal(ta, tb)
     text = {
-        "=": text_equal,
-        "!=": ~text_equal,
+        "=": ta == tb,
+        "!=": ta != tb,
         "<": ta < tb,
         "<=": ta <= tb,
         ">": ta > tb,
@@ -1055,6 +1102,16 @@ def _compare(op: str, frames: Sequence[Frame]) -> Frame:
         raise EvaluationError(f"cannot compare values of different types using {op!r}")
     if flags is None and df.height and df.select((flag_a & flag_b).any()).item():
         raise EvaluationError(f"booleans do not support {op!r}")
+    if op in {"=", "!="}:
+        _require_text_or_items(df, [_item_ambiguity(ta, tb)])
+    else:
+        # Items are not ordered; text and dates are. The txt column holds all
+        # three, so only text without a category separator is safe here.
+        colon = (ta.str.contains(":", literal=True)) | tb.str.contains(
+            ":", literal=True
+        )
+        if df.height and df.select((txt_a & txt_b & colon).any()).item():
+            raise ColumnarUnsupported(f"ordering text that may be items with {op!r}")
     result = (
         pl.when(num_a & num_b)
         .then(numeric)
@@ -1074,18 +1131,43 @@ def _compare(op: str, frames: Sequence[Frame]) -> Frame:
     return Frame(keys, df.select(selected))
 
 
-def _text_equal(left: pl.Expr, right: pl.Expr) -> pl.Expr:
-    """Items compare by category and code, ignoring a missing category.
+def _item_ambiguity(left: pl.Expr, right: pl.Expr) -> pl.Expr:
+    """Rows whose text equality and item equality differ.
+
+    Items compare by code, ignoring a category missing on either side
+    (``[qx1]`` matches ``[eba_qEC:qx1]``), text compares exactly (``"12:30"``
+    is not ``"30"``). The ``txt`` column holds both, so it cannot tell which
+    applies when one side has a category, the other has none and the codes
+    match. Everywhere else both readings agree with plain equality.
 
     Returns:
-        pl.Expr: Equality of the two text columns.
+        pl.Expr: True where the readings differ.
     """
-    both = left.str.contains(":", literal=True) & right.str.contains(":", literal=True)
-    return (
-        pl.when(both)
-        .then(left == right)
-        .otherwise(left.str.split(":").list.last() == right.str.split(":").list.last())
+    category = left.str.contains(":", literal=True)
+    return (category != right.str.contains(":", literal=True)) & (
+        left.str.split(":").list.last() == right.str.split(":").list.last()
     )
+
+
+def _literal_ambiguity(column: pl.Expr, text: str) -> pl.Expr:
+    """:func:`_item_ambiguity` against a literal, without splitting the column.
+
+    Returns:
+        pl.Expr: True where the readings differ.
+    """
+    if ":" in text:
+        return column == pl.lit(text.rsplit(":", 1)[1])
+    return column.str.ends_with(f":{text}")
+
+
+def _require_text_or_items(df: pl.DataFrame, checks: Sequence[pl.Expr]) -> None:
+    """Leave equality tests that :func:`_item_ambiguity` flags to the reference.
+
+    Raises:
+        ColumnarUnsupported: When some row's text and item readings differ.
+    """
+    if checks and df.height and df.select(pl.any_horizontal(checks).any()).item():
+        raise ColumnarUnsupported("text that may be an item without its category")
 
 
 def _conditional(
@@ -1169,6 +1251,7 @@ def _membership(
         members.append(member.df.row(0, named=True))
     num, thr, txt = pl.col(NUM), pl.col(THR).fill_null(ZERO), pl.col(TXT)
     tests: list[pl.Expr] = []
+    ambiguities: list[pl.Expr] = []
     for member in members:
         if member[NUM] is not None:
             width = thr + pl.lit(member[THR] or ZERO, DEC)
@@ -1176,7 +1259,8 @@ def _membership(
                 num.is_not_null() & ((num - pl.lit(member[NUM], DEC)).abs() <= width)
             )
         elif member[TXT] is not None:
-            tests.append(txt.is_not_null() & _text_equal(txt, pl.lit(member[TXT])))
+            tests.append(txt.is_not_null() & (txt == pl.lit(member[TXT])))
+            ambiguities.append(_literal_ambiguity(txt, member[TXT]))
         elif member[FLAG] is not None:
             tests.append(pl.col(FLAG) == pl.lit(member[FLAG]))
     if (
@@ -1186,6 +1270,7 @@ def _membership(
         and TXT in frame.kinds
     ):
         raise EvaluationError("cannot compare values of different types")
+    _require_text_or_items(frame.df, ambiguities)
     found = pl.any_horizontal(tests) if tests else pl.lit(False)
     return _with_values(
         frame, flag=pl.when(_is_null()).then(pl.lit(None, pl.Boolean)).otherwise(found)
@@ -1366,45 +1451,64 @@ def _literal_key(node: Node, provider: FrameProvider) -> str | None:
             return canonical_item(item)
         case Literal_(kind="null"):
             return None
-        case Literal_(value=value):
-            return _key_text(
-                _literal_value(node) if isinstance(value, Decimal) else value
-            )
+        case Literal_(kind="string" | "date", value=value):
+            return _key_text(value)
         case Parameter(name=name):
-            return _key_text(provider.parameter(name))
-    raise ColumnarUnsupported("non-literal key value")
+            value = provider.parameter(name)
+            if isinstance(value, str | Item | date) or value is None:
+                return _key_text(value)
+    # Key columns are text: "10" may have been a number or text, and a number
+    # never equals text (the reference evaluator reports that).
+    raise ColumnarUnsupported("key compared with a number, Boolean or expression")
 
 
-def _key_equals(column: pl.Expr, value: str | None) -> pl.Expr:
+def _key_equals(column: pl.Expr, value: str | None, checks: list[pl.Expr]) -> pl.Expr:
     if value is None:
         return column.is_null()
-    return _text_equal(column, pl.lit(value))
+    checks.append(_literal_ambiguity(column, value))
+    return column == pl.lit(value)
 
 
-def _key_predicate(node: Node, keys: Sequence[str], provider: FrameProvider) -> pl.Expr:
+def _key_predicate(
+    node: Node, keys: Sequence[str], provider: FrameProvider, checks: list[pl.Expr]
+) -> pl.Expr:
+    """Translate a where condition on keys to a filter expression.
+
+    Args:
+        node: The condition.
+        keys: The operand's keys.
+        provider: Report parameters.
+        checks: Collects the equality tests' :func:`_item_ambiguity`.
+
+    Returns:
+        pl.Expr: The filter.
+
+    Raises:
+        ColumnarUnsupported: For conditions beyond key comparisons.
+    """
     match node:
         case Binary(op="and", left=left, right=right):
-            return _key_predicate(left, keys, provider) & _key_predicate(
-                right, keys, provider
+            return _key_predicate(left, keys, provider, checks) & _key_predicate(
+                right, keys, provider, checks
             )
         case Binary(op="or", left=left, right=right):
-            return _key_predicate(left, keys, provider) | _key_predicate(
-                right, keys, provider
+            return _key_predicate(left, keys, provider, checks) | _key_predicate(
+                right, keys, provider, checks
             )
         case Unary(op="not", operand=operand):
-            return ~_key_predicate(operand, keys, provider)
+            return ~_key_predicate(operand, keys, provider, checks)
         case Binary(op="=" | "!=", left=Name(name=name), right=right):
             column = _key_column(name, keys)
-            test = _key_equals(column, _literal_key(right, provider))
+            test = _key_equals(column, _literal_key(right, provider), checks)
             return test if node.op == "=" else ~test
         case Binary(op="=" | "!=", left=left, right=Name(name=name)):
             column = _key_column(name, keys)
-            test = _key_equals(column, _literal_key(left, provider))
+            test = _key_equals(column, _literal_key(left, provider), checks)
             return test if node.op == "=" else ~test
         case In(operand=Name(name=name), values=values):
             column = _key_column(name, keys)
             tests = [
-                _key_equals(column, _literal_key(item, provider))
+                _key_equals(column, _literal_key(item, provider), checks)
                 for item in values.items
             ]
             return pl.any_horizontal(tests) if tests else pl.lit(False)

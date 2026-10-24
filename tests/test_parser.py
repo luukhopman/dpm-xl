@@ -199,3 +199,11 @@ def test_deliberate_readings_that_keep_eba_rules_unchanged() -> None:
     for source in ("1 < 2 < 3", "- not true"):
         with pytest.raises(DpmXlSyntaxError):
             parse(source)
+
+
+def test_items_may_be_escaped_property_codes() -> None:
+    node = parse("{tA} [where [`x.y`] = [ eba_qEC:qx1 ]]")
+    assert isinstance(node, Where)
+    assert node.condition == Binary(
+        "=", Literal_(Item(None, "x.y"), "item"), Literal_(Item("qEC", "qx1"), "item")
+    )

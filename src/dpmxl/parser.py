@@ -158,11 +158,12 @@ def _describe(token: Token) -> str:
 
 _EXPRESSION_KEYWORDS = KEYWORDS - {"group by"}
 _COMPARISON_OPERATORS = frozenset({"=", "!=", "<>", "<", "<=", ">", ">="})
-# An item: the grammar's ITEM_SIGNATURE (namespace:code) or a bare code, as
-# in the legacy [ei86], between brackets with optional spaces.
+# An item: the grammar's ITEM_SIGNATURE (namespace:code), or a property code
+# (bare, as in the legacy [ei86], or escaped), between brackets with optional
+# spaces.
 _ITEM = (
     r"\[\s*(?:[A-Za-z](?:[A-Za-z0-9_\-]*:[A-Za-z0-9._\-]*[A-Za-z0-9])+"
-    r"|[A-Za-z](?:[A-Za-z0-9_.]*[A-Za-z0-9])?)\s*\]"
+    r"|[A-Za-z](?:[A-Za-z0-9_.]*[A-Za-z0-9])?|`[A-Za-z0-9_.+]+`)\s*\]"
 )
 _NUMBER = r"\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|\.\d+"
 # Expression mode: everything outside braces, clause brackets included. Most
@@ -883,9 +884,7 @@ class _Parser:
             return Literal_(_date(self, token), "date", span=(token.start, token.end))
         if kind == "item":
             self.advance()
-            return Literal_(
-                Item.parse(token.text[1:-1]), "item", span=(token.start, token.end)
-            )
+            return Literal_(_item(token.text), "item", span=(token.start, token.end))
         if kind == "boolean":
             self.advance()
             return Literal_(
@@ -1244,7 +1243,7 @@ class _Parser:
             return Literal_(token.text.casefold() == "true", "boolean", span=span)
         if kind == "item":
             self.advance()
-            return Literal_(Item.parse(token.text[1:-1]), "item", span=span)
+            return Literal_(_item(token.text), "item", span=span)
         if kind == "date":
             self.advance()
             try:
@@ -1300,6 +1299,16 @@ def _name(token: Token) -> str:
     """
     text = token.text
     return text[1:-1] if text[:1] == "`" else text
+
+
+def _item(text: str) -> Item:
+    """Read an item token, dropping the backticks of an escaped code.
+
+    Returns:
+        Item: The item.
+    """
+    inner = text[1:-1].strip()
+    return Item.parse(inner[1:-1] if inner[:1] == "`" else inner)
 
 
 def _date(parser: _Parser, token: Token) -> date:

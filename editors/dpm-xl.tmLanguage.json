@@ -1,0 +1,130 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "DPM-XL",
+  "scopeName": "source.dpm-xl",
+  "fileTypes": [
+    "dpmxl",
+    "dpm-xl"
+  ],
+  "patterns": [
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#dates"
+    },
+    {
+      "include": "#selections"
+    },
+    {
+      "include": "#items"
+    },
+    {
+      "include": "#expression"
+    }
+  ],
+  "repository": {
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.dpm-xl",
+          "match": "\"[^\"]*\""
+        },
+        {
+          "name": "string.quoted.single.dpm-xl",
+          "match": "'[^']*'"
+        }
+      ]
+    },
+    "dates": {
+      "name": "constant.other.date.dpm-xl",
+      "match": "#[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9:]{8})?#"
+    },
+    "items": {
+      "name": "constant.other.item.dpm-xl",
+      "match": "\\[\\s*[A-Za-z_][A-Za-z0-9_.\\-]*:[A-Za-z0-9_.\\-]+\\s*\\]"
+    },
+    "selections": {
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.braces.dpm-xl"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.braces.dpm-xl"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#dates"
+        },
+        {
+          "include": "#items"
+        },
+        {
+          "include": "#selections"
+        },
+        {
+          "name": "storage.type.dpm-xl",
+          "match": "(?<![A-Za-z0-9_.])(set\\-boolean|set\\-integer|set\\-number|set\\-string|set\\-date|set\\-item|boolean|integer|number|string|date|item)(?![A-Za-z0-9_])"
+        },
+        {
+          "name": "keyword.other.option.dpm-xl",
+          "match": "(?<![A-Za-z0-9_.])(interval|default)(?![A-Za-z0-9_])"
+        },
+        {
+          "name": "constant.language.dpm-xl",
+          "match": "(?<![A-Za-z0-9_.])(false|null|true)(?![A-Za-z0-9_])"
+        },
+        {
+          "name": "variable.other.axis.dpm-xl",
+          "match": "(?<![A-Za-z0-9_.])[rcs](\\*|[0-9A-Za-z]+(-[0-9A-Za-z]+)?)(?![A-Za-z0-9_.\\-])"
+        },
+        {
+          "name": "entity.name.type.table.dpm-xl",
+          "match": "(?<![A-Za-z0-9_.])[tgvop](`[^`]*`|[A-Za-z0-9_.\\-]+)"
+        },
+        {
+          "include": "#numbers"
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.dpm-xl",
+      "match": "(?<![A-Za-z_])\\d+(\\.\\d+)?([eE][+-]?\\d+)?%?"
+    },
+    "expression": {
+      "patterns": [
+        {
+          "name": "keyword.control.dpm-xl",
+          "match": "(?<![A-Za-z0-9_.])(?i:current\\s+data\\s+point|partition\\s+by|data\\s+points|following|preceding|unbounded|group\\s+by|order\\s+by|between|rename|endif|range|where|desc|else|over|then|with|and|asc|get|not|sub|xor|if|in|or|to)(?![A-Za-z0-9_])"
+        },
+        {
+          "name": "constant.language.dpm-xl",
+          "match": "(?<![A-Za-z0-9_.])(?i:false|null|true)(?![A-Za-z0-9_])"
+        },
+        {
+          "name": "support.function.dpm-xl",
+          "match": "(?<![A-Za-z0-9_.])(time_shift|annualise|intersect|max_aggr|min_aggr|semester|quarter|setdiff|symdiff|filter|isnull|length|median|set_of|substr|count|match|month|power|union|date|rank|sqrt|week|year|abs|avg|day|exp|len|log|max|min|nvl|sum|ln)(?=\\s*\\()"
+        },
+        {
+          "include": "#numbers"
+        },
+        {
+          "name": "keyword.operator.dpm-xl",
+          "match": "!=|:=|<\\-|<=|<>|>=|%|\\&|\\*|\\+|\\-|/|<|=|>"
+        },
+        {
+          "name": "variable.other.escaped.dpm-xl",
+          "match": "`[^`]*`"
+        }
+      ]
+    }
+  }
+}

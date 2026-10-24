@@ -15,8 +15,19 @@ All notable changes to this project are documented here. The project follows
 - The public API is documented: every name in a module's `__all__`
   (including the `dpmxl.ast` tree and `VALUE_COLUMNS`), the columnar frame
   schema and which caches are thread-safe.
+- `tokenize()` and `Token(kind, text, start, end)` are public, with kinds
+  for syntax highlighting (keyword, function, operator, brace, table and axis
+  references, literal kinds, item, identifier, punctuation and more); every
+  AST node's source `span` is documented.
+- `DpmXlSyntaxError.end`, and `pointer()` underlines the offending text.
+- `dpmxl.grammar`: keywords, operators, function names and parameter types as
+  frozensets, and a TextMate grammar in `editors/dpm-xl.tmLanguage.json`.
 
 ### Changed
+
+- The tokenizer splits selections into tokens; `Token.text` is the exact
+  source text (quotes, brackets and backticks included) and `Token` is a
+  named tuple. Error positions inside selections point at the component.
 
 - `Number.of` raises `ValueError` for `decimals` beyond the decimal128 range
   (about -6,100 to 6,100, such as -7000), which 0.1.1 accepted; callers that

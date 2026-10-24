@@ -136,7 +136,15 @@ class SelectionSpec:
 
 @dataclass(frozen=True, slots=True)
 class Node:
-    """Base class for expression nodes."""
+    """Base class for expression nodes.
+
+    Every node has a public ``span``: the half-open ``(start, end)`` character
+    offsets of its source in the parsed expression, so ``expression[start:end]``
+    is the node's text. A parenthesized operand's span includes the
+    parentheses; a clause's span runs from its operand to the closing ``]``.
+    Spans take no part in equality or hashing. Nodes built directly default to
+    ``(0, 0)``.
+    """
 
     span: Span = field(default=(0, 0), compare=False, kw_only=True)
 

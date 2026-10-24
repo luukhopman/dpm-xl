@@ -82,9 +82,9 @@ expression, key)` returns an `Explanation`: `summary` (the sentence above),
 (`too_high` or `too_low`) and the `left` and `right` sides with their
 intervals.
 
-`parse(expression)` returns the expression tree and raises
-`DpmXlSyntaxError` with a plain message, the `position` and a `pointer()`
-that marks it:
+`parse(expression)` returns the expression tree, whose nodes keep their
+source `span`, and raises `DpmXlSyntaxError` with a plain message, the
+`position` and `end` of the offending text and a `pointer()` that marks it:
 
 ```text
 $ dpm-xl check "with {tC_01.00, c0010}: {r0010} = {r0020} +* {r0030}"
@@ -156,6 +156,18 @@ v0004: not_applicable
   records: 0 passed, 0 failed, 0 not evaluated
 4 rules: 2 failed, 1 passed, 1 not_applicable
 ```
+
+## Editor support
+
+`tokenize(expression)` (in `dpmxl.parser`) returns `Token(kind, text, start,
+end)` tuples for syntax highlighting: `keyword`, `function`, `operator`,
+`punctuation`, `brace`, `table`, `table_group`, `operation`, `variable` and
+`parameter` references, `axis` coordinates (`r0010`, `c*`), `type`, `period`,
+`item`, `identifier` and the literal kinds `number`, `string`, `date`,
+`boolean` and `null`; the parser works from the same tokens. `dpmxl.grammar`
+lists the keywords, operators, function names and parameter types as
+frozensets, and `textmate_grammar()` builds the TextMate grammar in
+[`editors/dpm-xl.tmLanguage.json`](https://github.com/luukhopman/dpm-xl/blob/main/editors/dpm-xl.tmLanguage.json).
 
 ## Supported language
 
@@ -265,6 +277,7 @@ checks both evaluators agree case by case. `PointsFrameProvider` adapts any `Dat
 | Module | Purpose |
 | --- | --- |
 | `dpmxl.parser` | Tokenizer and recursive-descent parser. Nodes keep source spans. |
+| `dpmxl.grammar` | Keywords, operators and function names; the TextMate grammar. |
 | `dpmxl.ast` | Expression tree, selections, axis selectors and item literals. |
 | `dpmxl.values` | `Number` with interval tolerance, comparison and formatting. |
 | `dpmxl.recordset` | Keyed record sets and the natural join used by every operator. |
@@ -321,6 +334,12 @@ read concurrently; `MemoryProvider` is.
 uv sync
 uv run pytest
 uv run ruff check . && uv run ruff format --check . && uv run ty check
+```
+
+After changing `dpmxl.grammar`, regenerate the editor grammar:
+
+```bash
+uv run python -c "import json; from dpmxl.grammar import textmate_grammar; print(json.dumps(textmate_grammar(), indent=2))" > editors/dpm-xl.tmLanguage.json
 ```
 
 `tests/data/eba_expressions.txt` is a sample of about 300 EBA rule

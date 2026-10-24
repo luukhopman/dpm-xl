@@ -1,0 +1,9 @@
+# Malformed expressions for comparing syntax error messages, one per line.
+{tC_01.00, r0010, c0010} >=
+with {tC_01.00, c0010}: {r0010} = {r0020} +
+if {tC_01.00, r0010} > 0 then true
+sum({tC_01.00, r0010} group by) > 0
+{tC_01.00, r0010, c0010 = 5
+with {tC_01.00, c0010}: {r0010} = {r0020} +* {r0030}
+max_aggr({tC_01.00, r0010}, ) > 0
+{tC_01.00, r0010} in {[eba_qAE:qx2007]

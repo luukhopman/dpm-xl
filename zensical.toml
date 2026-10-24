@@ -65,6 +65,7 @@ nav = [
   { "Project" = [
     { "Changelog" = "project/changelog.md" },
     { "Stability and versioning" = "project/stability.md" },
+    { "Benchmarks" = "project/benchmarks.md" },
     { "Security" = "project/security.md" },
     { "Contributing" = "project/contributing.md" },
     { "Licence" = "project/licence.md" },

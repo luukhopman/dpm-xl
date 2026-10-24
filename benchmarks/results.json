@@ -1,0 +1,428 @@
+{
+  "date": "2026-10-24",
+  "machine": "AMD Ryzen 7 4700U with Radeon Graphics, 8 cores",
+  "os": "Linux 7.0.0-38-generic",
+  "runs": 3,
+  "tools": {
+    "dpm-xl": {
+      "version": "1.0.0",
+      "python": "3.12.3",
+      "distributions": 1,
+      "site_packages_mb": 0.6872644424438477,
+      "import_seconds": 0.2024084460008453,
+      "import_rss_mb": 18,
+      "corpus_seconds": 3.45797172300081,
+      "corpus_rss_mb": 23,
+      "expressions": 14174,
+      "accepted": 14172,
+      "rejected": [
+        "with {default: 0, interval: true}:if    sum({tC_08.01.a, r0070, c0255} [where qEEA in {[eba_qAE:qx2007]} ])       =    sum({tC_08.01.a, r0010, c0255} [where qEEA in {[eba_qAE:qx2007]} ])then    sum(      filter(        {tC_08.02, c0255} [where qEEA=[eba_qAE:qx2007]],        {tC_08.02, c0010, interval:false} < 1      )    ) = sum({tC_09.02, r0130, c0120} [where CEG=[eba_GA:qx2014]])else    trueendif",
+        "with {tV_03.01, default: null, interval: false}: if not(isnull({c0010})) or not(isnull({c0020})) or not(isnull({c0040}))ornot(isnull({c0060})) or not(isnull({c0080})) or not(isnull({c0090})) or not(isnull({c0100})) or not(isnull({c0110})) or not(isnull({c0120})) or not(isnull({c0130})) or not(isnull({c0140})) or not(isnull({c0150})) then ( not ( isnull ({c0050}) ) ) endif"
+      ],
+      "constructs": [
+        {
+          "label": "rank over a partition",
+          "expression": "with {tC_08.02}: rank({c0010} over (partition by qEEA order by qEEA desc)) > 0",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "windowed aggregate",
+          "expression": "with {tC_08.02}: sum({c0010} over (order by qEEA data points between unbounded preceding and current data point)) > 0",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "statements with :=",
+          "expression": "x := {tC_01.00, r0010, c0010}; x > 0",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "persistent assignment <-",
+          "expression": "{tC_01.00, r0010, c0010} <- {tC_01.00, r0020, c0010} + 1",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "operation reference {o...}",
+          "expression": "{oV_1234} > 0",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "set operators and literals",
+          "expression": "union({tC_01.00, r0010, c0010}, {tC_01.00, r0020, c0010}) = {1, 2}",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "typed parameter {p...}",
+          "expression": "{tC_01.00, r0010, c0010} > {pThreshold, number, default: 5}",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "text concatenation &",
+          "expression": "{tC_01.00, r0010, c0010} & \"x\" = \"1x\"",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "date functions",
+          "expression": "year({tC_01.00, r0010, c0010}) = 2026",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "date() and date literals",
+          "expression": "date(2026, 12, 31) = #2026-12-31#",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "table group {g...}",
+          "expression": "{gCOREP_OF, r0010, c0010} > 0",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "annualise",
+          "expression": "annualise({tC_01.00, r0010, c0010}, 2, qEBB) > 0",
+          "valid": true,
+          "message": null
+        }
+      ],
+      "malformed": [
+        {
+          "label": null,
+          "expression": "{tC_01.00, r0010, c0010} >=",
+          "valid": false,
+          "message": "expression ends where an operand is expected at position 27"
+        },
+        {
+          "label": null,
+          "expression": "with {tC_01.00, c0010}: {r0010} = {r0020} +",
+          "valid": false,
+          "message": "expression ends where an operand is expected at position 43"
+        },
+        {
+          "label": null,
+          "expression": "if {tC_01.00, r0010} > 0 then true",
+          "valid": false,
+          "message": "expected 'endif', found end of expression at position 34"
+        },
+        {
+          "label": null,
+          "expression": "sum({tC_01.00, r0010} group by) > 0",
+          "valid": false,
+          "message": "expected a name, found ')' at position 30"
+        },
+        {
+          "label": null,
+          "expression": "{tC_01.00, r0010, c0010 = 5",
+          "valid": false,
+          "message": "unterminated '{': no matching '}' at position 0"
+        },
+        {
+          "label": null,
+          "expression": "with {tC_01.00, c0010}: {r0010} = {r0020} +* {r0030}",
+          "valid": false,
+          "message": "unexpected '*' where an operand is expected at position 43"
+        },
+        {
+          "label": null,
+          "expression": "max_aggr({tC_01.00, r0010}, ) > 0",
+          "valid": false,
+          "message": "unexpected ')' where an operand is expected at position 28"
+        },
+        {
+          "label": null,
+          "expression": "{tC_01.00, r0010} in {[eba_qAE:qx2007]",
+          "valid": false,
+          "message": "unterminated '{': no matching '}' at position 21"
+        }
+      ]
+    },
+    "pydpm-xl": {
+      "version": "0.3.12",
+      "python": "3.12.3",
+      "distributions": 17,
+      "site_packages_mb": 142.4458408355713,
+      "import_seconds": 2.1659230869991006,
+      "import_rss_mb": 97,
+      "corpus_seconds": 27.68006191099994,
+      "corpus_rss_mb": 108,
+      "expressions": 14174,
+      "accepted": 14172,
+      "rejected": [
+        "with {default: 0, interval: true}:if    sum({tC_08.01.a, r0070, c0255} [where qEEA in {[eba_qAE:qx2007]} ])       =    sum({tC_08.01.a, r0010, c0255} [where qEEA in {[eba_qAE:qx2007]} ])then    sum(      filter(        {tC_08.02, c0255} [where qEEA=[eba_qAE:qx2007]],        {tC_08.02, c0010, interval:false} < 1      )    ) = sum({tC_09.02, r0130, c0120} [where CEG=[eba_GA:qx2014]])else    trueendif",
+        "with {tV_03.01, default: null, interval: false}: if not(isnull({c0010})) or not(isnull({c0020})) or not(isnull({c0040}))ornot(isnull({c0060})) or not(isnull({c0080})) or not(isnull({c0090})) or not(isnull({c0100})) or not(isnull({c0110})) or not(isnull({c0120})) or not(isnull({c0130})) or not(isnull({c0140})) or not(isnull({c0150})) then ( not ( isnull ({c0050}) ) ) endif"
+      ],
+      "constructs": [
+        {
+          "label": "rank over a partition",
+          "expression": "with {tC_08.02}: rank({c0010} over (partition by qEEA order by qEEA desc)) > 0",
+          "valid": false,
+          "message": "offendingSymbol: [@7,17:20='rank',<70>,1:17] msg: extraneous input 'rank' expecting {BOOLEAN_LITERAL, NOT, MATCH, PLUS, MINUS, MAX_AGGR, MIN_AGGR, SUM, COUNT, AVG, MEDIAN, ABS, ISNULL, EXP, LN, SQRT, POWER, LOG, MAX, MIN, LPAREN, '{', '[', IF, NVL, FILTER, TIME_SHIFT, LEN, INTEGER_LITERAL, DECIMAL_LITERAL, PERCENT_LITERAL, STRING_LITERAL, EMPTY_LITERAL, DATE_LITERAL, TIME_INTERVAL_LITERAL, TIME_PERIOD_LITERAL, ROW_COMPONENT, COL_COMPONENT, SHEET_COMPONENT, PROPERTY_CODE}"
+        },
+        {
+          "label": "windowed aggregate",
+          "expression": "with {tC_08.02}: sum({c0010} over (order by qEEA data points between unbounded preceding and current data point)) > 0",
+          "valid": false,
+          "message": "offendingSymbol: [@13,29:32='over',<70>,1:29] msg: mismatched input 'over' expecting {'group by', RPAREN}"
+        },
+        {
+          "label": "statements with :=",
+          "expression": "x := {tC_01.00, r0010, c0010}; x > 0",
+          "valid": false,
+          "message": "offendingSymbol: [@17,33:33='>',<12>,1:33] msg: mismatched input '>' expecting ':='"
+        },
+        {
+          "label": "persistent assignment <-",
+          "expression": "{tC_01.00, r0010, c0010} <- {tC_01.00, r0020, c0010} + 1",
+          "valid": false,
+          "message": "offendingSymbol: [@10,25:26='<-',<7>,1:25] msg: mismatched input '<-' expecting {<EOF>, ';'}"
+        },
+        {
+          "label": "operation reference {o...}",
+          "expression": "{oV_1234} > 0",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "set operators and literals",
+          "expression": "union({tC_01.00, r0010, c0010}, {tC_01.00, r0020, c0010}) = {1, 2}",
+          "valid": false,
+          "message": "offendingSymbol: [@1,5:5='(',<39>,1:5] msg: missing ':=' at '('"
+        },
+        {
+          "label": "typed parameter {p...}",
+          "expression": "{tC_01.00, r0010, c0010} > {pThreshold, number, default: 5}",
+          "valid": false,
+          "message": "offendingSymbol: None msg: token recognition error at: 'p'"
+        },
+        {
+          "label": "text concatenation &",
+          "expression": "{tC_01.00, r0010, c0010} & \"x\" = \"1x\"",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "date functions",
+          "expression": "year({tC_01.00, r0010, c0010}) = 2026",
+          "valid": false,
+          "message": "offendingSymbol: [@1,4:4='(',<39>,1:4] msg: missing ':=' at '('"
+        },
+        {
+          "label": "date() and date literals",
+          "expression": "date(2026, 12, 31) = #2026-12-31#",
+          "valid": false,
+          "message": "offendingSymbol: [@1,4:4='(',<39>,1:4] msg: missing ':=' at '('"
+        },
+        {
+          "label": "table group {g...}",
+          "expression": "{gCOREP_OF, r0010, c0010} > 0",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "annualise",
+          "expression": "annualise({tC_01.00, r0010, c0010}, 2, qEBB) > 0",
+          "valid": false,
+          "message": "offendingSymbol: [@1,9:9='(',<39>,1:9] msg: missing ':=' at '('"
+        }
+      ],
+      "malformed": [
+        {
+          "label": null,
+          "expression": "{tC_01.00, r0010, c0010} >=",
+          "valid": false,
+          "message": "offendingSymbol: [@11,27:26='<EOF>',<-1>,1:27] msg: mismatched input '<EOF>' expecting {BOOLEAN_LITERAL, NOT, MATCH, PLUS, MINUS, MAX_AGGR, MIN_AGGR, SUM, COUNT, AVG, MEDIAN, ABS, ISNULL, EXP, LN, SQRT, POWER, LOG, MAX, MIN, LPAREN, '{', '[', IF, NVL, FILTER, TIME_SHIFT, LEN, INTEGER_LITERAL, DECIMAL_LITERAL, PERCENT_LITERAL, STRING_LITERAL, EMPTY_LITERAL, DATE_LITERAL, TIME_INTERVAL_LITERAL, TIME_PERIOD_LITERAL, ROW_COMPONENT, COL_COMPONENT, SHEET_COMPONENT, PROPERTY_CODE}"
+        },
+        {
+          "label": null,
+          "expression": "with {tC_01.00, c0010}: {r0010} = {r0020} +",
+          "valid": false,
+          "message": "offendingSymbol: [@21,43:42='<EOF>',<-1>,1:43] msg: mismatched input '<EOF>' expecting {BOOLEAN_LITERAL, NOT, MATCH, PLUS, MINUS, MAX_AGGR, MIN_AGGR, SUM, COUNT, AVG, MEDIAN, ABS, ISNULL, EXP, LN, SQRT, POWER, LOG, MAX, MIN, LPAREN, '{', '[', IF, NVL, FILTER, TIME_SHIFT, LEN, INTEGER_LITERAL, DECIMAL_LITERAL, PERCENT_LITERAL, STRING_LITERAL, EMPTY_LITERAL, DATE_LITERAL, TIME_INTERVAL_LITERAL, TIME_PERIOD_LITERAL, ROW_COMPONENT, COL_COMPONENT, SHEET_COMPONENT, PROPERTY_CODE}"
+        },
+        {
+          "label": null,
+          "expression": "if {tC_01.00, r0010} > 0 then true",
+          "valid": false,
+          "message": "offendingSymbol: [@16,34:33='<EOF>',<-1>,1:34] msg: mismatched input '<EOF>' expecting {ENDIF, ELSE}"
+        },
+        {
+          "label": null,
+          "expression": "sum({tC_01.00, r0010} group by) > 0",
+          "valid": false,
+          "message": "offendingSymbol: [@10,30:30=')',<40>,1:30] msg: missing {ROW_COMPONENT, COL_COMPONENT, SHEET_COMPONENT, PROPERTY_CODE} at ')'"
+        },
+        {
+          "label": null,
+          "expression": "{tC_01.00, r0010, c0010 = 5",
+          "valid": false,
+          "message": "offendingSymbol: None msg: token recognition error at: '='"
+        },
+        {
+          "label": null,
+          "expression": "with {tC_01.00, c0010}: {r0010} = {r0020} +* {r0030}",
+          "valid": false,
+          "message": "offendingSymbol: [@21,43:43='*',<18>,1:43] msg: extraneous input '*' expecting {BOOLEAN_LITERAL, NOT, MATCH, PLUS, MINUS, MAX_AGGR, MIN_AGGR, SUM, COUNT, AVG, MEDIAN, ABS, ISNULL, EXP, LN, SQRT, POWER, LOG, MAX, MIN, LPAREN, '{', '[', IF, NVL, FILTER, TIME_SHIFT, LEN, INTEGER_LITERAL, DECIMAL_LITERAL, PERCENT_LITERAL, STRING_LITERAL, EMPTY_LITERAL, DATE_LITERAL, TIME_INTERVAL_LITERAL, TIME_PERIOD_LITERAL, ROW_COMPONENT, COL_COMPONENT, SHEET_COMPONENT, PROPERTY_CODE}"
+        },
+        {
+          "label": null,
+          "expression": "max_aggr({tC_01.00, r0010}, ) > 0",
+          "valid": false,
+          "message": "offendingSymbol: [@8,26:26=',',<37>,1:26] msg: extraneous input ',' expecting {'group by', RPAREN}"
+        },
+        {
+          "label": null,
+          "expression": "{tC_01.00, r0010} in {[eba_qAE:qx2007]",
+          "valid": false,
+          "message": "offendingSymbol: [@13,38:37='<EOF>',<-1>,1:38] msg: missing CURLY_BRACKET_RIGHT at '<EOF>'"
+        }
+      ]
+    },
+    "dpmcore": {
+      "version": "0.2.1",
+      "python": "3.12.3",
+      "distributions": 15,
+      "site_packages_mb": 143.81988620758057,
+      "import_seconds": 2.235121109000829,
+      "import_rss_mb": 102,
+      "corpus_seconds": 29.50233138099975,
+      "corpus_rss_mb": 113,
+      "expressions": 14174,
+      "accepted": 14172,
+      "rejected": [
+        "with {default: 0, interval: true}:if    sum({tC_08.01.a, r0070, c0255} [where qEEA in {[eba_qAE:qx2007]} ])       =    sum({tC_08.01.a, r0010, c0255} [where qEEA in {[eba_qAE:qx2007]} ])then    sum(      filter(        {tC_08.02, c0255} [where qEEA=[eba_qAE:qx2007]],        {tC_08.02, c0010, interval:false} < 1      )    ) = sum({tC_09.02, r0130, c0120} [where CEG=[eba_GA:qx2014]])else    trueendif",
+        "with {tV_03.01, default: null, interval: false}: if not(isnull({c0010})) or not(isnull({c0020})) or not(isnull({c0040}))ornot(isnull({c0060})) or not(isnull({c0080})) or not(isnull({c0090})) or not(isnull({c0100})) or not(isnull({c0110})) or not(isnull({c0120})) or not(isnull({c0130})) or not(isnull({c0140})) or not(isnull({c0150})) then ( not ( isnull ({c0050}) ) ) endif"
+      ],
+      "constructs": [
+        {
+          "label": "rank over a partition",
+          "expression": "with {tC_08.02}: rank({c0010} over (partition by qEEA order by qEEA desc)) > 0",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "windowed aggregate",
+          "expression": "with {tC_08.02}: sum({c0010} over (order by qEEA data points between unbounded preceding and current data point)) > 0",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "statements with :=",
+          "expression": "x := {tC_01.00, r0010, c0010}; x > 0",
+          "valid": false,
+          "message": "Unexpected error: \"offendingSymbol: [@17,33:33='>',<12>,1:33] msg: mismatched input '>' expecting ':='\""
+        },
+        {
+          "label": "persistent assignment <-",
+          "expression": "{tC_01.00, r0010, c0010} <- {tC_01.00, r0020, c0010} + 1",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "operation reference {o...}",
+          "expression": "{oV_1234} > 0",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "set operators and literals",
+          "expression": "union({tC_01.00, r0010, c0010}, {tC_01.00, r0020, c0010}) = {1, 2}",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "typed parameter {p...}",
+          "expression": "{tC_01.00, r0010, c0010} > {pThreshold, number, default: 5}",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "text concatenation &",
+          "expression": "{tC_01.00, r0010, c0010} & \"x\" = \"1x\"",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "date functions",
+          "expression": "year({tC_01.00, r0010, c0010}) = 2026",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "date() and date literals",
+          "expression": "date(2026, 12, 31) = #2026-12-31#",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "table group {g...}",
+          "expression": "{gCOREP_OF, r0010, c0010} > 0",
+          "valid": true,
+          "message": null
+        },
+        {
+          "label": "annualise",
+          "expression": "annualise({tC_01.00, r0010, c0010}, 2, qEBB) > 0",
+          "valid": true,
+          "message": null
+        }
+      ],
+      "malformed": [
+        {
+          "label": null,
+          "expression": "{tC_01.00, r0010, c0010} >=",
+          "valid": false,
+          "message": "Unexpected error: \"offendingSymbol: [@11,27:26='<EOF>',<-1>,1:27] msg: mismatched input '<EOF>' expecting {BOOLEAN_LITERAL, NOT, MATCH, PLUS, MINUS, MAX_AGGR, MIN_AGGR, SUM, COUNT, AVG, MEDIAN, RANK, ABS, ISNULL, EXP, LN, SQRT, POWER, LOG, MAX, MIN, LPAREN, '{', '[', IF, NVL, FILTER, TIME_SHIFT, ANNUALISE, YEAR, SEMESTER, QUARTER, MONTH, WEEK, DAY, DATE, SET_OF, UNION, INTERSECT, SETDIFF, SYMDIFF, LEN, SUBSTR, INTEGER_LITERAL, DECIMAL_LITERAL, PERCENT_LITERAL, STRING_LITERAL, EMPTY_LITERAL, DATE_LITERAL, ESCAPED_IDENTIFIER, ROW_COMPONENT, COL_COMPONENT, SHEET_COMPONENT, PROPERTY_CODE}\""
+        },
+        {
+          "label": null,
+          "expression": "with {tC_01.00, c0010}: {r0010} = {r0020} +",
+          "valid": false,
+          "message": "Unexpected error: \"offendingSymbol: [@21,43:42='<EOF>',<-1>,1:43] msg: mismatched input '<EOF>' expecting {BOOLEAN_LITERAL, NOT, MATCH, PLUS, MINUS, MAX_AGGR, MIN_AGGR, SUM, COUNT, AVG, MEDIAN, RANK, ABS, ISNULL, EXP, LN, SQRT, POWER, LOG, MAX, MIN, LPAREN, '{', '[', IF, NVL, FILTER, TIME_SHIFT, ANNUALISE, YEAR, SEMESTER, QUARTER, MONTH, WEEK, DAY, DATE, SET_OF, UNION, INTERSECT, SETDIFF, SYMDIFF, LEN, SUBSTR, INTEGER_LITERAL, DECIMAL_LITERAL, PERCENT_LITERAL, STRING_LITERAL, EMPTY_LITERAL, DATE_LITERAL, ESCAPED_IDENTIFIER, ROW_COMPONENT, COL_COMPONENT, SHEET_COMPONENT, PROPERTY_CODE}\""
+        },
+        {
+          "label": null,
+          "expression": "if {tC_01.00, r0010} > 0 then true",
+          "valid": false,
+          "message": "Unexpected error: \"offendingSymbol: [@16,34:33='<EOF>',<-1>,1:34] msg: mismatched input '<EOF>' expecting {ENDIF, ELSE}\""
+        },
+        {
+          "label": null,
+          "expression": "sum({tC_01.00, r0010} group by) > 0",
+          "valid": false,
+          "message": "Unexpected error: \"offendingSymbol: [@10,30:30=')',<42>,1:30] msg: missing {ESCAPED_IDENTIFIER, ROW_COMPONENT, COL_COMPONENT, SHEET_COMPONENT, PROPERTY_CODE} at ')'\""
+        },
+        {
+          "label": null,
+          "expression": "{tC_01.00, r0010, c0010 = 5",
+          "valid": false,
+          "message": "Unexpected error: \"offendingSymbol: None msg: token recognition error at: '='\""
+        },
+        {
+          "label": null,
+          "expression": "with {tC_01.00, c0010}: {r0010} = {r0020} +* {r0030}",
+          "valid": false,
+          "message": "Unexpected error: \"offendingSymbol: [@21,43:43='*',<18>,1:43] msg: extraneous input '*' expecting {BOOLEAN_LITERAL, NOT, MATCH, PLUS, MINUS, MAX_AGGR, MIN_AGGR, SUM, COUNT, AVG, MEDIAN, RANK, ABS, ISNULL, EXP, LN, SQRT, POWER, LOG, MAX, MIN, LPAREN, '{', '[', IF, NVL, FILTER, TIME_SHIFT, ANNUALISE, YEAR, SEMESTER, QUARTER, MONTH, WEEK, DAY, DATE, SET_OF, UNION, INTERSECT, SETDIFF, SYMDIFF, LEN, SUBSTR, INTEGER_LITERAL, DECIMAL_LITERAL, PERCENT_LITERAL, STRING_LITERAL, EMPTY_LITERAL, DATE_LITERAL, ESCAPED_IDENTIFIER, ROW_COMPONENT, COL_COMPONENT, SHEET_COMPONENT, PROPERTY_CODE}\""
+        },
+        {
+          "label": null,
+          "expression": "max_aggr({tC_01.00, r0010}, ) > 0",
+          "valid": false,
+          "message": "Unexpected error: \"offendingSymbol: [@8,26:26=',',<39>,1:26] msg: extraneous input ',' expecting {'group by', 'over', RPAREN}\""
+        },
+        {
+          "label": null,
+          "expression": "{tC_01.00, r0010} in {[eba_qAE:qx2007]",
+          "valid": false,
+          "message": "Unexpected error: \"offendingSymbol: [@13,38:37='<EOF>',<-1>,1:38] msg: missing CURLY_BRACKET_RIGHT at '<EOF>'\""
+        }
+      ]
+    }
+  }
+}

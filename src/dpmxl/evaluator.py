@@ -1034,7 +1034,7 @@ def _analytic(node: Analytic, data: Recordset) -> Recordset:
                 )
             continue
         for current, (key, _record) in enumerate(members):
-            low, high = _window_span(node, members, order, current)
+            low, high = _window_span(node, members, ranks, order, current)
             window = members[low:high]
             values: list[Value] = [
                 item.value for _, item in window if item.value is not None
@@ -1077,13 +1077,15 @@ def _order_values(
 def _window_span(
     node: Analytic,
     members: list[tuple[tuple[Hashable, ...], Record]],
+    ranks: list[tuple[Any, ...]],
     order: list[tuple[int, bool]],
     current: int,
 ) -> tuple[int, int]:
     """Return the half-open range of sorted members in a record's window.
 
     Without a window clause the window is the whole partition, or, with an
-    ``order by``, every member up to the current one and its peers.
+    ``order by``, every member up to the current one and its peers: the
+    members with the same values for all order keys.
 
     Returns:
         tuple[int, int]: Start and end positions.
@@ -1115,9 +1117,32 @@ def _window_span(
         raise EvaluationError("a range window with offsets needs one order key")
     index, descending = order[0]
     value = members[current][0][index]
-    low = _range_bound(window.start, value, descending, members, index, start=True)
-    high = _range_bound(window.end, value, descending, members, index, start=False)
+    bounds = []
+    for bound, start in ((window.start, True), (window.end, False)):
+        if bound.kind == "current data point":
+            bounds.append(_peer_bound(ranks, current, start=start))
+        else:
+            bounds.append(
+                _range_bound(bound, value, descending, members, index, start=start)
+            )
+    low, high = bounds
     return low, max(high, low)
+
+
+def _peer_bound(ranks: list[tuple[Any, ...]], current: int, *, start: bool) -> int:
+    """Return where the current member's peers start, or end (exclusive).
+
+    Returns:
+        int: A position among the sorted members.
+    """
+    position = current
+    if start:
+        while position > 0 and ranks[position - 1] == ranks[current]:
+            position -= 1
+        return position
+    while position + 1 < len(ranks) and ranks[position + 1] == ranks[current]:
+        position += 1
+    return position + 1
 
 
 def _row_bound(bound: WindowBound, current: int, count: int) -> int:
@@ -1157,21 +1182,18 @@ def _range_bound(
         return 0
     if bound.kind == "unbounded following":
         return count
-    if bound.kind == "current data point":
-        target = value
+    offset = bound.offset if bound.kind == "following" else -bound.offset
+    if descending:
+        offset = -offset
+    if isinstance(value, date):
+        # Without a period, an offset over dates counts days.
+        target: Hashable = _shift_date(value, bound.period or "D", offset)
+    elif isinstance(value, Decimal):
+        if bound.period is not None:
+            raise EvaluationError("a range window period needs a date order key")
+        target = value + offset
     else:
-        offset = bound.offset if bound.kind == "following" else -bound.offset
-        if descending:
-            offset = -offset
-        if isinstance(value, Decimal) and bound.period is None:
-            target = value + offset
-        elif isinstance(value, date):
-            target = _shift_date(value, bound.period or "D", offset)
-        else:
-            raise EvaluationError(
-                "a range window offset needs a number or date order key"
-                + (" and a period for dates" if isinstance(value, date) else "")
-            )
+        raise EvaluationError("a range window offset needs a number or date order key")
     goal = _sort_value(target)
     # Members are sorted ascending on the key, or descending.
     positions = range(count)

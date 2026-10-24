@@ -270,11 +270,13 @@ Every distinct EBA rule and precondition expression in releases
   and order keys must be keys of the operand; `rank` needs `order by` and
   ranks by those keys, ties sharing the lowest rank and leaving gaps (1, 1,
   3). Without a window clause the window is the whole partition, or with
-  `order by` every record up to the current one and its peers (`range
-  between unbounded preceding and current data point`). `data points`
-  windows count records; `range` windows compare the single order key's
-  values (numbers, or dates with a period: `3 M preceding` is three calendar
-  months back). `preceding` follows the sort direction. These analytic calls
+  `order by` every record up to the current one and its peers, the records
+  with the same values for every order key (`range between unbounded
+  preceding and current data point`). `data points` windows count records.
+  A `range` bound with an offset needs a single number or date order key:
+  `3 preceding` is 3 less (3 days earlier for a date), `3 M preceding` three
+  calendar months earlier; a period on a number key is an error.
+  `preceding` follows the sort direction. These analytic calls
   are `Analytic` nodes, not `Call`s, and `rank` is not in
   `evaluator.AGGREGATES`.
 - **Clauses.** `[get key]` omits records whose fact is null; a `where` or

@@ -673,3 +673,95 @@ def test_dates_shifted_out_of_range_are_errors(expression: str) -> None:
     result = evaluate_rule(expression, report())
     assert result.status == "error"
     assert "leaves the years 1 to 9999" in (result.message or "")
+
+
+def test_analytic_peers_compare_every_order_key() -> None:
+    result = values("sum({tU, r*, c*} over (order by c, r))", grid())
+    assert {key: str(item.value) for key, item in result.items()} == {
+        ("0010", "0010"): "1",
+        ("0020", "0010"): "3",
+        ("0010", "0020"): "7",
+        ("0020", "0020"): "15",
+    }
+    peers = values(
+        "sum({tU, r*, c*} over (order by c range between current data point "
+        "and current data point))",
+        grid(),
+    )
+    assert {key: str(item.value) for key, item in peers.items()} == {
+        ("0010", "0010"): "3",
+        ("0020", "0010"): "3",
+        ("0010", "0020"): "12",
+        ("0020", "0020"): "12",
+    }
+
+
+def grid() -> MemoryProvider:
+    data: dict[CellKey, Value] = {
+        ("U", "0010", "0010", None, ()): Number.of(1, 0),
+        ("U", "0020", "0010", None, ()): Number.of(2, 0),
+        ("U", "0010", "0020", None, ()): Number.of(4, 0),
+        ("U", "0020", "0020", None, ()): Number.of(8, 0),
+    }
+    layout = TableLayout("U", rows=("0010", "0020"), columns=("0010", "0020"))
+    return MemoryProvider([layout], data)
+
+
+@pytest.mark.parametrize(
+    ("expression", "message"),
+    [
+        (
+            "sum({tU, c0010, r*} over (order by r range between 1 preceding and "
+            "current data point)) > 0",
+            "needs a number or date order key",
+        ),
+        (
+            "sum({tU, c*, r*} over (order by r, c range between 1 preceding and "
+            "current data point)) > 0",
+            "needs one order key",
+        ),
+        (
+            "sum({tU, c*, r*} over (order by r range between 1 M preceding and "
+            "current data point)) > 0",
+            "needs a number or date order key",
+        ),
+    ],
+)
+def test_range_window_errors(expression: str, message: str) -> None:
+    result = evaluate_rule(expression, grid())
+    assert result.status == "error"
+    assert message in (result.message or "")
+
+
+def test_range_window_periods_need_a_date_key() -> None:
+    provider = MemoryProvider(
+        [TableLayout("N", columns=("0010",), open_keys=("qN",))],
+        {
+            ("N", None, "0010", None, (("qN", Number(Decimal(n))),)): Number.of(n, 0)
+            for n in (1, 2)
+        },
+    )
+    result = evaluate_rule(
+        "sum({tN, c0010} over (order by qN range between 1 M preceding and "
+        "current data point)) > 0",
+        provider,
+    )
+    assert result.status == "error"
+    assert "period needs a date order key" in (result.message or "")
+    shifted = evaluate_rule(
+        "sum({tN, c0010} over (order by qN range between 1 preceding and "
+        "current data point)) > 0",
+        provider,
+    )
+    assert shifted.status == "passed"
+
+
+def test_range_window_offsets_over_dates_count_days_without_a_period() -> None:
+    assert plain(
+        "count({tO, c0010} over (order by qDAT range between 91 preceding and "
+        "current data point))"
+    ) == {
+        ("a", date(2026, 3, 31)): "1",
+        ("b", date(2026, 6, 30)): "2",
+        ("c", date(2026, 9, 30)): "1",
+    }

@@ -98,18 +98,54 @@ def render_object(obj: griffe.Object | griffe.Alias, level: int) -> str:
     return "\n".join(parts)
 
 
+def _parameters(parameters: griffe.Parameters) -> str:
+    """Render parameters as Python source, with ``*`` and ``/`` markers.
+
+    Returns:
+        str: The parameter list without parentheses.
+    """
+    parts: list[str] = []
+    star = False
+    for index, parameter in enumerate(parameters):
+        if index == 0 and parameter.name in {"self", "cls"}:
+            continue
+        kind = parameter.kind
+        if kind is griffe.ParameterKind.keyword_only and not star:
+            parts.append("*")
+            star = True
+        prefix = ""
+        if kind is griffe.ParameterKind.var_positional:
+            prefix, star = "*", True
+        elif kind is griffe.ParameterKind.var_keyword:
+            prefix = "**"
+        text = prefix + parameter.name
+        if parameter.annotation is not None:
+            text += f": {parameter.annotation}"
+        if parameter.default is not None:
+            text += (
+                f" = {parameter.default}"
+                if parameter.annotation
+                else f"={parameter.default}"
+            )
+        parts.append(text)
+        following = list(parameters)[index + 1 :]
+        if kind is griffe.ParameterKind.positional_only and not any(
+            item.kind is griffe.ParameterKind.positional_only for item in following
+        ):
+            parts.append("/")
+    return ", ".join(parts)
+
+
 def _signature(obj: griffe.Object | griffe.Alias, source: str) -> str:
     if obj.is_function:
-        parameters = ", ".join(str(parameter) for parameter in obj.parameters)
+        parameters = _parameters(obj.parameters)
         returns = f" -> {obj.returns}" if obj.returns else ""
         return f"def {obj.name}({parameters}){returns}"
     bases = ", ".join(str(base) for base in obj.bases)
     init = obj.members.get("__init__")
     parameters = ""
     if init is not None and init.is_function:
-        parameters = ", ".join(
-            str(parameter) for parameter in init.parameters if parameter.name != "self"
-        )
+        parameters = _parameters(init.parameters)
         return f"class {obj.name}({parameters})" + (
             f"  # bases: {bases}" if bases else ""
         )

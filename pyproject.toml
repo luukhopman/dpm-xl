@@ -11,10 +11,13 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [{ name = "Luuk Hopman", email = "github@luukhopman.nl" }]
-keywords = ["DPM", "DPM-XL", "EBA", "XBRL", "validation rules"]
+keywords = ["DPM", "DPM-XL", "EBA", "XBRL", "validation rules", "dpm-toolkit"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
     "Intended Audience :: Financial and Insurance Industry",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.11",
@@ -23,16 +26,17 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3.15",
     "Topic :: Office/Business :: Financial",
+    "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
 dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/luukhopman/dpm-xl"
+Documentation = "https://luukhopman.github.io/dpm-xl/"
 Source = "https://github.com/luukhopman/dpm-xl"
 Issues = "https://github.com/luukhopman/dpm-xl/issues"
 Changelog = "https://github.com/luukhopman/dpm-xl/blob/main/CHANGELOG.md"
-Documentation = "https://luukhopman.github.io/dpm-xl/"
 
 [project.scripts]
 dpm-xl = "dpmxl.cli:main"
@@ -50,11 +54,11 @@ docs = [
     "mkdocstrings-python>=2.0.10,<3",
     "polars>=2.0,<3",
     "dpm-xbrl>=1.0,<2",
+    "dpm-synth>=1.0,<2",
 ]
 dev = [
     { include-group = "test" },
     { include-group = "lint" },
-    "dpm-synth>=1.0,<2",
     { include-group = "docs" },
 ]
 
@@ -62,14 +66,14 @@ dev = [
 url = "https://pypi.org/simple"
 default = true
 
-[tool.ruff]
-target-version = "py311"
-line-length = 88
-
 # dpm-synth 1.0.0 is not on PyPI yet; the docs group takes it from GitHub
 # until it is (see AGENTS.md).
 [tool.uv.sources]
 dpm-synth = { git = "https://github.com/luukhopman/dpm-synth", branch = "main" }
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
 
 [tool.ruff.lint]
 preview = true

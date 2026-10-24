@@ -211,7 +211,7 @@ def markdown(results: dict[str, object]) -> str:
     ]
     for index, construct in enumerate(tools[names[0]]["constructs"]):
         lines.append(
-            f"| {construct['label']}: `{construct['expression']}` | "
+            f"| {construct['label']} | "
             + " | ".join(
                 "accepted" if tools[name]["constructs"][index]["valid"] else "rejected"
                 for name in names
@@ -219,11 +219,12 @@ def markdown(results: dict[str, object]) -> str:
             + " |"
         )
     lines += ["", "#### Syntax error messages", ""]
-    for index, case in enumerate(tools[names[0]]["malformed"]):
+    # Two examples are enough to show the difference in kind.
+    for index, case in enumerate(tools[names[0]]["malformed"][:2]):
         lines += [f"`{case['expression']}`", ""]
         for name in names:
             message = tools[name]["malformed"][index]["message"]
-            lines.append(f"- {name}: {_short(message, 200)}")
+            lines.append(f"- {name}: {_short(message, 110)}")
         lines.append("")
     return "\n".join(lines)
 
@@ -235,17 +236,30 @@ def main() -> int:
         int: The exit status.
     """
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--corpus", type=Path, required=True)
+    parser.add_argument("--corpus", type=Path)
+    parser.add_argument(
+        "--render-only",
+        action="store_true",
+        help="rewrite results.md from results.json without measuring",
+    )
     parser.add_argument(
         "--env",
         action="append",
-        required=True,
+        default=[],
         metavar="TOOL=VENV",
         help="a tool (dpm-xl, pydpm-xl, dpmcore) and its virtual environment",
     )
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--out", type=Path, default=HERE)
     arguments = parser.parse_args()
+    if arguments.render_only:
+        results = json.loads((arguments.out / "results.json").read_text("utf-8"))
+        (arguments.out / "results.md").write_text(
+            markdown(results) + "\n", encoding="utf-8"
+        )
+        return 0
+    if arguments.corpus is None or not arguments.env:
+        parser.error("--corpus and at least one --env are required")
     tools = {}
     for entry in arguments.env:
         tool, _, venv = entry.partition("=")

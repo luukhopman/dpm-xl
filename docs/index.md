@@ -6,7 +6,12 @@ description: What dpm-xl is, who it is for, a 30-second example and where to go 
 
 A Python parser and evaluator for **DPM-XL**, the expression language of EBA
 validation rules and similar checks. Give it a rule and your report data; it
-tells you which records fail and explains each failure in plain numbers:
+tells you which records fail and explains each failure in plain numbers.
+
+dpm-xl is an independent project, not affiliated with or endorsed by the
+European Banking Authority.
+
+A failure reads like this:
 
 ```text
 1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision
@@ -27,9 +32,6 @@ validation into a reporting platform, or analyse and edit DPM-XL rules.
   upload, a database or test fixtures. [dpm-xbrl](https://luukhopman.github.io/dpm-xbrl/)
   reads xBRL-CSV and XBRL-XML reports; the
   [end-to-end guide](guides/end-to-end.md) connects the two.
-
-dpm-xl is an independent project, not affiliated with or endorsed by the
-European Banking Authority.
 
 ## Installation
 
@@ -71,6 +73,10 @@ failed {'passed': 1, 'failed': 1, 'null': 0}
 
 Column `0010` adds up; in column `0020`, 1,204 is 7 short of 1,180 + 31, more
 than the rounding of three whole-unit amounts (±1.5) can explain.
+
+## Toolkit
+
+--8<-- "docs/.snippets/toolkit.md"
 
 ## Where next
 

@@ -5,7 +5,12 @@ from pathlib import Path
 import pytest
 
 from dpmxl import DpmXlSyntaxError, parse
+from dpmxl.ast import Call
+from dpmxl.evaluator import AGGREGATES
 from dpmxl.grammar import (
+    AGGREGATE_FUNCTIONS,
+    ANALYTIC_FUNCTIONS,
+    CALL_NAMES,
     FUNCTIONS,
     KEYWORDS,
     LITERAL_WORDS,
@@ -16,6 +21,7 @@ from dpmxl.grammar import (
     TIME_PERIODS,
     TOKEN_KINDS,
     WINDOW_KEYWORDS,
+    canonical_function,
     textmate_grammar,
 )
 from dpmxl.parser import Token, tokenize
@@ -191,3 +197,16 @@ def test_pointer_marks_the_failing_line_only() -> None:
     error = DpmXlSyntaxError("bad", "a +\nbcd efg", 4, 20)
     assert error.pointer() == "bcd efg\n^~~~~~~"
     assert DpmXlSyntaxError("bad", "abc", 1).end == 2
+
+
+@pytest.mark.parametrize("name", sorted(FUNCTIONS - ANALYTIC_FUNCTIONS))
+def test_function_spellings_map_to_call_names(name: str) -> None:
+    node = parse(f"{name.upper()}(x)")
+    assert isinstance(node, Call)
+    assert node.name == canonical_function(name)
+    assert node.name in CALL_NAMES
+
+
+def test_aggregate_call_names_are_the_evaluator_aggregates() -> None:
+    assert {canonical_function(name) for name in AGGREGATE_FUNCTIONS} == AGGREGATES
+    assert AGGREGATES <= CALL_NAMES

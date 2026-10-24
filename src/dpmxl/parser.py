@@ -37,6 +37,7 @@ from .ast import (
     With,
 )
 from .grammar import (
+    FUNCTION_ALIASES,
     FUNCTIONS,
     KEYWORDS,
     REFERENCE_PREFIXES,
@@ -145,7 +146,6 @@ def _describe(token: Token) -> str:
 
 
 _EXPRESSION_KEYWORDS = KEYWORDS - {"group by"}
-_AGGREGATE_ALIASES = {"max_aggr": "max", "min_aggr": "min"}
 _COMPARISON_OPERATORS = frozenset({"=", "!=", "<>", "<", "<=", ">", ">="})
 _NUMBER = r"\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|\.\d+"
 # Expression mode: everything outside braces, clause brackets included. Most
@@ -809,12 +809,12 @@ class _Parser:
                     break
         end = self.expect(")")
         function = _name(name).casefold()
-        if function in _AGGREGATE_ALIASES:
+        if function in FUNCTION_ALIASES:
             # max_aggr/min_aggr are the aggregate forms of max/min, which the
             # evaluators recognise by their single operand.
             if len(args) != 1:
                 raise self.error(f"{function} takes one operand")
-            function = _AGGREGATE_ALIASES[function]
+            function = FUNCTION_ALIASES[function]
         return Call(function, tuple(args), group_by, span=self.span(name.start, end))
 
     # Selections ----------------------------------------------------------

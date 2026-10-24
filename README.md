@@ -166,7 +166,8 @@ end)` tuples for syntax highlighting: `keyword`, `function`, `operator`,
 `item`, `identifier` and the literal kinds `number`, `string`, `date`,
 `boolean` and `null`; the parser works from the same tokens. `dpmxl.grammar`
 lists the keywords, operators, function names and parameter types as
-frozensets, and `textmate_grammar()` builds the TextMate grammar in
+frozensets; `canonical_function(name)` gives the `Call.name` a spelling parses
+to (`max_aggr` is `max`), `CALL_NAMES` all of them; `textmate_grammar()` builds the TextMate grammar in
 [`editors/dpm-xl.tmLanguage.json`](https://github.com/luukhopman/dpm-xl/blob/main/editors/dpm-xl.tmLanguage.json).
 
 ## Supported language

@@ -124,6 +124,33 @@ FUNCTIONS = (
 )
 """Function names, recognized when followed by ``(``."""
 
+FUNCTION_ALIASES = {"max_aggr": "max", "min_aggr": "min"}
+"""Source spellings whose ``Call.name`` differs: the aggregate forms of
+``max`` and ``min``, which evaluators recognize by their single operand."""
+
+
+def canonical_function(name: str) -> str:
+    """Map a function's source spelling to the ``Call.name`` the parser gives it.
+
+    Args:
+        name: A function name as written, in any case.
+
+    Returns:
+        str: The lower-case name, with ``max_aggr`` and ``min_aggr`` read as
+        ``max`` and ``min``.
+    """
+    folded = name.casefold()
+    return FUNCTION_ALIASES.get(folded, folded)
+
+
+CALL_NAMES = frozenset(
+    canonical_function(name) for name in FUNCTIONS - ANALYTIC_FUNCTIONS
+)
+"""Every ``Call.name`` a known function parses to. Aggregates among them are
+``{canonical_function(name) for name in AGGREGATE_FUNCTIONS}``, which equals
+``dpmxl.evaluator.AGGREGATES``. Analytic functions (``rank``, and aggregates
+with ``over``) parse to :class:`dpmxl.ast.Analytic` instead of a call."""
+
 OPERATORS = frozenset(
     {
         "!=",
@@ -316,7 +343,9 @@ __all__ = [
     "AGGREGATE_FUNCTIONS",
     "ANALYTIC_FUNCTIONS",
     "AXIS_PREFIXES",
+    "CALL_NAMES",
     "FUNCTIONS",
+    "FUNCTION_ALIASES",
     "KEYWORDS",
     "LITERAL_WORDS",
     "OPERATORS",
@@ -327,5 +356,6 @@ __all__ = [
     "TIME_PERIODS",
     "TOKEN_KINDS",
     "WINDOW_KEYWORDS",
+    "canonical_function",
     "textmate_grammar",
 ]

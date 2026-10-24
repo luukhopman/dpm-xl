@@ -27,7 +27,8 @@ All notable changes to this project are documented here. The project follows
   `setdiff` and `symdiff`, `in` with any set operand and `default: {…}`;
   the `ValueSet` value type.
 - `dpmxl.grammar`: keywords, operators, function names and parameter types as
-  frozensets, and a TextMate grammar in `editors/dpm-xl.tmLanguage.json`.
+  frozensets, `canonical_function` and `CALL_NAMES` for the `Call.name` of
+  each spelling, and a TextMate grammar in `editors/dpm-xl.tmLanguage.json`.
 
 ### Changed
 

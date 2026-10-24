@@ -320,7 +320,7 @@ def _condition_summary(
                 f"{formatter.render(operand, filled=False)} must be empty, "
                 f"but {value} is reported"
             )
-        case In(operand=operand, values=values):
+        case In(operand=operand, values=SetLiteral() as values):
             options = ", ".join(
                 formatter.render(item, filled=True) for item in values.items[:6]
             )
@@ -503,11 +503,16 @@ class _Formatter:
             case Call(name=name, args=args):
                 inner = ", ".join(self.render(arg, filled=filled) for arg in args)
                 return f"{name}({inner})"
-            case In(operand=operand, values=values):
+            case In(operand=operand, values=SetLiteral() as values):
                 members = ", ".join(
                     self.render(item, filled=filled) for item in values.items
                 )
                 return f"{self.render(operand, filled=filled)} in {{{members}}}"
+            case In(operand=operand, values=values):
+                return (
+                    f"{self.render(operand, filled=filled)} in "
+                    f"{self.render(values, filled=filled)}"
+                )
             case SetLiteral(items=items):
                 return (
                     "{"

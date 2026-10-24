@@ -23,6 +23,9 @@ All notable changes to this project are documented here. The project follows
 - Text concatenation `&`, `substr`, `log`, the date functions `year`,
   `semester`, `quarter`, `month`, `week`, `day` and `date(y, m, d)`, and date
   literals with a time part (`#2026-12-31T10:00:00#`).
+- Sets: literals such as `{1, 2}` and `{}`, `set_of`, `union`, `intersect`,
+  `setdiff` and `symdiff`, `in` with any set operand and `default: {…}`;
+  the `ValueSet` value type.
 - `dpmxl.grammar`: keywords, operators, function names and parameter types as
   frozensets, and a TextMate grammar in `editors/dpm-xl.tmLanguage.json`.
 
@@ -31,6 +34,9 @@ All notable changes to this project are documented here. The project follows
 - The tokenizer splits selections into tokens; `Token.text` is the exact
   source text (quotes, brackets and backticks included) and `Token` is a
   named tuple. Error positions inside selections point at the component.
+- `{}` is the empty set rather than an empty selection, and `In.values` may
+  be any set-valued node, not only a `SetLiteral`; `Value` includes
+  `ValueSet`.
 
 - `Number.of` raises `ValueError` for `decimals` beyond the decimal128 range
   (about -6,100 to 6,100, such as -7000), which 0.1.1 accepted; callers that

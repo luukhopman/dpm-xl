@@ -5,10 +5,29 @@ from decimal import Decimal
 
 import pytest
 
-from dpmxl import MemoryProvider, Number, TableLayout, Value, evaluate_rule, parse
-from dpmxl.ast import Binary, Get, Literal_, Name, Where
+from dpmxl import (
+    Item,
+    MemoryProvider,
+    Number,
+    TableLayout,
+    Value,
+    evaluate_rule,
+    parse,
+)
+from dpmxl.ast import (
+    Binary,
+    Call,
+    Get,
+    In,
+    Literal_,
+    Name,
+    Selection,
+    SetLiteral,
+    Where,
+)
 from dpmxl.evaluator import Evaluator
 from dpmxl.provider import CellKey
+from dpmxl.values import ValueSet
 
 
 def report(**parameters: Value) -> MemoryProvider:
@@ -126,3 +145,70 @@ def test_escaped_names_and_empty_strings_parse() -> None:
     assert values("{tO, c0010} [where `qKEY` = 'a']") == {
         ("a", date(2026, 3, 31)): Number(Decimal(10))
     }
+
+
+def numbers(*items: int) -> ValueSet:
+    return ValueSet(tuple(Number(Decimal(item)) for item in items))
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ("{1, 2, 2.0}", numbers(1, 2)),
+        ("{}", ValueSet()),
+        ("{(-5), 3}", numbers(-5, 3)),
+        ("{[eba_qK:a], [qK:a], [qK:b]}", ValueSet((Item("qK", "a"), Item("qK", "b")))),
+        ("union({1, 2}, {2, 3}, {4})", numbers(1, 2, 3, 4)),
+        ("intersect({1, 2, 3}, {2, 3, 4}, {3})", numbers(3)),
+        ("setdiff({1, 2, 3}, {2})", numbers(1, 3)),
+        ("symdiff({1, 2}, {2, 3})", numbers(1, 3)),
+        ("set_of({tT, r*, c0010})", numbers(100, 60, 40)),
+        ("set_of(null)", ValueSet()),
+        ("union(1, null)", numbers(1)),
+        ("3 in union({1, 2}, {3})", True),
+        ("2 in setdiff({1, 2}, {2})", False),
+        ("100 in {tT, r*, c0010}", True),
+        ("1 not in {}", True),
+        ("null in {1}", None),
+    ],
+)
+def test_set_literals_and_operators(expression: str, expected: Value) -> None:
+    assert value(expression) == expected
+
+
+def test_in_takes_any_set_operand() -> None:
+    assert values("with {tT, c0010}: {r*} in set_of({tT, r0010-0020, c0010})") == {
+        "0010": True,
+        "0020": True,
+        "0030": False,
+    }
+    node = parse("{tA} in union({1}, {2})")
+    assert isinstance(node, In) and isinstance(node.values, Call)
+    # A brace after in that starts with a reference is a selection.
+    selection = parse("{tA} in {tB, r*}")
+    assert isinstance(selection, In) and isinstance(selection.values, Selection)
+
+
+@pytest.mark.parametrize(
+    ("expression", "message"),
+    [
+        ("{1} = {1}", "cannot compare set with set"),
+        ("{tT, r0010, c0010, default: {1}} > 0", "a set default applies only to set"),
+        ("union({1}) = {1}", "union takes at least 2 operands"),
+        ("setdiff({1}, {2}, {3}) = {1}", "setdiff takes 2 operands"),
+        ("{{1}} = 1", "unknown selection component '{'"),
+    ],
+)
+def test_set_errors(expression: str, message: str) -> None:
+    result = evaluate_rule(expression, report())
+    assert result.status == "error"
+    assert result.message is not None and message in result.message
+
+
+def test_set_default_parses() -> None:
+    node = parse("{tT, r0010, default: {1, 2}}")
+    assert isinstance(node, Selection)
+    assert node.spec.default == SetLiteral(
+        (Literal_(Decimal(1), "number"), Literal_(Decimal(2), "number"))
+    )
+    assert node.spec.text() == "{tT, r0010, default: {1, 2}}"

@@ -582,15 +582,39 @@ class _Parser:
             )
         if self.at_keyword("in"):
             self.advance()
-            values = self.parse_set()
+            values = self.parse_set_operand()
             return In(left, values, span=(left.span[0], values.span[1]))
         if self.at_keyword("not") and _is_keyword(self.peek(), "in"):
             start = self.advance().start
             self.advance()
-            values = self.parse_set()
+            values = self.parse_set_operand()
             node = In(left, values, span=(left.span[0], values.span[1]))
             return Unary("not", node, span=(start, values.span[1]))
         return left
+
+    def parse_set_operand(self) -> Node:
+        if self.at("{") and self.starts_set(self.index + 1):
+            return self.parse_set()
+        return self.parse_concat()
+
+    def starts_set(self, index: int) -> bool:
+        """Whether a brace whose first inner token is at ``index`` is a set.
+
+        Returns:
+            bool: True for ``{}`` and braces that start with a literal, an
+            item or a signed number; selections start with a reference or
+            axis instead.
+        """
+        token = self.tokens[index]
+        kind = token.kind
+        if kind in _LITERAL_KINDS or (kind == "brace" and token.text == "}"):
+            return True
+        if kind == "operator":
+            return token.text in {"+", "-"}
+        if kind == "punctuation" and token.text == "(":
+            following = self.tokens[index + 1]
+            return following.kind == "number" or following.text in {"+", "-"}
+        return False
 
     def parse_set(self) -> SetLiteral:
         opening = self.expect("{")
@@ -797,6 +821,9 @@ class _Parser:
 
     def parse_brace(self, opening: Token) -> Node:
         first = self.current
+        if self.starts_set(self.index):
+            self.index -= 1
+            return self.parse_set()
         if first.kind == "variable" and self.peek().text == "}":
             self.advance()
             closing = self.advance()
@@ -882,7 +909,7 @@ class _Parser:
             str: The text up to the next comma or brace.
         """
         match = re.match(r"[^,{}]*", self.expression[token.start :])
-        return match.group().strip() if match else token.text
+        return (match.group().strip() if match else "") or token.text
 
     def parse_axis(self) -> tuple[AxisSelector, str]:
         token = self.current
@@ -915,9 +942,11 @@ class _Parser:
             raise self.error("empty axis list", opening)
         return AxisSelector(parts=tuple(parts)), axis
 
-    def parse_default(self) -> Literal_:
+    def parse_default(self) -> Literal_ | SetLiteral:
         token = self.current
         start = token.start
+        if token.kind == "brace" and token.text == "{":
+            return self.parse_set()
         sign = ""
         if token.kind == "operator" and token.text in {"+", "-"}:
             sign = "-" if token.text == "-" else ""
@@ -960,6 +989,7 @@ class _Parser:
 
 
 _SYMBOL_KINDS = frozenset({"punctuation", "brace", "operator"})
+_LITERAL_KINDS = frozenset({"number", "string", "date", "item", "boolean", "null"})
 
 
 def _keyword(token: Token) -> str:

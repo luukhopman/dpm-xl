@@ -21,7 +21,14 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Callable, Collection, Hashable, Mapping
+from collections.abc import (
+    Callable,
+    Collection,
+    Hashable,
+    Iterable,
+    Mapping,
+    Sequence,
+)
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
@@ -69,12 +76,13 @@ from .recordset import (
     resolve_key,
     unique_points,
 )
-from .values import Number, Value, compare, type_name
+from .values import Number, Value, ValueSet, compare, type_name
 
 AGGREGATES = frozenset({"sum", "count", "avg", "max", "min", "median"})
 _COMPARISONS = frozenset({"=", "!=", "<", "<=", ">", ">="})
 _ARITHMETIC = frozenset({"+", "-", "*", "/"})
 _BOOLEAN = frozenset({"and", "or", "xor"})
+_SET_FUNCTIONS = frozenset({"set_of", "union", "intersect", "setdiff", "symdiff"})
 _UNSUPPORTED_FUNCTIONS = {
     "time_shift": (
         "The rule compares with the previous reporting period (time_shift), "
@@ -300,7 +308,14 @@ class Evaluator:
                 )
             case Binary():
                 return self._chain(node, context, bindings)
-            case In(operand=operand, values=values):
+            case In(operand=operand, values=values) if not isinstance(
+                values, SetLiteral
+            ):
+                found = self._as_set(self.evaluate(values, context, bindings), "in")
+                return self.evaluate(operand, context, bindings).map(
+                    _unary_per_record(lambda value: _membership(value, found.members))
+                )
+            case In(operand=operand, values=SetLiteral() as values):
                 members = self._members.get(id(values))
                 if members is None:
                     members = [
@@ -314,8 +329,12 @@ class Evaluator:
                 return self.evaluate(operand, context, bindings).map(
                     _unary_per_record(lambda value: _membership(value, members))
                 )
-            case SetLiteral():
-                raise EvaluationError("a set can only follow 'in'")
+            case SetLiteral(items=items):
+                return Recordset.scalar(
+                    _value_set(
+                        self._set_member(item, context, bindings) for item in items
+                    )
+                )
             case If(condition=condition, then=then, otherwise=otherwise):
                 verdicts = self.evaluate(condition, context, bindings)
                 outcome = self.evaluate(then, context, bindings)
@@ -441,6 +460,8 @@ class Evaluator:
                     if name not in open_keys:
                         open_keys.append(name)
         keys = (*axis_keys, *open_keys)
+        if isinstance(spec.default, SetLiteral):
+            raise EvaluationError("a set default applies only to set parameters")
         default = (
             _literal_value(spec.default) if isinstance(spec.default, Literal_) else None
         )
@@ -486,6 +507,8 @@ class Evaluator:
         name = node.name
         if name in _UNSUPPORTED_FUNCTIONS:
             raise UnsupportedError(_UNSUPPORTED_FUNCTIONS[name])
+        if name in _SET_FUNCTIONS:
+            return self._set_function(node, context, bindings)
         if name in AGGREGATES and (len(node.args) == 1 or node.group_by is not None):
             if len(node.args) != 1:
                 raise EvaluationError(f"{name} with group by takes one operand")
@@ -525,6 +548,71 @@ class Evaluator:
                 f"{name} takes {' or '.join(map(str, arity))} operands"
             )
         return combine(args, _per_record(implementation))
+
+    def _set_function(
+        self,
+        node: Call,
+        context: SelectionSpec,
+        bindings: Mapping[str, Value] | None,
+    ) -> Recordset:
+        name = node.name
+        if node.group_by is not None:
+            raise EvaluationError(f"group by is not allowed in {name}")
+        count = len(node.args)
+        if (name == "set_of" and count != 1) or (
+            name in {"setdiff", "symdiff"} and count != 2
+        ):
+            raise EvaluationError(
+                f"{name} takes {1 if name == 'set_of' else 2} operands"
+            )
+        if name in {"union", "intersect"} and count < 2:
+            raise EvaluationError(f"{name} takes at least 2 operands")
+        operands = [self.evaluate(arg, context, bindings) for arg in node.args]
+        sets = [self._as_set(operand, name) for operand in operands]
+        first = sets[0]
+        if name == "set_of":
+            result = first
+        elif name == "union":
+            result = _value_set(member for found in sets for member in found.members)
+        elif name == "intersect":
+            result = ValueSet(
+                tuple(
+                    member
+                    for member in first.members
+                    if all(member in other for other in sets[1:])
+                )
+            )
+        elif name == "setdiff":
+            result = ValueSet(
+                tuple(member for member in first.members if member not in sets[1])
+            )
+        else:
+            result = ValueSet(
+                tuple(member for member in first.members if member not in sets[1])
+                + tuple(member for member in sets[1].members if member not in first)
+            )
+        points = unique_points(
+            record.points for operand in operands for record in operand.records.values()
+        )
+        return Recordset.scalar(result, points)
+
+    @staticmethod
+    def _as_set(data: Recordset, name: str) -> ValueSet:
+        """Read an operand as a set: a set value, or the set of its values.
+
+        Returns:
+            ValueSet: The set; null values are left out.
+
+        Raises:
+            EvaluationError: If a value failed or is itself a set.
+        """
+        values = [_checked(record.value) for record in data.records.values()]
+        if not data.keys and len(values) == 1 and isinstance(values[0], ValueSet):
+            return values[0]
+        try:
+            return ValueSet.of(values)
+        except TypeError as error:
+            raise EvaluationError(f"{name}: {error}") from error
 
     # Clauses ------------------------------------------------------------
 
@@ -948,7 +1036,14 @@ def conditional(
     return result
 
 
-def _membership(value: Value, members: list[Value]) -> Value:
+def _value_set(values: Iterable[Value]) -> ValueSet:
+    try:
+        return ValueSet.of(values)
+    except TypeError as error:
+        raise EvaluationError(str(error)) from error
+
+
+def _membership(value: Value, members: Sequence[Value]) -> Value:
     if value is None:
         return None
     try:

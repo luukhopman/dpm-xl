@@ -40,7 +40,7 @@ from .recordset import (
     unique_points,
 )
 from .references import Reference, references, reported_templates, tables
-from .values import Number, Value, compare, format_value
+from .values import Number, Value, ValueSet, compare, format_value
 
 __all__ = [
     "AxisSelector",
@@ -66,6 +66,7 @@ __all__ = [
     "TableLayout",
     "UnsupportedError",
     "Value",
+    "ValueSet",
     "__version__",
     "axis_matcher",
     "axis_matches",

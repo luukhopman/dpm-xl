@@ -88,7 +88,7 @@ class SelectionSpec:
     rows: AxisSelector | None = None
     columns: AxisSelector | None = None
     sheets: AxisSelector | None = None
-    default: Literal_ | _Missing = MISSING
+    default: Literal_ | SetLiteral | _Missing = MISSING
     interval: bool | None = None
 
     def merged_into(self, context: SelectionSpec) -> SelectionSpec:
@@ -240,7 +240,7 @@ class Name(Node):
 
 @dataclass(frozen=True, slots=True)
 class SetLiteral(Node):
-    """``{a, b, ...}`` after ``in``."""
+    """A set literal ``{a, b, ...}`` or the empty set ``{}``."""
 
     items: tuple[Node, ...]
 
@@ -264,10 +264,14 @@ class Binary(Node):
 
 @dataclass(frozen=True, slots=True)
 class In(Node):
-    """``operand in {set}``."""
+    """``operand in set``.
+
+    ``values`` is a :class:`SetLiteral` for ``in {...}``, otherwise any
+    set-valued expression such as a ``set-*`` parameter or ``union(...)``.
+    """
 
     operand: Node
-    values: SetLiteral
+    values: Node
 
 
 @dataclass(frozen=True, slots=True)
@@ -376,7 +380,16 @@ def walk(node: Node) -> list[Node]:
     return result
 
 
-def _literal_text(value: Literal_ | _Missing) -> str:
+def _literal_text(value: Literal_ | SetLiteral | _Missing) -> str:
+    if isinstance(value, SetLiteral):
+        return (
+            "{"
+            + ", ".join(
+                _literal_text(item) if isinstance(item, Literal_) else "…"
+                for item in value.items
+            )
+            + "}"
+        )
     if not isinstance(value, Literal_):
         return ""
     match value.kind:

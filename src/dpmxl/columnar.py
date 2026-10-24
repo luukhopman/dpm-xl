@@ -586,7 +586,7 @@ class ColumnarEvaluator:
                         current.op, frame, self.evaluate(current.right, context)
                     )
                 return frame
-            case In(operand=operand, values=values):
+            case In(operand=operand, values=SetLiteral() as values):
                 return _membership(
                     self.evaluate(operand, context), values, self, context
                 )
@@ -615,7 +615,7 @@ class ColumnarEvaluator:
             case Rename(operand=operand, pairs=pairs):
                 return self._rename(self.evaluate(operand, context), pairs)
             case SetLiteral():
-                raise EvaluationError("a set can only follow 'in'")
+                raise ColumnarUnsupported("set values")
         raise ColumnarUnsupported(type(node).__name__)
 
     def _branch(self, node: Node, context: SelectionSpec) -> Frame:
@@ -644,6 +644,8 @@ class ColumnarEvaluator:
     # Selections -------------------------------------------------------------
 
     def _selection(self, spec: SelectionSpec) -> Frame:
+        if isinstance(spec.default, SetLiteral):
+            raise ColumnarUnsupported("a set default")
         if not spec.table:
             raise EvaluationError(f"selection {spec.text()} has no table")
         return self.cache.selection(spec, lambda: self._build_selection(spec))
@@ -1579,7 +1581,7 @@ def _key_predicate(
             column = _key_column(name, keys)
             test = _key_equals(column, _literal_key(left, provider), checks)
             return test if node.op == "=" else ~test
-        case In(operand=Name(name=name), values=values):
+        case In(operand=Name(name=name), values=SetLiteral() as values):
             column = _key_column(name, keys)
             tests = [
                 _key_equals(column, _literal_key(item, provider), checks)

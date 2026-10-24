@@ -425,6 +425,9 @@ NEW_CONSTRUCTS = [
     "log({tONE, r0010, c0010}, 5) = 1",
     "year(#2026-12-31#) = 2026",
     "date(2026, 12, 31) = #2026-12-31T00:00:00#",
+    "{tONE, r0010, c0010} in union({5}, {6})",
+    "with {tT, c0010}: {r0010} in set_of({tT, r*, c0010})",
+    "5 in {tONE, r0010, c0010}",
 ]
 
 
@@ -434,3 +437,10 @@ def test_newer_constructs_go_to_the_reference_engine(expression: str) -> None:
     with pytest.raises(ColumnarUnsupported):
         evaluate_rule_columnar(expression, PointsFrameProvider(provider))
     assert evaluate_rule(expression, provider).status == "passed"
+
+
+def test_set_defaults_go_to_the_reference_engine() -> None:
+    expression = "{tONE, r0010, c0010, default: {1}} > 1"
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(data()))
+    assert evaluate_rule(expression, data()).status == "error"

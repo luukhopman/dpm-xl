@@ -111,7 +111,7 @@ reported key combination, with the key components in `DataPoint.keys`; an
 optional `open_keys(table)` method names them for tables with no rows.
 `table_reported` answers `{v_TABLE}` and `parameter` answers `{vName}`.
 Values are `Number` (use `Number.of(value, decimals)` for reported facts),
-`str`, `bool`, `datetime.date`, `Item` or `None`.
+`str`, `bool`, `datetime.date`, `Item`, `ValueSet` or `None`.
 [`examples/custom_provider.py`](https://github.com/luukhopman/dpm-xl/blob/main/examples/custom_provider.py) is a complete
 provider in 40 lines.
 
@@ -178,8 +178,11 @@ frozensets, and `textmate_grammar()` builds the TextMate grammar in
 - Literals: numbers, `4.5%`, `"text"`/`'text'` (and `''`), `#2026-12-31#`,
   `#2026-12-31T10:00:00#`, `true`/`false`, `null`, items `[eba_qEC:qx01]`;
   escaped names such as `` `x.y` `` for keys.
-- Operators `+ - * /`, `&` (text), `= != <> < <= > >=`, `in {…}`, `not`, `and`,
+- Operators `+ - * /`, `&` (text), `= != <> < <= > >=`, `in`, `not`, `and`,
   `or`, `xor`, `if … then … [else …] endif`.
+- Sets: literals `{1, 2}`, `{[eba_qEC:qx01], [eba_qEC:qx02]}` and `{}`;
+  `set_of(x)`, `union`, `intersect`, `setdiff`, `symdiff`; `in` with any set,
+  including a selection; `default: {…}` for set parameters.
 - Aggregates `sum`, `count`, `avg`, `min`, `max`, `median` (and the
   specification's `min_aggr`/`max_aggr` spellings) with `group by`;
   scalar `abs`, `isnull`, `nvl`, `len`, `substr`, `match`, `min`/`max` with
@@ -244,6 +247,12 @@ frozensets, and `textmate_grammar()` builds the TextMate grammar in
   yields `''` past the end. `log(x, base)` follows `ln` (null outside its
   domain). `week` is the ISO 8601 week, `semester` 1 or 2; `date(y, m, d)` of
   an impossible day is an error. A date equals a date-time at midnight.
+- **Sets** hold distinct non-null values (numbers exactly, items ignoring the
+  `eba_` prefix) in first-seen order. An operand of `in` or of a set operator
+  that is not a set stands for the set of its non-null values, so
+  `{c0010} in {tT, r*, c0020}` tests against the column's values. Sets cannot
+  be compared or appear in a rule's result; a set `default` on a cell
+  selection is an error.
 - **Key names** in `where`, `group by`, `sub` and `get` match with or without
   the DPM 2.0 `q` prefix and ignore case (`EBB` finds `qEBB`).
 - **Items** compare by code and category, ignoring the `eba_` prefix and a

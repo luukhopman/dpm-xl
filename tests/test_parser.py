@@ -13,6 +13,7 @@ from dpmxl.ast import (
     Item,
     Literal_,
     Selection,
+    SetLiteral,
     Sub,
     TableReported,
     Unary,
@@ -82,6 +83,7 @@ def test_clauses_sets_and_group_by() -> None:
     where = node.right.left
     assert isinstance(where, Where)
     assert isinstance(where.condition, In)
+    assert isinstance(where.condition.values, SetLiteral)
     assert where.condition.values.items[1] == Literal_(Item("qEC", "qx1"), "item")
 
 

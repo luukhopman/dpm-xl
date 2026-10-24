@@ -18,6 +18,7 @@ decimal128), whatever the caller's thread decimal context.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import (
@@ -192,7 +193,65 @@ class Number:
         return Number(self.value.copy_abs(), self.tolerance)
 
 
-Value: TypeAlias = Number | Item | str | bool | date | None
+@dataclass(frozen=True, slots=True)
+class ValueSet:
+    """A set of distinct scalar values.
+
+    Set literals, ``set-*`` parameters and set operators yield sets. Members
+    are kept in first-seen order; numbers are exact, so ``1`` and
+    ``1.0`` are one member. Build sets with :meth:`of`, which removes
+    duplicates by DPM-XL equality.
+    """
+
+    members: tuple[Value, ...] = ()
+
+    @classmethod
+    def of(cls, values: Iterable[Value]) -> ValueSet:
+        """Collect distinct non-null values.
+
+        Returns:
+            ValueSet: The set, in first-seen order.
+
+        Raises:
+            TypeError: If a value is itself a set.
+        """
+        members: list[Value] = []
+        for value in values:
+            if value is None:
+                continue
+            if isinstance(value, ValueSet):
+                raise TypeError("a set cannot contain a set")
+            if isinstance(value, Number):
+                value = value.exact()
+            if not any(_same(value, member) for member in members):
+                members.append(value)
+        return cls(tuple(members))
+
+    def __contains__(self, value: object) -> bool:
+        """Whether a member equals ``value`` (numbers by interval overlap).
+
+        Returns:
+            bool: Membership.
+        """
+        return any(_same(cast(Value, value), member) for member in self.members)
+
+    def __len__(self) -> int:
+        """Return the number of members.
+
+        Returns:
+            int: The size.
+        """
+        return len(self.members)
+
+
+def _same(left: Value, right: Value) -> bool:
+    try:
+        return compare("=", left, right) is True
+    except TypeError:
+        return False
+
+
+Value: TypeAlias = Number | Item | str | bool | date | ValueSet | None
 
 
 def compare(op: str, left: Value, right: Value) -> bool | None:
@@ -228,6 +287,8 @@ def compare(op: str, left: Value, right: Value) -> bool | None:
             case ">=":
                 return difference >= tolerance.copy_negate()
     if isinstance(left, Item) or isinstance(right, Item):
+        if isinstance(left, ValueSet) or isinstance(right, ValueSet):
+            raise TypeError(f"cannot compare {type_name(left)} with {type_name(right)}")
         if op not in {"=", "!="}:
             raise TypeError(f"items do not support {op!r}")
         equal = _item_of(left).matches(_item_of(right))
@@ -252,7 +313,12 @@ def compare(op: str, left: Value, right: Value) -> bool | None:
             case ">=":
                 return left >= right
         raise ValueError(f"unknown comparison {op!r}")
-    if isinstance(left, Number) or isinstance(right, Number):
+    if (
+        isinstance(left, Number)
+        or isinstance(right, Number)
+        or isinstance(left, ValueSet)
+        or isinstance(right, ValueSet)
+    ):
         raise TypeError(
             f"cannot compare {type_name(left)} with {type_name(right)} using {op!r}"
         )
@@ -320,6 +386,8 @@ def type_name(value: Value) -> str:
             return "boolean"
         case date():
             return "date"
+        case ValueSet():
+            return "set"
     return "string"
 
 
@@ -343,6 +411,8 @@ def format_value(value: Value) -> str:
             return "true" if value else "false"
         case date():
             return value.isoformat()
+        case ValueSet(members=members):
+            return "{" + ", ".join(format_value(member) for member in members) + "}"
     return f'"{value}"'
 
 
@@ -395,6 +465,7 @@ __all__ = [
     "DECIMAL_CONTEXT",
     "Number",
     "Value",
+    "ValueSet",
     "compare",
     "format_computed",
     "format_decimal",

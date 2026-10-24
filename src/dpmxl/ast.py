@@ -160,6 +160,12 @@ class Item:
     category: str | None
     code: str
 
+    def __post_init__(self) -> None:
+        """Drop the ``eba_`` prefix from a category given directly."""
+        category = self.category
+        if category is not None and category[:4].casefold() == "eba_":
+            object.__setattr__(self, "category", category[4:] or None)
+
     @classmethod
     def parse(cls, text: str) -> Item:
         """Parse ``prefix:code`` or a bare code.
@@ -171,10 +177,7 @@ class Item:
         if ":" not in value:
             return cls(None, value)
         prefix, code = value.split(":", 1)
-        prefix = prefix.strip()
-        if prefix.casefold().startswith("eba_"):
-            prefix = prefix[4:]
-        return cls(prefix or None, code.strip())
+        return cls(prefix.strip() or None, code.strip())
 
     def matches(self, other: Item) -> bool:
         """Compare two items, ignoring a category missing on either side.

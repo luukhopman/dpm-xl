@@ -163,3 +163,9 @@ def test_long_operator_chains_parse() -> None:
     node = parse(" + ".join(["{r0010}"] * 5000) + " = 0")
     assert isinstance(node, Binary)
     assert node.op == "="
+
+
+def test_items_drop_the_eba_prefix_however_built() -> None:
+    assert Item("eba_qEC", "qx1") == Item.parse("eba_qEC:qx1") == Item("qEC", "qx1")
+    assert Item("EBA_qEC", "qx1").matches(Item("qEC", "qx1"))
+    assert Item.parse("qx1") == Item(None, "qx1")

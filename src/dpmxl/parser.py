@@ -158,6 +158,12 @@ def _describe(token: Token) -> str:
 
 _EXPRESSION_KEYWORDS = KEYWORDS - {"group by"}
 _COMPARISON_OPERATORS = frozenset({"=", "!=", "<>", "<", "<=", ">", ">="})
+# An item: the grammar's ITEM_SIGNATURE (namespace:code) or a bare code, as
+# in the legacy [ei86], between brackets with optional spaces.
+_ITEM = (
+    r"\[\s*(?:[A-Za-z](?:[A-Za-z0-9_\-]*:[A-Za-z0-9._\-]*[A-Za-z0-9])+"
+    r"|[A-Za-z](?:[A-Za-z0-9_.]*[A-Za-z0-9])?)\s*\]"
+)
 _NUMBER = r"\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|\.\d+"
 # Expression mode: everything outside braces, clause brackets included. Most
 # groups are named after the token kind they produce; leading whitespace is
@@ -174,7 +180,7 @@ _EXPRESSION = re.compile(
   | (?P<brace>[{{}}])
   | (?P<string>"[^"]*"|'[^']*')
   | (?P<clause>\[(?=\s*(?i:where|get|sub|rename)(?![A-Za-z0-9_])))
-  | (?P<item>\[[^\]]*\])
+  | (?P<item>{_ITEM})
   | (?P<date>\#[^#]*\#)
   | (?P<identifier>`[^`]*`)
   | (?P<error>\S)
@@ -196,7 +202,7 @@ _SELECTION = re.compile(
   | (?P<identifier>[A-Za-z_][A-Za-z0-9_.\-]*)
   | (?P<operator>[+\-%])
   | (?P<string>"[^"]*"|'[^']*')
-  | (?P<item>\[[^\]]*\])
+  | (?P<item>{_ITEM})
   | (?P<date>\#[^#]*\#)
   | (?P<error>\S)
     )""",
@@ -398,6 +404,11 @@ def _lex_error(
         # An unterminated brace explains the rest better than its content.
         _matching(source, braces[0], "{", "}")
     char = text[index]
+    if char == "[" and "]" in text[index:]:
+        end = text.index("]", index) + 1
+        return DpmXlSyntaxError(
+            f"invalid item {text[index:end]!r}", source, position, end + offset
+        )
     if char in _UNTERMINATED:
         return DpmXlSyntaxError(_UNTERMINATED[char], source, position)
     if selecting:

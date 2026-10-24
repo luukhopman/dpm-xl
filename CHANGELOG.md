@@ -40,6 +40,9 @@ All notable changes to this project are documented here. The project follows
   numeric open keys, ordering items and text that may be an item.
 - The CLI accepts `"decimals": "INF"` and reports malformed data without a
   traceback.
+- The columnar evaluator hands record-level type errors (comparing text with
+  numbers, `and`/`not`/`abs` on the wrong type, mixed `max`/`min` groups) to
+  the reference evaluator, which fails only the records concerned.
 - A non-Boolean condition of a keyed `if` fails only its records.
 
 ### Performance

@@ -152,11 +152,15 @@ def mixed_values() -> MemoryProvider:
 def test_max_and_min_order_dates_text_and_items(expression: str, expected: str) -> None:
     provider = mixed_values()
     reference = evaluate_rule(expression, provider)
-    columnar = evaluate_rule_columnar(expression, PointsFrameProvider(provider))
     assert reference.status == expected, reference.message
+    if expected == "error":
+        # Type errors fail records, which the reference evaluator tracks.
+        with pytest.raises(ColumnarUnsupported):
+            evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+        return
+    columnar = evaluate_rule_columnar(expression, PointsFrameProvider(provider))
     assert columnar.status == expected, columnar.message
-    if expected == "passed":
-        assert columnar.passed == reference.counts["passed"]
+    assert columnar.passed == reference.counts["passed"]
 
 
 @pytest.mark.parametrize(
@@ -347,3 +351,22 @@ def test_unambiguous_text_and_items_stay_columnar(
     assert evaluate_rule(expression, provider).status == expected
     columnar = evaluate_rule_columnar(expression, PointsFrameProvider(provider))
     assert columnar.status == expected
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        '({tO, r0010, c0010} > "x") [where qKEY = [qK:zz]]',
+        "with {tO, c0010}: ({r0010} and true) [where qKEY = [qK:zz]]",
+        "with {tO, c0010}: (not {r0010}) [where qKEY = [qK:zz]]",
+        "with {tO, c0010}: abs({r0010} > 1) [where qKEY = [qK:zz]]",
+        "with {tO, c0010}: (if {r0010} then true endif) [where qKEY = [qK:zz]]",
+    ],
+)
+def test_record_type_errors_dropped_by_where_go_to_the_reference(
+    expression: str,
+) -> None:
+    provider = data()
+    assert evaluate_rule(expression, provider).status == "not_applicable"
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))

@@ -92,6 +92,15 @@ class ColumnarUnsupported(Exception):
     """The expression needs the reference evaluator."""
 
 
+class _RecordError(ColumnarUnsupported):
+    """A type or pattern error in some records.
+
+    The reference evaluator fails only those records, which a join, filter,
+    where or ``if`` may still drop (see ``dpmxl.evaluator._Failed``), so it
+    decides whether the rule is an error.
+    """
+
+
 class FrameProvider(Protocol):
     """Columnar report data for :class:`ColumnarEvaluator`.
 
@@ -961,7 +970,7 @@ def _with_values(frame: Frame, **values: pl.Expr) -> Frame:
 def _require_numeric(frames: Sequence[Frame], operation: str) -> None:
     for frame in frames:
         if frame.kinds & {TXT, FLAG}:
-            raise EvaluationError(f"{operation} needs numbers")
+            raise _RecordError(f"{operation} needs numbers")
 
 
 # Operators ---------------------------------------------------------------------
@@ -970,7 +979,7 @@ def _require_numeric(frames: Sequence[Frame], operation: str) -> None:
 def _unary(op: str, frame: Frame) -> Frame:
     if op == "not":
         if frame.kinds & {NUM, TXT}:
-            raise EvaluationError("not needs a boolean")
+            raise _RecordError("not needs a boolean")
         return _with_values(frame, flag=~pl.col(FLAG))
     _require_numeric([frame], f"unary {op}")
     if op == "-":
@@ -996,7 +1005,7 @@ def _binary(op: str, left: Frame, right: Frame) -> Frame:
     if op in {"and", "or", "xor"}:
         for frame in frames:
             if frame.kinds & {NUM, TXT}:
-                raise EvaluationError(f"{op} needs booleans")
+                raise _RecordError(f"{op} needs booleans")
         a, b = _c(FLAG, 0), _c(FLAG, 1)
         if op == "and":
             return _combine(frames, {FLAG: a & b})
@@ -1101,9 +1110,9 @@ def _compare(op: str, frames: Sequence[Frame]) -> Frame:
         else False
     )
     if mixed:
-        raise EvaluationError(f"cannot compare values of different types using {op!r}")
+        raise _RecordError(f"cannot compare values of different types using {op!r}")
     if flags is None and df.height and df.select((flag_a & flag_b).any()).item():
-        raise EvaluationError(f"booleans do not support {op!r}")
+        raise _RecordError(f"booleans do not support {op!r}")
     if op in {"=", "!="}:
         _require_text_or_items(df, [_item_ambiguity(ta, tb)])
     else:
@@ -1181,12 +1190,12 @@ def _conditional(
         Frame: One record per condition record (or the chosen branch).
 
     Raises:
-        EvaluationError: For non-Boolean conditions.
+        _RecordError: For non-Boolean conditions, which fail their records.
         ColumnarUnsupported: When a branch has keys the condition lacks.
     """
     df = condition.df
     if condition.kinds & {NUM, TXT}:
-        raise EvaluationError("if needs a boolean condition")
+        raise _RecordError("if needs a boolean condition")
     fallback = {NUM: None, THR: None, TXT: None, FLAG: True if boolean_then else None}
     if not condition.keys:
         verdict = df.get_column(FLAG)[0] if df.height else None
@@ -1271,7 +1280,7 @@ def _membership(
         and any(m[NUM] is not None for m in members)
         and TXT in frame.kinds
     ):
-        raise EvaluationError("cannot compare values of different types")
+        raise _RecordError("cannot compare values of different types")
     _require_text_or_items(frame.df, ambiguities)
     found = pl.any_horizontal(tests) if tests else pl.lit(False)
     return _with_values(
@@ -1301,11 +1310,11 @@ def _match(frame: Frame, pattern: Frame) -> Frame:
         raise ColumnarUnsupported("non-literal match pattern")
     text = pattern.df.row(0, named=True)[TXT]
     if not isinstance(text, str):
-        raise EvaluationError("match needs a text pattern")
+        raise _RecordError("match needs a text pattern")
     try:
         re.compile(text)
     except re.error as error:
-        raise EvaluationError(f"invalid match pattern: {error}") from error
+        raise _RecordError(f"invalid match pattern: {error}") from error
     if NUM in frame.kinds:
         raise ColumnarUnsupported("match on numbers")
     try:
@@ -1381,9 +1390,9 @@ def _aggregate(name: str, frame: Frame, group_by: tuple[str, ...] | None) -> Fra
     text = False
     if name != "count" and frame.kinds & {TXT, FLAG}:
         if name not in {"max", "min"}:
-            raise EvaluationError(f"{name} needs numbers")
+            raise _RecordError(f"{name} needs numbers")
         if FLAG in frame.kinds:
-            raise EvaluationError(f"{name} needs numbers, dates, text or items")
+            raise _RecordError(f"{name} needs numbers, dates, text or items")
         # Dates, text and items order by their text (ISO dates in date
         # order); a group may not mix them with numbers.
         text = True
@@ -1395,7 +1404,7 @@ def _aggregate(name: str, frame: Frame, group_by: tuple[str, ...] | None) -> Fra
                 else df.select(both)
             )
             if mixed.get_column(NUM).any():
-                raise EvaluationError(
+                raise _RecordError(
                     f"{name} cannot compare numbers with dates, text or items"
                 )
     present = pl.col(NUM).is_not_null()

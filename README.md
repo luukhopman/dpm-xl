@@ -251,9 +251,10 @@ comparison that hinges on the 13th decimal can differ. Keys are joined like
 `recordset.combine`, and a `FrameCache` shares selections across rules within
 a row budget; rules evaluated on several threads build each selection once.
 Anything the module does not implement, including values that do not fit
-`Decimal(38, 12)`, arithmetic that would overflow, record errors (such as a
-zero divisor) and text that may be an item, raises `ColumnarUnsupported` so
-the caller falls back to the reference evaluator. `tests/test_columnar.py`
+`Decimal(38, 12)`, arithmetic that would overflow, any record error (a zero
+divisor or a type error, which the reference evaluator confines to its
+record), ordering items and text that may be an item, raises
+`ColumnarUnsupported` so the caller falls back to the reference evaluator. `tests/test_columnar.py`
 checks both evaluators agree case by case. `PointsFrameProvider` adapts any `DataProvider`.
 
 ## Modules

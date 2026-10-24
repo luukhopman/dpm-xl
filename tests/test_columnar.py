@@ -417,3 +417,20 @@ def test_frame_from_points_checks_numbers_in_bulk() -> None:
     for wide in ("1e30", "0.0000000000004", "NaN"):
         with pytest.raises(ColumnarUnsupported):
             frame_from_points([DataPoint("T", "0010", value=Number(Decimal(wide)))])
+
+
+NEW_CONSTRUCTS = [
+    'with {tT, c0010}: "a" & "b" = "ab"',
+    'substr("abc", 2) = "bc"',
+    "log({tONE, r0010, c0010}, 5) = 1",
+    "year(#2026-12-31#) = 2026",
+    "date(2026, 12, 31) = #2026-12-31T00:00:00#",
+]
+
+
+@pytest.mark.parametrize("expression", NEW_CONSTRUCTS)
+def test_newer_constructs_go_to_the_reference_engine(expression: str) -> None:
+    provider = data()
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    assert evaluate_rule(expression, provider).status == "passed"

@@ -755,6 +755,22 @@ def _binary(op: str) -> Callable[[list[Value]], Value]:
             return left / right
 
         return arithmetic
+    if op == "&":
+
+        def concatenate(values: list[Value]) -> Value:
+            left, right = values
+            if type(left) is _Failed:
+                return left
+            if type(right) is _Failed:
+                return right
+            if left is None or right is None:
+                return None
+            if not isinstance(left, str) or not isinstance(right, str):
+                found = right if isinstance(left, str) else left
+                return _failure(f"& needs text, found {type_name(found)}")
+            return left + right
+
+        return concatenate
     if op in _BOOLEAN:
 
         def boolean(values: list[Value]) -> Value:
@@ -1087,6 +1103,62 @@ def _power(base: Value, exponent: Value) -> Value:
         return None
 
 
+def _log(value: Value, base: Value) -> Value:
+    number = _require_number(value, "log")
+    radix = _require_number(base, "log")
+    try:
+        return _float_number(math.log(float(number.value), float(radix.value)))
+    except (ValueError, ZeroDivisionError, OverflowError):
+        return None
+
+
+def _integer(value: Value, name: str) -> int:
+    number = _require_number(value, name)
+    if number.value != number.value.to_integral_value():
+        raise EvaluationError(f"{name} needs whole numbers, found {number.value}")
+    return int(number.value)
+
+
+def _substr(*values: Value) -> Value:
+    text = values[0]
+    if not isinstance(text, str):
+        raise EvaluationError(f"substr needs text, found {type_name(text)}")
+    start = _integer(values[1], "substr") if len(values) > 1 else 1
+    if start < 1:
+        raise EvaluationError("substr start must be at least 1")
+    if len(values) < 3:
+        return text[start - 1 :]
+    length = _integer(values[2], "substr")
+    if length < 0:
+        raise EvaluationError("substr length must not be negative")
+    return text[start - 1 : start - 1 + length]
+
+
+def _date_part(name: str) -> Callable[[Value], Value]:
+    def apply(value: Value) -> Value:
+        if not isinstance(value, date):
+            raise EvaluationError(f"{name} needs a date, found {type_name(value)}")
+        part = {
+            "year": value.year,
+            "semester": (value.month - 1) // 6 + 1,
+            "quarter": (value.month - 1) // 3 + 1,
+            "month": value.month,
+            "week": value.isocalendar().week,
+            "day": value.day,
+        }[name]
+        return Number(Decimal(part))
+
+    return apply
+
+
+def _make_date(year: Value, month: Value, day: Value) -> Value:
+    parts = [_integer(value, "date") for value in (year, month, day)]
+    try:
+        return date(*parts)
+    except ValueError as error:
+        raise EvaluationError(f"invalid date: {error}") from error
+
+
 def _float_number(value: float | complex) -> Value:
     # Out of float range (inf) or undefined (nan, complex): null, as math
     # domain errors are.
@@ -1110,6 +1182,13 @@ _SCALAR_FUNCTIONS: dict[
     "ln": ((1,), _null_safe(_math(math.log, "ln"))),
     "sqrt": ((1,), _null_safe(_math(math.sqrt, "sqrt"))),
     "power": ((2,), _null_safe(_power)),
+    "log": ((2,), _null_safe(_log)),
+    "substr": ((1, 2, 3), _null_safe(_substr)),
+    "date": ((3,), _null_safe(_make_date)),
+    **{
+        name: ((1,), _null_safe(_date_part(name)))
+        for name in ("year", "semester", "quarter", "month", "week", "day")
+    },
 }
 
 

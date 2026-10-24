@@ -19,7 +19,7 @@ decimal128), whatever the caller's thread decimal context.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import (
     ROUND_HALF_EVEN,
     Context,
@@ -28,7 +28,7 @@ from decimal import (
     InvalidOperation,
     Overflow,
 )
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, cast
 
 from .ast import Item
 
@@ -259,7 +259,12 @@ def compare(op: str, left: Value, right: Value) -> bool | None:
     ordered: Any = left
     other: Any = right
     if type(left) is not type(right):
-        ordered, other = str(left), str(right)
+        if isinstance(left, date) and isinstance(right, date):
+            # A date compares with a date-time as its midnight.
+            ordered = cast(Any, _moment(left))
+            other = cast(Any, _moment(right))
+        else:
+            ordered, other = str(left), str(right)
     match op:
         case "=":
             return ordered == other
@@ -274,6 +279,12 @@ def compare(op: str, left: Value, right: Value) -> bool | None:
         case ">=":
             return ordered >= other
     raise ValueError(f"unknown comparison {op!r}")
+
+
+def _moment(value: date) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    return datetime(value.year, value.month, value.day)
 
 
 def _item_of(value: Value) -> Item:

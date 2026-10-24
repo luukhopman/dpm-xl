@@ -175,14 +175,17 @@ frozensets, and `textmate_grammar()` builds the TextMate grammar in
 - Selections `{tTABLE, r…, c…, s…, default: v, interval: b}` with single codes,
   inclusive ranges (`r0010-0050`), lists (`(c0010, c0030)`) and wildcards.
 - `{v_TABLE}` filing-indicator tests and `{vName}` report parameters.
-- Literals: numbers, `4.5%`, `"text"`/`'text'`, `#2026-12-31#`, `true`/`false`,
-  `null`, items `[eba_qEC:qx01]`.
-- Operators `+ - * /`, `= != <> < <= > >=`, `in {…}`, `not`, `and`, `or`, `xor`,
-  `if … then … [else …] endif`.
+- Literals: numbers, `4.5%`, `"text"`/`'text'` (and `''`), `#2026-12-31#`,
+  `#2026-12-31T10:00:00#`, `true`/`false`, `null`, items `[eba_qEC:qx01]`;
+  escaped names such as `` `x.y` `` for keys.
+- Operators `+ - * /`, `&` (text), `= != <> < <= > >=`, `in {…}`, `not`, `and`,
+  `or`, `xor`, `if … then … [else …] endif`.
 - Aggregates `sum`, `count`, `avg`, `min`, `max`, `median` (and the
   specification's `min_aggr`/`max_aggr` spellings) with `group by`;
-  scalar `abs`, `isnull`, `nvl`, `len`, `match`, `min`/`max` with several
-  operands, `exp`, `ln`, `sqrt`, `power`; `filter(data, condition)`.
+  scalar `abs`, `isnull`, `nvl`, `len`, `substr`, `match`, `min`/`max` with
+  several operands, `exp`, `ln`, `sqrt`, `power`, `log`; `year`, `semester`,
+  `quarter`, `month`, `week`, `day` and `date(y, m, d)`;
+  `filter(data, condition)`.
 - Clauses `[where …]`, `[get key]`, `[sub key = value]`, `[rename a to b]`.
 
 `time_shift` needs the previous reporting period and is reported as
@@ -236,6 +239,11 @@ frozensets, and `textmate_grammar()` builds the TextMate grammar in
   `sub` on a selection inside a `with` body overrides the terms of the
   context's `where` (split at `and`) that name the same key; the other terms
   still apply. Booleans order `false < true`.
+- **Text and dates.** `&` joins text; other operands are an error. `substr(s,
+  start, length)` counts from 1 (start ≥ 1, length ≥ 0, whole numbers) and
+  yields `''` past the end. `log(x, base)` follows `ln` (null outside its
+  domain). `week` is the ISO 8601 week, `semester` 1 or 2; `date(y, m, d)` of
+  an impossible day is an error. A date equals a date-time at midnight.
 - **Key names** in `where`, `group by`, `sub` and `get` match with or without
   the DPM 2.0 `q` prefix and ignore case (`EBB` finds `qEBB`).
 - **Items** compare by code and category, ignoring the `eba_` prefix and a

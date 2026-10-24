@@ -20,6 +20,9 @@ All notable changes to this project are documented here. The project follows
   references, literal kinds, item, identifier, punctuation and more); every
   AST node's source `span` is documented.
 - `DpmXlSyntaxError.end`, and `pointer()` underlines the offending text.
+- Text concatenation `&`, `substr`, `log`, the date functions `year`,
+  `semester`, `quarter`, `month`, `week`, `day` and `date(y, m, d)`, and date
+  literals with a time part (`#2026-12-31T10:00:00#`).
 - `dpmxl.grammar`: keywords, operators, function names and parameter types as
   frozensets, and a TextMate grammar in `editors/dpm-xl.tmLanguage.json`.
 

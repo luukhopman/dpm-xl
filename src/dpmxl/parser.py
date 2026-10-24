@@ -9,7 +9,7 @@ the expression tree of :mod:`dpmxl.ast` from those tokens.
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Literal, NamedTuple, cast
 
@@ -569,11 +569,11 @@ class _Parser:
         return self.parse_comparison()
 
     def parse_comparison(self) -> Node:
-        left = self.parse_additive()
+        left = self.parse_concat()
         token = self.current
         if token.kind == "operator" and token.text in _COMPARISON_OPERATORS:
             op = self.advance().text
-            right = self.parse_additive()
+            right = self.parse_concat()
             return Binary(
                 "!=" if op == "<>" else op,
                 left,
@@ -604,6 +604,16 @@ class _Parser:
                     break
         closing = self.expect("}")
         return SetLiteral(tuple(items), span=(opening.start, closing.end))
+
+    def parse_concat(self) -> Node:
+        left = self.parse_additive()
+        while True:
+            token = self.current
+            if token.kind != "operator" or token.text != "&":
+                return left
+            self.advance()
+            right = self.parse_additive()
+            left = Binary("&", left, right, span=(left.span[0], right.span[1]))
 
     def parse_additive(self) -> Node:
         left = self.parse_multiplicative()
@@ -943,7 +953,7 @@ class _Parser:
         if kind == "date":
             self.advance()
             try:
-                return Literal_(date.fromisoformat(token.text[1:-1]), "date", span=span)
+                return Literal_(_date_value(token.text[1:-1]), "date", span=span)
             except ValueError as error:
                 raise self.error("invalid default date", token) from error
         raise self.error(f"invalid default {self._component(token)!r}", token)
@@ -978,9 +988,26 @@ def _name(token: Token) -> str:
 
 def _date(parser: _Parser, token: Token) -> date:
     try:
-        return date.fromisoformat(token.text[1:-1].strip())
+        return _date_value(token.text[1:-1])
     except ValueError as error:
         raise parser.error(f"invalid date {token.text[1:-1]!r}", token) from error
+
+
+def _date_value(text: str) -> date:
+    """Read ``YYYY-MM-DD`` or ``YYYY-MM-DDThh:mm:ss``.
+
+    Returns:
+        date: A date, or a ``datetime`` when the text has a time part.
+
+    Raises:
+        ValueError: For any other text.
+    """
+    text = text.strip()
+    if "T" in text:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", text):
+            raise ValueError(text)
+        return datetime.fromisoformat(text)
+    return date.fromisoformat(text)
 
 
 def _axis_part(text: str) -> tuple[AxisSelector, str]:

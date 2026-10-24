@@ -77,6 +77,7 @@ _SYMBOLS = {
     "and": "and",
     "or": "or",
     "xor": "xor",
+    "&": "&",
 }
 _COMPARISONS = frozenset({"=", "!=", "<", "<=", ">", ">="})
 VERBS = {

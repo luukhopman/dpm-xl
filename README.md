@@ -1,3 +1,7 @@
+<p align="center">
+  <a href="https://luukhopman.github.io/dpm-xl/"><img src="https://luukhopman.github.io/dpm-xl/assets/logo.svg" alt="" width="96" height="96"></a>
+</p>
+
 # dpm-xl
 
 A Python parser and evaluator for **DPM-XL**, the expression language of EBA

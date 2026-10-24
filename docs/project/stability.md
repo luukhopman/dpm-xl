@@ -40,4 +40,4 @@ field names do not change outside a major release.
 ## Supported Python versions
 
 dpm-xl supports the Python versions listed in its package metadata,
-currently 3.11 to 3.14.
+currently 3.11 to 3.15.

@@ -150,11 +150,11 @@ wheels = [
 
 [[package]]
 name = "dpm-xbrl"
-version = "0.1.1"
+version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/16/39/7686b451cea8fdcbc51a9c153afa311ca35bd0308f9519e867f18c7fdc4b/dpm_xbrl-0.1.1.tar.gz", hash = "sha256:c9931fdcf6dc3e7f85e07e808d337b0c07c69e4e4efcae3630e4c6683c97f7dc", size = 53745, upload-time = "2026-10-23T20:26:27.545Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/63/afd57fa0461d8fc98f27a338acb88e6b01f303f25396a6dab46830c27873/dpm_xbrl-1.0.0.tar.gz", hash = "sha256:e5adadec7d24283b3686bb8e433cb48b53aff3ebe881d6eb5f4dd87d2b9e8352", size = 78538, upload-time = "2026-10-24T14:01:27.676Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/46/ac/61aebc232559f4b170d9f84e7e5d280b297be946af45d9ae5649b44e560b/dpm_xbrl-0.1.1-py3-none-any.whl", hash = "sha256:5498241e854c7d114110fb754eb6a5199cc8156b7884688c06a9897ddefa3046", size = 59029, upload-time = "2026-10-23T20:26:26.547Z" },
+    { url = "https://files.pythonhosted.org/packages/b7/8d/f29c124b3ac8f4da54086e817c7e0d07a5a7702b53718cf0f73d9f95f469/dpm_xbrl-1.0.0-py3-none-any.whl", hash = "sha256:121cbfcb799dfde28813bc67b8c7d8ba117ca55f51a71adf95c92b594b4a5eb2", size = 86372, upload-time = "2026-10-24T14:01:26.612Z" },
 ]
 
 [[package]]
@@ -199,7 +199,7 @@ provides-extras = ["columnar"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "dpm-xbrl", specifier = ">=0.1.1" },
+    { name = "dpm-xbrl", specifier = ">=1.0,<2" },
     { name = "mkdocstrings-python", specifier = ">=2.0.10,<3" },
     { name = "polars", specifier = ">=2.0,<3" },
     { name = "pytest" },
@@ -209,7 +209,7 @@ dev = [
     { name = "zensical", specifier = ">=0.0.72,<0.1" },
 ]
 docs = [
-    { name = "dpm-xbrl", specifier = ">=0.1.1" },
+    { name = "dpm-xbrl", specifier = ">=1.0,<2" },
     { name = "mkdocstrings-python", specifier = ">=2.0.10,<3" },
     { name = "polars", specifier = ">=2.0,<3" },
     { name = "zensical", specifier = ">=0.0.72,<0.1" },

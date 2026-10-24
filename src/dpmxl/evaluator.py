@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import math
 import re
-import statistics
 from collections.abc import Callable, Collection, Hashable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import date
@@ -784,7 +783,13 @@ def _reduce(name: str, values: list[Value], record_count: int) -> Value:
             total += number
         return total / Number(Decimal(len(numbers)))
     if name == "median":
-        return Number(statistics.median(number.value for number in numbers))
+        ordered = sorted(number.value for number in numbers)
+        middle = len(ordered) // 2
+        if len(ordered) % 2:
+            return Number(ordered[middle])
+        return (Number(ordered[middle - 1]) + Number(ordered[middle])) / Number(
+            Decimal(2)
+        )
     if name == "max":
         return max(numbers, key=lambda number: number.value)
     return min(numbers, key=lambda number: number.value)

@@ -11,18 +11,42 @@ threshold, and ``min``/``max`` keep the chosen value's threshold. Two numbers
 are equal when ``|a - b| <= ta + tb``, i.e. when their intervals overlap.
 Selections evaluated with ``interval: false`` drop the threshold, so their
 comparisons are exact.
+
+Arithmetic uses :data:`DECIMAL_CONTEXT` (34 significant digits, as IEEE
+decimal128), whatever the caller's thread decimal context.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, InvalidOperation, localcontext
+from decimal import (
+    ROUND_HALF_EVEN,
+    Context,
+    Decimal,
+    DivisionByZero,
+    InvalidOperation,
+    Overflow,
+)
 from typing import Any, TypeAlias
 
 from .ast import Item
 
 ZERO = Decimal(0)
+
+DECIMAL_CONTEXT = Context(
+    prec=34,
+    rounding=ROUND_HALF_EVEN,
+    Emax=6144,
+    Emin=-6143,
+    traps=[DivisionByZero, InvalidOperation, Overflow],
+)
+"""The decimal context of every operation on numbers (IEEE decimal128)."""
+
+_add = DECIMAL_CONTEXT.add
+_subtract = DECIMAL_CONTEXT.subtract
+_multiply = DECIMAL_CONTEXT.multiply
+_divide = DECIMAL_CONTEXT.divide
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,7 +67,7 @@ class Number:
         amount = value if isinstance(value, Decimal) else Decimal(value)
         if decimals is None:
             return cls(amount)
-        return cls(amount, Decimal(5).scaleb(-decimals - 1))
+        return cls(amount, Decimal(5).scaleb(-decimals - 1, DECIMAL_CONTEXT))
 
     def exact(self) -> Number:
         """Return the same value without tolerance.
@@ -56,12 +80,12 @@ class Number:
     @property
     def low(self) -> Decimal:
         """Lower interval bound."""
-        return self.value - self.tolerance
+        return _subtract(self.value, self.tolerance)
 
     @property
     def high(self) -> Decimal:
         """Upper interval bound."""
-        return self.value + self.tolerance
+        return _add(self.value, self.tolerance)
 
     def __add__(self, other: Number) -> Number:
         """Add values and tolerances.
@@ -69,7 +93,9 @@ class Number:
         Returns:
             Number: The result.
         """
-        return Number(self.value + other.value, self.tolerance + other.tolerance)
+        return Number(
+            _add(self.value, other.value), _add(self.tolerance, other.tolerance)
+        )
 
     def __sub__(self, other: Number) -> Number:
         """Subtract values; tolerances add up.
@@ -77,7 +103,9 @@ class Number:
         Returns:
             Number: The result.
         """
-        return Number(self.value - other.value, self.tolerance + other.tolerance)
+        return Number(
+            _subtract(self.value, other.value), _add(self.tolerance, other.tolerance)
+        )
 
     def __mul__(self, other: Number) -> Number:
         """Multiply as Eurofiling's ``iaf:numeric-multiply`` does.
@@ -87,12 +115,17 @@ class Number:
         Returns:
             Number: The result.
         """
-        threshold = (
-            abs(self.value * other.tolerance)
-            + abs(other.value * self.tolerance)
-            + self.tolerance * other.tolerance
+        value = _multiply(self.value, other.value)
+        if not self.tolerance and not other.tolerance:
+            return Number(value)
+        threshold = _add(
+            _add(
+                _multiply(self.value, other.tolerance).copy_abs(),
+                _multiply(other.value, self.tolerance).copy_abs(),
+            ),
+            _multiply(self.tolerance, other.tolerance),
         )
-        return Number(self.value * other.value, threshold)
+        return Number(value, threshold)
 
     def __truediv__(self, other: Number) -> Number:
         """Divide as Eurofiling's ``iaf:numeric-divide`` does.
@@ -109,18 +142,16 @@ class Number:
         """
         if other.value == 0:
             raise ZeroDivisionError("division by zero")
-        with localcontext() as context:
-            context.prec = 34
-            value = self.value / other.value
-            if not self.tolerance and not other.tolerance:
-                return Number(value)
-            deviations = [
-                abs(value - numerator / denominator)
-                for numerator in (self.high, self.low)
-                for denominator in (other.high, other.low)
-                if denominator != 0
-            ]
-            return Number(value, max(deviations, default=ZERO))
+        value = _divide(self.value, other.value)
+        if not self.tolerance and not other.tolerance:
+            return Number(value)
+        deviations = [
+            _subtract(value, _divide(numerator, denominator)).copy_abs()
+            for numerator in (self.high, self.low)
+            for denominator in (other.high, other.low)
+            if denominator != 0
+        ]
+        return Number(value, max(deviations, default=ZERO))
 
     def __neg__(self) -> Number:
         """Negate the value.
@@ -128,7 +159,7 @@ class Number:
         Returns:
             Number: The result.
         """
-        return Number(-self.value, self.tolerance)
+        return Number(self.value.copy_negate(), self.tolerance)
 
     def __abs__(self) -> Number:
         """Return the absolute value.
@@ -136,7 +167,7 @@ class Number:
         Returns:
             Number: The result.
         """
-        return Number(abs(self.value), self.tolerance)
+        return Number(self.value.copy_abs(), self.tolerance)
 
 
 Value: TypeAlias = Number | Item | str | bool | date | None
@@ -159,21 +190,21 @@ def compare(op: str, left: Value, right: Value) -> bool | None:
     if left is None or right is None:
         return None
     if isinstance(left, Number) and isinstance(right, Number):
-        difference = left.value - right.value
-        tolerance = left.tolerance + right.tolerance
+        difference = _subtract(left.value, right.value)
+        tolerance = _add(left.tolerance, right.tolerance)
         match op:
             case "=":
-                return abs(difference) <= tolerance
+                return difference.copy_abs() <= tolerance
             case "!=":
-                return abs(difference) > tolerance
+                return difference.copy_abs() > tolerance
             case "<":
                 return difference < tolerance
             case "<=":
                 return difference <= tolerance
             case ">":
-                return difference > -tolerance
+                return difference > tolerance.copy_negate()
             case ">=":
-                return difference >= -tolerance
+                return difference >= tolerance.copy_negate()
     if isinstance(left, Item) or isinstance(right, Item):
         if op not in {"=", "!="}:
             raise TypeError(f"items do not support {op!r}")
@@ -289,7 +320,7 @@ def format_decimal(value: Decimal) -> str:
         str: For example ``1,204`` or ``-0.075``.
     """
     try:
-        normalized = value.normalize()
+        normalized = value.normalize(DECIMAL_CONTEXT)
     except InvalidOperation:  # pragma: no cover - NaN guards
         return str(value)
     return format(normalized, ",f")
@@ -304,8 +335,9 @@ _COMPUTED_DIGITS = 6
 def format_computed(value: Decimal) -> str:
     """Format a computed decimal, rounding a long fraction for display.
 
-    A division yields up to 28 decimals. Beyond ten, the number shows six
-    significant digits, but keeps every integer digit and two decimals:
+    A division yields up to 34 significant digits. Beyond ten decimals, the
+    number shows six significant digits, but keeps every integer digit and
+    two decimals:
     ``1.852935352358765...`` reads ``1.85294`` and ``12345.67890123456``
     ``12,345.68``. Shorter fractions, such as the exact difference of two
     reported values, are shown in full, as reported values always are.
@@ -314,17 +346,20 @@ def format_computed(value: Decimal) -> str:
         str: The formatted number.
     """
     try:
-        normalized = value.normalize()
+        normalized = value.normalize(DECIMAL_CONTEXT)
     except InvalidOperation:  # pragma: no cover - NaN guards
         return str(value)
     exponent = normalized.as_tuple().exponent
     if isinstance(exponent, int) and exponent < -_LONG_FRACTION:
         places = max(_COMPUTED_DIGITS - 1 - normalized.adjusted(), 2)
-        normalized = round(normalized, places)
+        normalized = normalized.quantize(
+            Decimal(1).scaleb(-places), context=DECIMAL_CONTEXT
+        )
     return format_decimal(normalized)
 
 
 __all__ = [
+    "DECIMAL_CONTEXT",
     "Number",
     "Value",
     "compare",

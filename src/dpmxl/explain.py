@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from functools import lru_cache
 from typing import Literal, cast
 
@@ -46,7 +46,14 @@ from .ast import (
 from .evaluator import AGGREGATES, Evaluation
 from .provider import DataPoint
 from .recordset import unique_points
-from .values import Number, Value, format_computed, format_decimal, format_value
+from .values import (
+    DECIMAL_CONTEXT,
+    Number,
+    Value,
+    format_computed,
+    format_decimal,
+    format_value,
+)
 
 MINUS = "\u2212"
 TIMES = "\u00d7"
@@ -150,6 +157,13 @@ def explain(
     Returns:
         Explanation: Summary sentence, formula, filled formula and operands.
     """
+    with localcontext(DECIMAL_CONTEXT):
+        return _explain(evaluation, expression, key)
+
+
+def _explain(
+    evaluation: Evaluation, expression: str, key: Mapping[str, Hashable]
+) -> Explanation:
     body = evaluation.root
     while isinstance(body, With):
         body = body.body

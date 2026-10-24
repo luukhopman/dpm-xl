@@ -1,5 +1,5 @@
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 import pytest
 
@@ -347,6 +347,17 @@ def test_interval_arithmetic_follows_eurofiling() -> None:
     )
     # A divisor interval spanning zero skips the zero endpoint.
     assert (Number.of(1, 0) / Number.of("0.5", 0)).tolerance == Decimal("1.5")
+
+
+def test_arithmetic_ignores_the_callers_decimal_context() -> None:
+    provider = closed(
+        {("0010", "0010"): 1234561, ("0020", "0010"): 1234000, ("0030", "0010"): 561}
+    )
+    rule = "with {tC_01.00, c0010, interval: false}: {r0010} = {r0020} + {r0030}"
+    with localcontext() as context:
+        context.prec = 6
+        assert evaluate_rule(rule, provider).status == "passed"
+        assert (Number.of(1, 0) / Number.of(3, 0)).value == Decimal("0." + "3" * 34)
 
 
 def test_explanations_show_each_sides_interval() -> None:

@@ -81,7 +81,8 @@ European Banking Authority.
   `max` keep the chosen value's threshold. `a = b` holds when
   `|a − b| ≤ δa + δb` (the intervals overlap), `a ≤ b` when
   `a − b ≤ δa + δb`, `a ≥ b` when `a ≥ b − (δa + δb)`, and likewise for the
-  strict comparisons. With `interval: false` facts are exact.
+  strict comparisons. With `interval: false` facts are exact. Arithmetic
+  keeps 34 significant digits (IEEE decimal128) in any thread decimal context.
   Explanations report each side's interval and the *gap*: how far apart the
   closest values within those intervals still are.
 - **Null.** Null propagates through arithmetic, comparisons and functions

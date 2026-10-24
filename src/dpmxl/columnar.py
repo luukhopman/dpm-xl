@@ -67,13 +67,14 @@ from .provider import (
     normalize_code,
 )
 from .recordset import STANDARD_KEYS, EvaluationError, UnsupportedError, resolve_key
-from .values import Number, Value
+from .values import DECIMAL_CONTEXT, Number, Value
 
 DEC = pl.Decimal(38, 12)
 NUM, THR, TXT, FLAG = "num", "thr", "txt", "flag"
 VALUE_COLUMNS = (NUM, THR, TXT, FLAG)
 CELL = "cell"
 ZERO = Decimal(0)
+_SCALE = Decimal("1e-12")
 
 Status = Literal["passed", "failed", "not_applicable", "error", "unsupported"]
 
@@ -949,8 +950,8 @@ def _divide(frames: Sequence[Frame]) -> Frame:
             thrs.append(None)
             continue
         quotient = Number(a, ta or ZERO) / Number(b, tb or ZERO)
-        nums.append(quotient.value.quantize(Decimal("1e-12")))
-        thrs.append(quotient.tolerance.quantize(Decimal("1e-12")))
+        nums.append(quotient.value.quantize(_SCALE, context=DECIMAL_CONTEXT))
+        thrs.append(quotient.tolerance.quantize(_SCALE, context=DECIMAL_CONTEXT))
     columns: dict[str, pl.Series] = {
         _key(key): df.get_column(_key(key)) for key in keys
     }

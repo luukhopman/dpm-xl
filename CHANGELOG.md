@@ -66,7 +66,9 @@ All notable changes to this project are documented here. The project follows
 - A `_` after a selection prefix is cosmetic, as the DPM-XL grammar says:
   `{t_T1}` selects table `T1`, not `_T1`. `SelectionSpec` has
   `table_group` and `operation` fields.
-
+- `with`, `to`, `where`, `get`, `sub`, `rename` and `over` are reserved
+  words; escape a key of that name as `` `to` ``. `a<-1` is now a persistent
+  assignment; write `a < -1` for the comparison.
 - `Number.of` raises `ValueError` for `decimals` beyond the decimal128 range
   (about -6,100 to 6,100, such as -7000), which 0.1.1 accepted; callers that
   pass report-level decimals should catch it. The CLI reports it.

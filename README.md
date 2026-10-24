@@ -354,7 +354,10 @@ Anything the module does not implement, including values that do not fit
 `Decimal(38, 12)`, arithmetic that would overflow, any record error (a zero
 divisor or a type error, which the reference evaluator confines to its
 record), ordering items and text that may be an item, raises
-`ColumnarUnsupported` so the caller falls back to the reference evaluator. `tests/test_columnar.py`
+`ColumnarUnsupported` so the caller falls back to the reference evaluator.
+So do statements and assignments, sets, analytic functions, `time_shift`,
+`annualise`, text and date functions, and typed parameter, operation and
+table-group references. `tests/test_columnar.py`
 checks both evaluators agree case by case. `PointsFrameProvider` adapts any `DataProvider`.
 
 ## Modules

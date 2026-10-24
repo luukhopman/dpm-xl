@@ -1,8 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="dpm-xl">
-  <style>.m{stroke:#4F46E5}.f{fill:#4F46E5}@media (prefers-color-scheme:dark){.m{stroke:#818CF8}.f{fill:#818CF8}}</style>
-  <g class="m" fill="none" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M18 10c-5 0-7 3-7 7v8c0 4-2 7-6 7 4 0 6 3 6 7v8c0 4 2 7 7 7"/>
-    <path d="M46 10c5 0 7 3 7 7v8c0 4 2 7 6 7-4 0-6 3-6 7v8c0 4-2 7-7 7"/>
-    <path d="M23 33l6 6 12-13"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="dpm-xl"><circle cx="32" cy="32" r="32" fill="#4F46E5"/><path d="M30.856 41.0 27.827 36.099000000000004 26.969 35.54 22.003000000000004 28.364H26.644000000000002L29.491000000000003 32.966L30.323 33.486000000000004L35.458 41.0ZM21.756000000000004 41.0 26.930000000000003 33.655 29.192000000000004 36.203 26.098000000000003 41.0ZM30.297000000000004 35.514 28.022000000000002 32.979 30.882000000000005 28.364H35.211ZM36.979 41.0V22.124000000000002H40.957V41.0Z" fill="#fff"/></svg>

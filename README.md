@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://luukhopman.github.io/dpm-xl/"><img src="https://luukhopman.github.io/dpm-xl/assets/logo.svg" alt="" width="96" height="96"></a>
+  <a href="https://luukhopman.github.io/dpm-xl/"><img src="https://luukhopman.github.io/dpm-xl/assets/logo.svg" alt="dpm-xl" width="240"></a>
 </p>
 
 # dpm-xl

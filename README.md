@@ -223,10 +223,13 @@ to (`max_aggr` is `max`), `CALL_NAMES` all of them; `textmate_grammar()` builds 
   preceding|following`.
 - Clauses `[where …]`, `[get key]`, `[sub key = value]`, `[rename a to b]`.
 
-Three readings differ from the DPM-XL grammar on purpose, so that EBA rules
+Some readings differ from the DPM-XL grammar on purpose, so that EBA rules
 keep their meaning: `not` binds looser than comparisons and `in` (`not a =
-b` is `not (a = b)`), chained comparisons such as `a < b < c` are syntax
-errors, and so is `- not x`.
+b` is `not (a = b)`); chained comparisons such as `a < b < c` or `a in b in
+c`, `- not x`, and a selection that repeats an axis, `default` or
+`interval` are syntax errors. In the other direction, keywords match in any
+case, `null` and `<>` are accepted anywhere, and the last of several
+statements needs no `;`.
 
 Every distinct EBA rule and precondition expression in releases
 3.4–4.4 parses, except two source expressions with typos (`trueendif`,

@@ -64,7 +64,8 @@ All notable changes to this project are documented here. The project follows
 - `time_shift` is no longer always `unsupported`: with a provider that has
   `earlier_report` it is evaluated, and `MemoryProvider` without the
   requested report reports it with a new message. The columnar evaluator
-  hands such rules to the reference evaluator.
+  hands every `time_shift` rule to the reference evaluator (raising
+  `ColumnarUnsupported`) instead of reporting `unsupported` itself.
 - A `_` after a selection prefix is cosmetic, as the DPM-XL grammar says:
   `{t_T1}` selects table `T1`, not `_T1`. `SelectionSpec` has
   `table_group` and `operation` fields.

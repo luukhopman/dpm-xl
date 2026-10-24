@@ -483,3 +483,50 @@ def test_time_functions_go_to_the_reference_engine() -> None:
         with pytest.raises(ColumnarUnsupported):
             evaluate_rule_columnar(expression, PointsFrameProvider(shifting))
         assert evaluate_rule(expression, shifting).status == "passed"
+
+
+class _ThreeMethods:
+    """A provider without any optional method."""
+
+    def __init__(self, inner: MemoryProvider) -> None:
+        self.inner = inner
+
+    def select(self, query):
+        return self.inner.select(query)
+
+    def table_reported(self, table: str) -> bool | None:
+        return self.inner.table_reported(table)
+
+    def parameter(self, name: str) -> Value:
+        return self.inner.parameter(name)
+
+
+@pytest.mark.parametrize(
+    ("expression", "status"),
+    [
+        (
+            "time_shift({tD, c0010}, Q, 1, qDAT) [sub qDAT = #2026-06-30#] = 5",
+            "passed",
+        ),
+        (
+            "time_shift({tD, c0010}, Q, 1, refPeriod) [sub qDAT = #2026-03-31#] = 5",
+            "unsupported",
+        ),
+    ],
+)
+def test_time_shift_always_goes_to_the_reference_engine(
+    expression: str, status: str
+) -> None:
+    provider = _ThreeMethods(
+        MemoryProvider(
+            [TableLayout("D", columns=("0010",), open_keys=("qDAT",))],
+            {
+                ("D", None, "0010", None, (("qDAT", date(2026, 3, 31)),)): Number.of(
+                    5, 0
+                )
+            },
+        )
+    )
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    assert evaluate_rule(expression, provider).status == status

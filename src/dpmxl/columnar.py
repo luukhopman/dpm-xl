@@ -61,7 +61,6 @@ from .ast import (
     With,
 )
 from .evaluator import (
-    _UNSUPPORTED_FUNCTIONS,
     AGGREGATES,
     _context_condition,
     _key_names,
@@ -669,9 +668,7 @@ class ColumnarEvaluator:
     def _call(self, node: Call, context: SelectionSpec) -> Frame:
         name = node.name
         if name == "time_shift":
-            underlying = getattr(self.provider, "provider", self.provider)
-            if not callable(getattr(underlying, "earlier_report", None)):
-                raise UnsupportedError(_UNSUPPORTED_FUNCTIONS["time_shift"])
+            # Even without another report, a date key can be shifted.
             raise ColumnarUnsupported("time_shift")
         if name == "annualise":
             raise ColumnarUnsupported("annualise")

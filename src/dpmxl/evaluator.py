@@ -1,8 +1,10 @@
 """Evaluate DPM-XL expressions against a :class:`~dpmxl.provider.DataProvider`.
 
-The evaluator implements the subset of DPM-XL 1.0 used by EBA validation
-rules and similar checks. It keeps every intermediate record set so that a
-failing record can be explained operand by operand (see :mod:`dpmxl.explain`).
+The evaluator implements every construct of the DPM-XL grammar; constructs
+that need data beyond one report (``time_shift``, operation and table-group
+references) use optional provider methods. It keeps every intermediate
+record set so that a failing record can be explained operand by operand (see
+:mod:`dpmxl.explain`).
 
 Semantics in brief:
 

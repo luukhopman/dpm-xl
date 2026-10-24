@@ -8,8 +8,9 @@ tells you which records fail and explains each failure in plain numbers:
 1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision
 ```
 
-- Parses every EBA validation rule and precondition of DPM releases 3.4–4.4
-  (14,000+ distinct expressions, about 0.1 ms each).
+- Parses every construct of the DPM-XL grammar, including every EBA
+  validation rule and precondition of DPM releases 3.4–4.4 (14,000+ distinct
+  expressions, about 0.1 ms each).
 - Evaluates them with EBA's interval arithmetic, null logic and key joins, and
   points each failure at the cells involved.
 - Has no dependencies. The optional `columnar` extra adds a polars evaluator
@@ -426,5 +427,7 @@ After changing `dpmxl.grammar`, regenerate the editor grammar:
 uv run python -c "import json; from dpmxl.grammar import textmate_grammar; print(json.dumps(textmate_grammar(), indent=2))" > editors/dpm-xl.tmLanguage.json
 ```
 
+`tests/test_grammar_coverage.py` has an example for every alternative of the
+DPM-XL grammar; each must parse, and each that yields a value is evaluated.
 `tests/data/eba_expressions.txt` is a sample of about 300 EBA rule
 expressions covering every construct above. Every line must parse.

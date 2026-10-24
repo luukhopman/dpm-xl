@@ -45,6 +45,8 @@ All notable changes to this project are documented here. The project follows
 - Analytic functions: `rank` and aggregates with `over (partition by …
   order by … window)`, parsed to the `Analytic` node with `Window` and
   `WindowBound`.
+- `tests/test_grammar_coverage.py`: an example for every alternative of the
+  DPM-XL grammar, each parsed and, where it yields a value, evaluated.
 - `dpmxl.grammar`: keywords, operators, function names and parameter types as
   frozensets, `canonical_function` and `CALL_NAMES` for the `Call.name` of
   each spelling, and a TextMate grammar in `editors/dpm-xl.tmLanguage.json`.

@@ -1152,13 +1152,15 @@ class _Parser:
             self.advance()
             return _axis_part(token.text)
         opening = self.expect("(")
+        if self.at(")"):
+            raise self.error("empty axis list", opening)
         parts: list[str | tuple[str, str]] = []
         axis: str | None = None
-        while not self.at(")"):
+        while True:
             part = self.current
             if part.kind != "axis":
-                if part.text in {",", ")"} and axis is None:
-                    break
+                if part.text in {",", ")"}:
+                    raise self.error("empty axis list member", part)
                 raise self.error(
                     f"unknown selection component {self._component(part)!r}", part
                 )
@@ -1173,8 +1175,6 @@ class _Parser:
             if not self.accept(","):
                 break
         self.expect(")")
-        if axis is None:
-            raise self.error("empty axis list", opening)
         return AxisSelector(parts=tuple(parts)), axis
 
     def parse_default(self) -> Literal_ | SetLiteral:

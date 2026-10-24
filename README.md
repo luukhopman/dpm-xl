@@ -199,8 +199,9 @@ to (`max_aggr` is `max`), `CALL_NAMES` all of them; `textmate_grammar()` builds 
 - `{v_TABLE}` filing-indicator tests and `{vName}` report parameters; typed
   parameters `{p_Name, number|integer|string|date|boolean|item|set-…[, default:
   v]}`; operation references `{o_Code[, r…, c…]}` and table groups
-  `{g_Group, …}`. A `_` after a reference prefix is cosmetic (`t_T1` is `tT1`)
-  and `` t`code` `` escapes a code.
+  `{g_Group, …}`. A `_` after the `t`, `g`, `o` and `p` prefixes is
+  cosmetic (`t_T1` is `tT1`) and `` t`code` `` escapes a code; after `v` it
+  is not: `{v_X}` tests a filing indicator, `{vX}` reads a parameter.
 - Literals: numbers, `4.5%`, `"text"`/`'text'` (and `''`), `#2026-12-31#`,
   `#2026-12-31T10:00:00#`, `true`/`false`, `null`, items `[eba_qEC:qx01]`;
   escaped names such as `` `x.y` `` for keys.
@@ -221,6 +222,11 @@ to (`max_aggr` is `max`), `CALL_NAMES` all of them; `textmate_grammar()` builds 
   `unbounded preceding|following`, `current data point` and `n [A|S|Q|M|W|D]
   preceding|following`.
 - Clauses `[where …]`, `[get key]`, `[sub key = value]`, `[rename a to b]`.
+
+Three readings differ from the DPM-XL grammar on purpose, so that EBA rules
+keep their meaning: `not` binds looser than comparisons and `in` (`not a =
+b` is `not (a = b)`), chained comparisons such as `a < b < c` are syntax
+errors, and so is `- not x`.
 
 Every distinct EBA rule and precondition expression in releases
 3.4–4.4 parses, except two source expressions with typos (`trueendif`,

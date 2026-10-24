@@ -188,3 +188,14 @@ def test_clause_chains_within_the_nesting_limit_parse() -> None:
     node = parse("{tA}" + " [where qX = 1]" * 40 + " > 0")
     assert isinstance(node, Binary)
     assert isinstance(node.left, Where)
+
+
+def test_deliberate_readings_that_keep_eba_rules_unchanged() -> None:
+    # not binds looser than comparisons and in, unlike the grammar.
+    negated = parse("not 1 = 2")
+    assert isinstance(negated, Unary) and isinstance(negated.operand, Binary)
+    member = parse("not 1 in {1}")
+    assert isinstance(member, Unary) and isinstance(member.operand, In)
+    for source in ("1 < 2 < 3", "- not true"):
+        with pytest.raises(DpmXlSyntaxError):
+            parse(source)

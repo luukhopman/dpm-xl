@@ -1276,7 +1276,8 @@ def _reference_name(text: str) -> str:
     """Return a selection reference's code without its prefix.
 
     The ``_`` after the prefix is cosmetic (``t_T1`` is ``tT1``), and an
-    escaped code drops its backticks.
+    escaped code drops its backticks. ``{v_X}`` never gets here: it is a
+    filing-indicator test, unlike ``{vX}``.
 
     Returns:
         str: The code, such as ``C_01.00`` for ``tC_01.00``.

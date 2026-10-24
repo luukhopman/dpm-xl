@@ -3,23 +3,15 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org).
 
-## Unreleased
-
-### Added
-
-- Documentation site at https://luukhopman.github.io/dpm-xl/, with
-  `llms.txt` and `llms-full.txt`; every example in it is tested.
-- `examples/rules.txt` and `examples/xbrl-report/`, a small xBRL-CSV report
-  for the end-to-end guide.
-
-### Changed
-
-- `dpm-xl --help` points to the documentation for the data file format.
-
 ## 1.0.0 - 2026-10-24
 
 ### Added
 
+- Python 3.15 support, tested in CI on 3.11 to 3.15 with and without extras.
+- Documentation site at https://luukhopman.github.io/dpm-xl/, with
+  `llms.txt` and `llms-full.txt`; every example in it is tested.
+- `examples/rules.txt` and `examples/xbrl-report/`, a small xBRL-CSV report
+  for the end-to-end guide.
 - `dpm-xl eval` takes a rule file as well as one expression and summarizes
   every rule; `check` and `eval` accept `--json`; `--version` and examples in
   `--help`.

@@ -99,6 +99,24 @@ def test_division_by_zero_is_a_runtime_error() -> None:
     assert status(rule, data) == "error"
 
 
+def test_errors_fail_only_the_records_that_reach_the_result() -> None:
+    # Column 0010 divides by zero, column 0020 does not.
+    data = provider(
+        {("0010", "0010"): 4, ("0020", "0010"): 0, ("0010", "0020"): 4}
+        | {("0020", "0020"): 2}
+    )
+    guarded = "with {tT, c*}: if {r0020} != 0 then {r0010} / {r0020} > 1 endif"
+    result = evaluate_rule(guarded, data)
+    assert result.status == "passed", result.message
+    assert result.counts == {"passed": 2, "failed": 0, "null": 0}
+    taken = "with {tT, c*}: if {r0010} > 0 then {r0010} / {r0020} > 1 endif"
+    assert evaluate_rule(taken, data).message == "division by zero"
+    typed = 'with {tT, c*}: if {r0020} != 0 then {r0010} > "a" else true endif'
+    assert status(typed, data) == "error"
+    text = 'with {tT, c*}: if isnull({r0030}) then true else {r0010} > "a" endif'
+    assert status(text, data) == "passed"
+
+
 def test_get_omits_records_with_null_facts() -> None:
     # 11.3.6: "Records with null Fact value will be omitted."
     data = provider({}, open_rows=[(Item("qK", "a"), 1)])

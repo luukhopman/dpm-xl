@@ -84,6 +84,69 @@ _UNSUPPORTED_FUNCTIONS = {
 # Marks records removed by filter(); never escapes the evaluator.
 _FILTERED = cast(Value, object())
 
+
+@dataclass(frozen=True, slots=True)
+class _Failed:
+    """The value of a record whose computation failed, such as ``x / 0``.
+
+    A failure belongs to its record: it propagates through the operators
+    that use the record and is dropped with it, as when an ``if`` takes the
+    other branch for that record (``if {x} != 0 then {y} / {x} > 1 endif``).
+    Only a failure that reaches the rule's result raises its error.
+    """
+
+    message: str
+
+
+def _per_record(
+    function: Callable[[list[Value]], Value],
+) -> Callable[[list[Value]], Value]:
+    """Apply a record function, keeping a failure to the record it occurs in.
+
+    Returns:
+        Callable[[list[Value]], Value]: The function, passing on a failed
+        operand and turning an evaluation error into a failed value.
+    """
+
+    def apply(values: list[Value]) -> Value:
+        for value in values:
+            if type(value) is _Failed:
+                return value
+        try:
+            return function(values)
+        except UnsupportedError:
+            raise
+        except EvaluationError as error:
+            return _failure(str(error))
+
+    return apply
+
+
+def _failure(message: str) -> Value:
+    return cast(Value, _Failed(message))
+
+
+def _unary_per_record(
+    function: Callable[[Value], Value],
+) -> Callable[[Value], Value]:
+    single = _per_record(lambda values: function(values[0]))
+    return lambda value: single([value])
+
+
+def _checked(value: Value) -> Value:
+    """Return a value that is used as a whole, raising a record's failure.
+
+    Returns:
+        Value: The value.
+
+    Raises:
+        EvaluationError: If the value's computation failed.
+    """
+    if type(value) is _Failed:
+        raise EvaluationError(value.message)
+    return value
+
+
 Status = Literal["passed", "failed", "not_applicable", "error", "unsupported"]
 
 
@@ -223,7 +286,9 @@ class Evaluator:
                     return Recordset.scalar(value)
                 raise EvaluationError(f"unknown key component or parameter {name!r}")
             case Unary(op=op, operand=operand):
-                return self.evaluate(operand, context, bindings).map(_unary(op))
+                return self.evaluate(operand, context, bindings).map(
+                    _unary_per_record(_unary(op))
+                )
             case Binary(op=op, left=left, right=right):
                 operands = [
                     self.evaluate(left, context, bindings),
@@ -235,7 +300,7 @@ class Evaluator:
                     self._set_member(item, context, bindings) for item in values.items
                 ]
                 return self.evaluate(operand, context, bindings).map(
-                    lambda value: _membership(value, members)
+                    _unary_per_record(lambda value: _membership(value, members))
                 )
             case SetLiteral():
                 raise EvaluationError("a set can only follow 'in'")
@@ -261,7 +326,7 @@ class Evaluator:
                 return self._sub(
                     self._clause_operand(operand, context, bindings),
                     name,
-                    fixed.value if fixed else None,
+                    _checked(fixed.value) if fixed else None,
                 )
             case Rename(operand=operand, pairs=pairs):
                 return self._rename(self.evaluate(operand, context, bindings), pairs)
@@ -387,7 +452,13 @@ class Evaluator:
             condition = self.evaluate(node.args[1], context, bindings)
             joined = combine(
                 [condition, data],
-                lambda values: values[1] if values[0] is True else _FILTERED,
+                lambda values: (
+                    values[1]
+                    if values[0] is True
+                    else values[0]
+                    if type(values[0]) is _Failed
+                    else _FILTERED
+                ),
             )
             return Recordset(
                 joined.keys,
@@ -406,7 +477,7 @@ class Evaluator:
             raise EvaluationError(
                 f"{name} takes {' or '.join(map(str, arity))} operands"
             )
-        return combine(args, implementation)
+        return combine(args, _per_record(implementation))
 
     # Clauses ------------------------------------------------------------
 
@@ -422,7 +493,7 @@ class Evaluator:
                 for name, value in zip(data.keys, key, strict=True)
             }
             verdict = self.evaluate(condition, context, bindings).single()
-            if verdict is not None and verdict.value is True:
+            if verdict is not None and _checked(verdict.value) is True:
                 result.records[key] = record
         return result
 
@@ -438,7 +509,12 @@ class Evaluator:
         return Recordset(
             data.keys,
             {
-                record_key: Record(_value_of_key(record_key[position]), record.points)
+                record_key: Record(
+                    record.value
+                    if type(record.value) is _Failed
+                    else _value_of_key(record_key[position]),
+                    record.points,
+                )
                 for record_key, record in data.records.items()
                 if record.value is not None
             },
@@ -474,7 +550,7 @@ class Evaluator:
         bindings: Mapping[str, Value] | None,
     ) -> Value:
         record = self.evaluate(node, context, bindings).single()
-        return record.value if record else None
+        return _checked(record.value) if record else None
 
 
 # Value helpers -------------------------------------------------------------
@@ -532,43 +608,56 @@ def _unary(op: str) -> Callable[[Value], Value]:
 
 
 def _binary(op: str) -> Callable[[list[Value]], Value]:
+    # The hottest record functions: they pass on failed operands and fail
+    # their record themselves instead of going through _per_record.
     if op in _COMPARISONS:
 
         def comparison(values: list[Value]) -> Value:
+            left, right = values
+            if type(left) is _Failed:
+                return left
+            if type(right) is _Failed:
+                return right
             try:
-                return compare(op, values[0], values[1])
+                return compare(op, left, right)
             except TypeError as error:
-                raise EvaluationError(str(error)) from error
+                return _failure(str(error))
 
         return comparison
     if op in _ARITHMETIC:
 
         def arithmetic(values: list[Value]) -> Value:
             left, right = values
+            if type(left) is _Failed:
+                return left
+            if type(right) is _Failed:
+                return right
             if left is None or right is None:
                 return None
-            a = _require_number(left, op)
-            b = _require_number(right, op)
+            if not isinstance(left, Number) or not isinstance(right, Number):
+                found = right if isinstance(left, Number) else left
+                return _failure(f"{op} needs numbers, found {type_name(found)}")
             if op == "+":
-                return a + b
+                return left + right
             if op == "-":
-                return a - b
+                return left - right
             if op == "*":
-                return a * b
-            if b.value == 0:
+                return left * right
+            if right.value == 0:
                 # DPM-XL 4.3.4.6: a zero denominator is a run-time error.
-                raise EvaluationError("division by zero")
-            return a / b
+                return _failure("division by zero")
+            return left / right
 
         return arithmetic
     if op in _BOOLEAN:
 
         def boolean(values: list[Value]) -> Value:
             for value in values:
+                if type(value) is _Failed:
+                    return value
+            for value in values:
                 if value is not None and not isinstance(value, bool):
-                    raise EvaluationError(
-                        f"{op} needs booleans, found {type_name(value)}"
-                    )
+                    return _failure(f"{op} needs booleans, found {type_name(value)}")
             left, right = values
             if op == "and":
                 if left is False or right is False:
@@ -633,7 +722,7 @@ def conditional(
     fallback: Value = True if boolean_then else None
 
     def verdict(value: Value) -> Value:
-        if value is not None and not isinstance(value, bool):
+        if value is not None and not isinstance(value, bool | _Failed):
             raise EvaluationError(
                 f"if needs a boolean condition, found {type_name(value)}"
             )
@@ -641,7 +730,7 @@ def conditional(
 
     if not condition.keys:
         record = condition.single()
-        value = verdict(record.value if record else None)
+        value = verdict(_checked(record.value) if record else None)
         if value is True:
             return then
         if otherwise is not None:
@@ -669,7 +758,13 @@ def conditional(
     result = Recordset(condition.keys + extra)
     for key, record in condition.records.items():
         value = verdict(record.value)
-        branch = then if value is True else otherwise
+        if type(value) is _Failed:
+            # A failed condition fails its records whichever branch they take.
+            branch = None
+            fallback_value: Value = value
+        else:
+            branch = then if value is True else otherwise
+            fallback_value = fallback
         binding = dict(zip(condition.keys, key, strict=True))
         widenings: Collection[tuple[Hashable, ...]] = [()]
         if extra:
@@ -681,7 +776,7 @@ def conditional(
             ).keys()
         for widening in widenings:
             if branch is None:
-                result.records[key + widening] = Record(fallback, record.points)
+                result.records[key + widening] = Record(fallback_value, record.points)
                 continue
             full = binding | {
                 name: part
@@ -739,12 +834,13 @@ def _aggregate(
             record
         )
     result = Recordset(tuple(group_keys))
+    reduce = _per_record(lambda values: _reduce(name, values, len(values)))
     for key, records in groups.items():
         values: list[Value] = [
             record.value for record in records if record.value is not None
         ]
         points = unique_points(point for record in records for point in record.points)
-        result.records[key] = Record(_reduce(name, values, len(records)), points)
+        result.records[key] = Record(reduce(values), points)
     if not group_keys and not groups:
         # DPM-XL 7.3: count is the number of records; other aggregates of
         # nothing are null.
@@ -987,7 +1083,9 @@ def evaluate_rule(
                 else precondition
             )
             pre = Evaluator(provider, trace=False, cache=cache).run(pre_node)
-            if not any(record.value is True for record in pre.result.records.values()):
+            if not any(
+                _checked(record.value) is True for record in pre.result.records.values()
+            ):
                 return RuleResult("not_applicable", message="precondition not met")
         node = _parse_cached(expression) if isinstance(expression, str) else expression
         evaluation = Evaluator(
@@ -1000,6 +1098,8 @@ def evaluate_rule(
 
     outcomes: list[Outcome] = []
     for key, record in evaluation.result.records.items():
+        if type(record.value) is _Failed:
+            return RuleResult("error", message=record.value.message)
         if record.value is not None and not isinstance(record.value, bool):
             return RuleResult(
                 "error",

@@ -479,10 +479,8 @@ class ColumnarEvaluator:
             case If(condition=condition, then=then, otherwise=otherwise):
                 return _conditional(
                     self.evaluate(condition, context),
-                    self.evaluate(then, context),
-                    self.evaluate(otherwise, context)
-                    if otherwise is not None
-                    else None,
+                    self._branch(then, context),
+                    self._branch(otherwise, context) if otherwise is not None else None,
                     boolean_then=is_boolean(then),
                 )
             case Call():
@@ -498,6 +496,16 @@ class ColumnarEvaluator:
             case SetLiteral():
                 raise EvaluationError("a set can only follow 'in'")
         raise ColumnarUnsupported(type(node).__name__)
+
+    def _branch(self, node: Node, context: SelectionSpec) -> Frame:
+        # An error in a branch fails only the records that take the branch
+        # (see dpmxl.evaluator._Failed); the reference evaluator tracks that.
+        try:
+            return self.evaluate(node, context)
+        except UnsupportedError:
+            raise
+        except EvaluationError as error:
+            raise ColumnarUnsupported(f"error in a branch: {error}") from error
 
     def _clause_operand(self, operand: Node, context: SelectionSpec) -> Frame:
         # DPM-XL 3.2: a where or sub on a selection overrides the with-where.
@@ -540,10 +548,15 @@ class ColumnarEvaluator:
             return _aggregate(name, self.evaluate(node.args[0], context), node.group_by)
         if node.group_by is not None:
             raise EvaluationError(f"group by is not allowed in {name}")
-        args = [self.evaluate(arg, context) for arg in node.args]
         if name == "filter":
-            _arity(name, args, 2)
-            return _filter(args[0], args[1])
+            if len(node.args) != 2:
+                raise EvaluationError("filter takes 2 operands")
+            # Like a branch, the data's records the condition drops may fail.
+            return _filter(
+                self._branch(node.args[0], context),
+                self.evaluate(node.args[1], context),
+            )
+        args = [self.evaluate(arg, context) for arg in node.args]
         if name == "abs":
             _arity(name, args, 1)
             return _map_numeric(args[0], lambda num, thr: (num.abs(), thr))
@@ -944,7 +957,9 @@ def _divide(frames: Sequence[Frame]) -> Frame:
     thrs: list[Decimal | None] = []
     for a, ta, b, tb in rows:
         if a is not None and b is not None and b == 0:
-            raise EvaluationError("division by zero")
+            # The reference evaluator fails only this record, which a join,
+            # filter or if may still drop.
+            raise ColumnarUnsupported("division by zero")
         if a is None or b is None:
             nums.append(None)
             thrs.append(None)

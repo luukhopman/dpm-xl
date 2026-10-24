@@ -172,6 +172,33 @@ def test_elementwise_max_and_min_of_text_go_to_the_reference_engine(
 
 
 @pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        (
+            "with {tT, c*, default: 0}: "
+            "if {r0030} > 20 then {r0010} / ({r0030} - 17) > 1 endif",
+            "passed",
+        ),
+        (
+            "with {tT, c*}: filter({r0010} / ({r0030} - 17), {r0030} > 20) > 1",
+            "passed",
+        ),
+        ('with {tT, c*}: if {r0030} > 50 then {r0010} > "a" else true endif', "passed"),
+        ("with {tT, c*, default: 0}: {r0010} / ({r0030} - 17) > 1", "error"),
+    ],
+)
+def test_record_errors_go_to_the_reference_engine(
+    expression: str, expected: str
+) -> None:
+    # Column 0020 divides by zero; the error fails only that column's record.
+    provider = data()
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    reference = evaluate_rule(expression, provider)
+    assert reference.status == expected, reference.message
+
+
+@pytest.mark.parametrize(
     "expression",
     [
         "with {tT, c*, default: 0, interval: true}: {r0010} = {r0020} + {r0030}",

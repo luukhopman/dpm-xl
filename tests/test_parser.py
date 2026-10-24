@@ -151,6 +151,7 @@ def test_spans_cover_source() -> None:
         ("(" * 60 + "true" + ")" * 60, "too deeply nested"),
         ("-" * 2000 + "1", "too deeply nested"),
         ("not " * 2000 + "true", "too deeply nested"),
+        ("{tA}" + " [where qX = 1]" * 60, "too deeply nested"),
         ("1e99999999999 + 1 = 1", "number out of range"),
         ("4.5%% = 0.045", "'%' must follow a number"),
         ("{tA, default: 1e-99999999999}", "invalid default"),
@@ -172,3 +173,9 @@ def test_items_drop_the_eba_prefix_however_built() -> None:
     assert Item("eba_qEC", "qx1") == Item.parse("eba_qEC:qx1") == Item("qEC", "qx1")
     assert Item("EBA_qEC", "qx1").matches(Item("qEC", "qx1"))
     assert Item.parse("qx1") == Item(None, "qx1")
+
+
+def test_clause_chains_within_the_nesting_limit_parse() -> None:
+    node = parse("{tA}" + " [where qX = 1]" * 40 + " > 0")
+    assert isinstance(node, Binary)
+    assert isinstance(node.left, Where)

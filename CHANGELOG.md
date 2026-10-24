@@ -18,8 +18,9 @@ All notable changes to this project are documented here. The project follows
   operand is expected" and "expected a name, found ')'".
 - A `where` or `sub` on a selection inside a `with` body overrides only the
   context's `where` terms on the same key; the other terms still apply.
-- Expressions nested more than 50 deep, and numbers outside the decimal128
-  range, are syntax errors; `4.5%%` is no longer read as 0.00045.
+- Expressions nested more than 50 deep (chained clauses included), and
+  numbers outside the decimal128 range, are syntax errors; `4.5%%` is no
+  longer read as 0.00045.
 - Explanations round the remaining gap down, so "at least" never overstates
   it, and keep only the parentheses the rule writes.
 

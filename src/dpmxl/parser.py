@@ -129,9 +129,10 @@ _OPERATORS = ("<>", "!=", "<=", ">=", "=", "<", ">", "+", "-", "*", "/", "%")
 _PUNCTUATION = "(),:"
 _CLAUSE_START = re.compile(r"\[\s*(where|get|sub|rename)\b", re.IGNORECASE)
 _AXIS_PART = re.compile(r"([rcs])(\*|[0-9A-Za-z]+(?:-[0-9A-Za-z]+)?)$")
-# Parentheses, signs, not, if, calls and with contexts nest at most this deep
-# (EBA rules nest below ten), well within Python's recursion limit when the
-# tree is evaluated and explained.
+# Parentheses, signs, not, if, calls, with contexts and chained clauses
+# ({x} [where ...] [sub ...]) nest at most this deep (EBA rules nest below
+# ten), well within Python's recursion limit when the tree is evaluated and
+# explained.
 MAX_NESTING = 50
 
 
@@ -387,9 +388,9 @@ class _Parser:
         return self.parse_expression()
 
     def parse_expression(self) -> Node:
-        # Every nested expression (in parentheses, if, calls, clauses and
-        # sets) starts here. A syntax error ends the parse, so the depth needs
-        # no unwinding.
+        # Every nested expression (in parentheses, if, calls, clause conditions
+        # and sets) starts here; parse_postfix counts chained clauses. A
+        # syntax error ends the parse, so the depth needs no unwinding.
         self.nest()
         node = self.parse_or()
         self.depth -= 1
@@ -500,6 +501,7 @@ class _Parser:
 
     def parse_postfix(self) -> Node:
         node = self.parse_primary()
+        clauses = 0
         while True:
             if self.at("op", "%"):
                 token = self.advance()
@@ -515,8 +517,12 @@ class _Parser:
                     raise self.error("'%' must follow a number, not a percentage")
                 continue
             if self.at("["):
+                # Each clause wraps the node once more.
+                self.nest()
+                clauses += 1
                 node = self.parse_clause(node)
                 continue
+            self.depth -= clauses
             return node
 
     def parse_clause(self, operand: Node) -> Node:

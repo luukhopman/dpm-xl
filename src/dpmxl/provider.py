@@ -86,10 +86,19 @@ class DataPoint:
 class DataProvider(Protocol):
     """Source of report data for one evaluation.
 
-    A provider may also define ``open_keys(table) -> Sequence[str]``, the
-    open key names of a table. Without it, an open table with no reported
-    rows yields a selection without keys; with it, the selection keeps the
-    table's key structure and is empty, as the specification requires.
+    A provider may also define these optional methods:
+
+    * ``open_keys(table) -> Sequence[str]``: the open key names of a table.
+      Without it, an open table with no reported rows yields a selection
+      without keys; with it, the selection keeps the table's key structure
+      and is empty, as the specification requires.
+    * ``table_group(code) -> Sequence[str] | None``: the table codes of a
+      table group, for ``{g_Group, ...}`` selections.
+    * ``operation(code) -> str | None``: the expression of another
+      operation, for ``{o_Code, ...}`` references.
+
+    Without the method, or when it returns ``None``, rules that need it are
+    ``unsupported``.
     """
 
     def select(self, query: CellQuery) -> Sequence[DataPoint]:
@@ -259,6 +268,8 @@ class MemoryProvider:
         *,
         reported: Iterable[str] | None = None,
         parameters: Mapping[str, Value] | None = None,
+        table_groups: Mapping[str, Sequence[str]] | None = None,
+        operations: Mapping[str, str] | None = None,
     ) -> None:
         """Index tables and values.
 
@@ -268,7 +279,11 @@ class MemoryProvider:
             reported: Template or table codes with a positive filing
                 indicator; defaults to every table that has a value.
             parameters: Report parameters such as ``refPeriod``.
+            table_groups: Table codes by table group code.
+            operations: Operation expressions by operation code.
         """
+        self.table_groups = dict(table_groups or {})
+        self.operations = dict(operations or {})
         self.tables = {table.code: table for table in tables}
         self.values = dict(values)
         self.parameters = dict(parameters or {})
@@ -347,6 +362,22 @@ class MemoryProvider:
             Value: The parameter or ``None``.
         """
         return self.parameters.get(name)
+
+    def table_group(self, code: str) -> Sequence[str] | None:
+        """Return the table codes of a table group.
+
+        Returns:
+            Sequence[str] | None: The tables, or ``None`` for an unknown group.
+        """
+        return self.table_groups.get(code)
+
+    def operation(self, code: str) -> str | None:
+        """Return the expression of an operation.
+
+        Returns:
+            str | None: The expression, or ``None`` for an unknown operation.
+        """
+        return self.operations.get(code)
 
 
 __all__ = [

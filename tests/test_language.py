@@ -13,6 +13,8 @@ from dpmxl import (
     Value,
     evaluate_rule,
     parse,
+    references,
+    tables,
 )
 from dpmxl.ast import (
     Binary,
@@ -212,3 +214,118 @@ def test_set_default_parses() -> None:
         (Literal_(Decimal(1), "number"), Literal_(Decimal(2), "number"))
     )
     assert node.spec.text() == "{tT, r0010, default: {1, 2}}"
+
+
+def provider_with_references(**parameters: Value) -> MemoryProvider:
+    tables = [
+        TableLayout("A", rows=("0010", "0020"), columns=("0010",)),
+        TableLayout("B", rows=("0010", "0020"), columns=("0010",)),
+    ]
+    data: dict[CellKey, Value] = {
+        ("A", "0010", "0010", None, ()): Number.of(1, 0),
+        ("A", "0020", "0010", None, ()): Number.of(2, 0),
+        ("B", "0010", "0010", None, ()): Number.of(3, 0),
+    }
+    return MemoryProvider(
+        tables,
+        data,
+        parameters=parameters,
+        table_groups={"G": ("A", "B"), "ONE": ("B",)},
+        operations={
+            "v1": "with {c0010}: {tA, r*} + 10",
+            "v2": "{o_v1, r0010} * 2",
+            "loop": "{o_loop} + 1",
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    ("expression", "parameters", "expected"),
+    [
+        ("{p_Level, string}", {"Level": "solo"}, "solo"),
+        ("{pLevel, string, default: 'x'}", {}, "x"),
+        ("{p`a.b`, number}", {"a.b": 5}, Number(Decimal(5))),
+        ("{p_N, integer}", {"N": Number(Decimal(3))}, Number(Decimal(3))),
+        ("{p_N, number, default: (-1)}", {}, Number(Decimal(-1))),
+        ("{p_N, number}", {}, None),
+        ("{p_B, boolean}", {"B": True}, True),
+        ("{p_I, item}", {"I": "eba_qK:a"}, Item("qK", "a")),
+        ("{p_D, date}", {"D": "2026-12-31"}, date(2026, 12, 31)),
+        ("{p_S, set-number}", {"S": [1, 2, 2]}, numbers(1, 2)),
+        ("{p_S, set-number, default: {1}}", {}, numbers(1)),
+        ("{p_S, set-item}", {"S": ["qK:a"]}, ValueSet((Item("qK", "a"),))),
+        ("3 in {p_S, set-integer}", {"S": (1, 3)}, True),
+    ],
+)
+def test_typed_parameters(expression: str, parameters: dict, expected: Value) -> None:
+    assert value(expression, provider_with_references(**parameters)) == expected
+
+
+@pytest.mark.parametrize(
+    ("expression", "parameters", "message"),
+    [
+        ("{p_N, integer} = 1", {"N": Number(Decimal("1.5"))}, "is not an integer"),
+        ("{p_N, number} = 1", {"N": "x"}, "is not a number"),
+        ("{p_S, set-string} = 1", {"S": "x"}, "is not a set"),
+        ("{p_B, boolean}", {"B": 1}, "is not a Boolean"),
+    ],
+)
+def test_typed_parameter_errors(
+    expression: str, parameters: dict, message: str
+) -> None:
+    result = evaluate_rule(expression, provider_with_references(**parameters))
+    assert result.status == "error"
+    assert result.message is not None and message in result.message
+
+
+def test_table_groups_key_records_by_table() -> None:
+    provider = provider_with_references()
+    assert values("{g_G, r0010, c0010}", provider) == {
+        "A": Number(Decimal(1)),
+        "B": Number(Decimal(3)),
+    }
+    assert value("{g_ONE, r0010, c0010}", provider) == Number(Decimal(3))
+    assert values("with {gG, c0010, default: 0}: {r*} > 0", provider) == {
+        ("A", "0010"): True,
+        ("A", "0020"): True,
+        ("B", "0010"): True,
+        ("B", "0020"): False,
+    }
+
+
+def test_operation_references_evaluate_the_operation() -> None:
+    provider = provider_with_references()
+    assert values("{o_v1}", provider) == {
+        "0010": Number(Decimal(11)),
+        "0020": Number(Decimal(12)),
+    }
+    assert value("{o_v1, r0020}", provider) == Number(Decimal(12))
+    assert value("{o_v2}", provider) == Number(Decimal(22))
+    assert evaluate_rule("{o_v1, r0010} = 11", provider).status == "passed"
+
+
+@pytest.mark.parametrize(
+    ("expression", "status", "message"),
+    [
+        ("{o_loop} > 0", "error", "operation loop refers to itself"),
+        ("{o_v1, c0010} > 0", "error", "has no c key"),
+        ("{o_missing} > 0", "unsupported", "needs a provider that resolves"),
+        ("{g_missing, r0010} > 0", "unsupported", "needs a provider that resolves"),
+    ],
+)
+def test_reference_errors(expression: str, status: str, message: str) -> None:
+    result = evaluate_rule(expression, provider_with_references())
+    assert result.status == status
+    assert result.message is not None and message in result.message
+
+
+def test_references_describe_groups_and_operations() -> None:
+    node = parse("{tA, r0010} + {g_G, r0010} + {o_v1, r0010} + {p_X, number}")
+    found = references(node)
+    assert [(item.kind, item.code, item.spec.table) for item in found] == [
+        ("table", "A", "A"),
+        ("table_group", "G", None),
+        ("operation", "v1", None),
+    ]
+    assert tables(node) == ("A",)
+    assert parse("{t_A}") == parse("{tA}") == parse("{t`A`}")

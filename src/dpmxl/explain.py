@@ -44,6 +44,7 @@ from .ast import (
     SetLiteral,
     Sub,
     TableReported,
+    TypedParameter,
     Unary,
     Where,
     With,
@@ -704,7 +705,7 @@ def _literal_value(node: Literal_) -> Value:
 
 
 # Nodes whose number is a reported (or literal) value, shown exactly.
-_REPORTED = (Selection, Where, Get, Sub, Literal_, Parameter)
+_REPORTED = (Selection, Where, Get, Sub, Literal_, Parameter, TypedParameter)
 
 
 def _shown(node: Node, value: Value) -> str:
@@ -719,7 +720,9 @@ def _shown(node: Node, value: Value) -> str:
 
 
 def _is_leaf(node: Node) -> bool:
-    if isinstance(node, Selection | Literal_ | Parameter | TableReported):
+    if isinstance(
+        node, Selection | Literal_ | Parameter | TypedParameter | TableReported
+    ):
         return True
     if (
         isinstance(node, Call)

@@ -428,6 +428,7 @@ NEW_CONSTRUCTS = [
     "{tONE, r0010, c0010} in union({5}, {6})",
     "with {tT, c0010}: {r0010} in set_of({tT, r*, c0010})",
     "5 in {tONE, r0010, c0010}",
+    "{p_X, number, default: 5} = {tONE, r0010, c0010}",
 ]
 
 
@@ -444,3 +445,16 @@ def test_set_defaults_go_to_the_reference_engine() -> None:
     with pytest.raises(ColumnarUnsupported):
         evaluate_rule_columnar(expression, PointsFrameProvider(data()))
     assert evaluate_rule(expression, data()).status == "error"
+
+
+@pytest.mark.parametrize("expression", ["{g_G, r0010, c0010} > 0", "{o_X} > 0"])
+def test_groups_and_operations_go_to_the_reference_engine(expression: str) -> None:
+    provider = MemoryProvider(
+        [TableLayout("T", rows=("0010",), columns=("0010",))],
+        {("T", "0010", "0010", None, ()): Number.of(1, 0)},
+        table_groups={"G": ("T",)},
+        operations={"X": "{tT, r0010, c0010}"},
+    )
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    assert evaluate_rule(expression, provider).status == "passed"

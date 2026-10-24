@@ -26,6 +26,11 @@ All notable changes to this project are documented here. The project follows
 - Sets: literals such as `{1, 2}` and `{}`, `set_of`, `union`, `intersect`,
   `setdiff` and `symdiff`, `in` with any set operand and `default: {…}`;
   the `ValueSet` value type.
+- Typed parameters `{p_Name, type[, default: v]}`, operation references
+  `{o_Code, …}` and table groups `{g_Group, …}`, resolved through optional
+  `operation(code)` and `table_group(code)` provider methods (and
+  `MemoryProvider`'s `operations` and `table_groups`, also in the CLI data
+  file); `Reference.kind` and `Reference.code`.
 - `dpmxl.grammar`: keywords, operators, function names and parameter types as
   frozensets, `canonical_function` and `CALL_NAMES` for the `Call.name` of
   each spelling, and a TextMate grammar in `editors/dpm-xl.tmLanguage.json`.
@@ -38,6 +43,9 @@ All notable changes to this project are documented here. The project follows
 - `{}` is the empty set rather than an empty selection, and `In.values` may
   be any set-valued node, not only a `SetLiteral`; `Value` includes
   `ValueSet`.
+- A `_` after a selection prefix is cosmetic, as the DPM-XL grammar says:
+  `{t_T1}` selects table `T1`, not `_T1`. `SelectionSpec` has
+  `table_group` and `operation` fields.
 
 - `Number.of` raises `ValueError` for `decimals` beyond the decimal128 range
   (about -6,100 to 6,100, such as -7000), which 0.1.1 accepted; callers that

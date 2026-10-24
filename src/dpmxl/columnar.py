@@ -646,6 +646,8 @@ class ColumnarEvaluator:
     def _selection(self, spec: SelectionSpec) -> Frame:
         if isinstance(spec.default, SetLiteral):
             raise ColumnarUnsupported("a set default")
+        if spec.table_group is not None or spec.operation is not None:
+            raise ColumnarUnsupported("table group and operation references")
         if not spec.table:
             raise EvaluationError(f"selection {spec.text()} has no table")
         return self.cache.selection(spec, lambda: self._build_selection(spec))

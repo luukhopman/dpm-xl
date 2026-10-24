@@ -15,6 +15,7 @@ from typing import Any, Literal, NamedTuple, cast
 
 from .ast import (
     AXIS_PREFIXES,
+    MISSING,
     AxisSelector,
     Binary,
     Call,
@@ -32,9 +33,11 @@ from .ast import (
     SetLiteral,
     Sub,
     TableReported,
+    TypedParameter,
     Unary,
     Where,
     With,
+    _Missing,
 )
 from .grammar import (
     FUNCTION_ALIASES,
@@ -833,9 +836,37 @@ class _Parser:
                 return TableReported(body[2:], span=span)
             if re.fullmatch(r"v[A-Za-z][A-Za-z0-9_]*", body):
                 return Parameter(body[1:], span=span)
+            if body[1:2] == "`":
+                return Parameter(_reference_name(body), span=span)
             raise self.error(f"unknown selection component {body!r}", first)
+        if first.kind == "parameter":
+            return self.parse_parameter(opening)
         spec = self.parse_spec(opening.end)
         return Selection(spec, span=(opening.start, self.tokens[self.index - 1].end))
+
+    def parse_parameter(self, opening: Token) -> Node:
+        name = _reference_name(self.advance().text)
+        self.expect(",")
+        kind = self.current
+        if kind.kind != "type":
+            raise self.error(
+                f"expected a parameter type, found {_describe(kind)}", kind
+            )
+        self.advance()
+        default: Literal_ | SetLiteral | _Missing = MISSING
+        if self.accept(","):
+            if not self.at_keyword("default"):
+                raise self.error(f"expected 'default', found {_describe(self.current)}")
+            self.advance()
+            self.expect(":")
+            default = self.parse_default()
+        closing = self.expect("}")
+        return TypedParameter(
+            name,
+            kind.text.casefold(),
+            default,
+            span=(opening.start, closing.end),
+        )
 
     def parse_spec(self, body_start: int, closing: str = "}") -> SelectionSpec:
         """Parse selection components up to and including ``closing``.
@@ -868,11 +899,15 @@ class _Parser:
                     fields[name] = value.text.casefold() == "true"
                 else:
                     fields[name] = self.parse_default()
-            elif token.kind == "table":
-                if "table" in fields:
+            elif token.kind in _SOURCES:
+                if (
+                    "table" in fields
+                    or "table_group" in fields
+                    or "operation" in fields
+                ):
                     raise self.error("duplicate table", token)
                 self.advance()
-                fields["table"] = token.text[1:]
+                fields[_SOURCES[token.kind]] = _reference_name(token.text)
             elif token.kind == "axis" or (
                 token.kind == "punctuation" and token.text == "("
             ):
@@ -947,6 +982,12 @@ class _Parser:
         start = token.start
         if token.kind == "brace" and token.text == "{":
             return self.parse_set()
+        if token.text == "(" and token.kind == "punctuation":
+            # The grammar writes a negative integer literal as (-5).
+            self.advance()
+            inner = self.parse_default()
+            closing = self.expect(")")
+            return cast(Literal_ | SetLiteral, _with_span(inner, (start, closing.end)))
         sign = ""
         if token.kind == "operator" and token.text in {"+", "-"}:
             sign = "-" if token.text == "-" else ""
@@ -1000,6 +1041,24 @@ def _keyword(token: Token) -> str:
     """
     text = token.text.casefold()
     return text if text.isalpha() else " ".join(text.split())
+
+
+_SOURCES = {"table": "table", "table_group": "table_group", "operation": "operation"}
+
+
+def _reference_name(text: str) -> str:
+    """Return a selection reference's code without its prefix.
+
+    The ``_`` after the prefix is cosmetic (``t_T1`` is ``tT1``), and an
+    escaped code drops its backticks.
+
+    Returns:
+        str: The code, such as ``C_01.00`` for ``tC_01.00``.
+    """
+    code = text[1:]
+    if code[:1] == "`":
+        return code[1:-1]
+    return code[1:] if code[:1] == "_" else code
 
 
 def _is_keyword(token: Token, word: str) -> bool:

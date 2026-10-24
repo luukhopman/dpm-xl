@@ -82,7 +82,12 @@ MISSING = _Missing()
 
 @dataclass(frozen=True, slots=True)
 class SelectionSpec:
-    """Table, axis and option components of a ``{...}`` cell selection."""
+    """Source, axis and option components of a ``{...}`` selection.
+
+    The source is one of ``table`` (``tC_01.00``), ``table_group``
+    (``gG_01``) or ``operation`` (``o_v1234``, another operation's result);
+    the others are ``None``.
+    """
 
     table: str | None = None
     rows: AxisSelector | None = None
@@ -90,20 +95,33 @@ class SelectionSpec:
     sheets: AxisSelector | None = None
     default: Literal_ | SetLiteral | _Missing = MISSING
     interval: bool | None = None
+    table_group: str | None = None
+    operation: str | None = None
 
     def merged_into(self, context: SelectionSpec) -> SelectionSpec:
         """Return this selection completed by an inherited ``with`` context.
 
         Returns:
-            SelectionSpec: Components written here win over the context.
+            SelectionSpec: Components written here win over the context; a
+            source written here replaces the context's source.
         """
+        if self.table is None and self.table_group is None and self.operation is None:
+            table, group, operation = (
+                context.table,
+                context.table_group,
+                context.operation,
+            )
+        else:
+            table, group, operation = self.table, self.table_group, self.operation
         return SelectionSpec(
-            table=self.table if self.table is not None else context.table,
+            table=table,
             rows=self.rows if self.rows is not None else context.rows,
             columns=self.columns if self.columns is not None else context.columns,
             sheets=self.sheets if self.sheets is not None else context.sheets,
             default=self.default if self.default is not MISSING else context.default,
             interval=self.interval if self.interval is not None else context.interval,
+            table_group=group,
+            operation=operation,
         )
 
     def axis(self, name: AxisName) -> AxisSelector | None:
@@ -123,6 +141,10 @@ class SelectionSpec:
         parts: list[str] = []
         if self.table:
             parts.append(f"t{self.table}")
+        if self.table_group:
+            parts.append(f"g{self.table_group}")
+        if self.operation:
+            parts.append(f"o{self.operation}")
         for name, prefix in (("rows", "r"), ("columns", "c"), ("sheets", "s")):
             selector = getattr(self, name)
             if selector is not None:
@@ -229,6 +251,18 @@ class Parameter(Node):
     """``{vName}``: a report-level parameter such as ``ReportingLevel``."""
 
     name: str
+
+
+@dataclass(frozen=True, slots=True)
+class TypedParameter(Node):
+    """``{p_Name, type[, default: value]}``: a typed report parameter.
+
+    ``type`` is one of :data:`dpmxl.grammar.PARAMETER_TYPES` in lower case.
+    """
+
+    name: str
+    type: str
+    default: Literal_ | SetLiteral | _Missing = MISSING
 
 
 @dataclass(frozen=True, slots=True)
@@ -429,6 +463,7 @@ __all__ = [
     "Span",
     "Sub",
     "TableReported",
+    "TypedParameter",
     "Unary",
     "Where",
     "With",

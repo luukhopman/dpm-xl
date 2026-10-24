@@ -109,7 +109,10 @@ cells of the closed axes with `value=None` where nothing was reported, so
 `default` and `isnull` work. For an open table it returns one point per
 reported key combination, with the key components in `DataPoint.keys`; an
 optional `open_keys(table)` method names them for tables with no rows.
-`table_reported` answers `{v_TABLE}` and `parameter` answers `{vName}`.
+`table_reported` answers `{v_TABLE}` and `parameter` answers `{vName}` and
+`{p_Name, type}`. Optional `table_group(code)` and `operation(code)` methods
+resolve `{g_…}` table groups and `{o_…}` operation references
+(`MemoryProvider` takes them as `table_groups` and `operations`).
 Values are `Number` (use `Number.of(value, decimals)` for reported facts),
 `str`, `bool`, `datetime.date`, `Item`, `ValueSet` or `None`.
 [`examples/custom_provider.py`](https://github.com/luukhopman/dpm-xl/blob/main/examples/custom_provider.py) is a complete
@@ -134,7 +137,7 @@ and an optional `precondition` ([`examples/rules.json`](https://github.com/luukh
 `data.json` ([`examples/data.json`](https://github.com/luukhopman/dpm-xl/blob/main/examples/data.json)) holds `tables`
 (`code`, `rows`, `columns`, `sheets`, `open_keys`), `facts` (`table`, `row`,
 `column`, `sheet`, `keys`, `value`, `decimals` as an integer or `INF`, `type`),
-`reported` and `parameters`. `--json` output is an object with
+`reported`, `parameters` (a list is a set), `table_groups` and `operations`. `--json` output is an object with
 `schema_version` (1), and `results` (`eval`: rule, expression, status,
 message, counts and failures with key, summary and cells) or `parsed`,
 `total` and `errors` with positions (`check`). The exit status is 0 when everything parsed or
@@ -175,7 +178,11 @@ to (`max_aggr` is `max`), `CALL_NAMES` all of them; `textmate_grammar()` builds 
 - `with {context} [where …]: body`, nested contexts replacing inherited parts.
 - Selections `{tTABLE, r…, c…, s…, default: v, interval: b}` with single codes,
   inclusive ranges (`r0010-0050`), lists (`(c0010, c0030)`) and wildcards.
-- `{v_TABLE}` filing-indicator tests and `{vName}` report parameters.
+- `{v_TABLE}` filing-indicator tests and `{vName}` report parameters; typed
+  parameters `{p_Name, number|integer|string|date|boolean|item|set-…[, default:
+  v]}`; operation references `{o_Code[, r…, c…]}` and table groups
+  `{g_Group, …}`. A `_` after a reference prefix is cosmetic (`t_T1` is `tT1`)
+  and `` t`code` `` escapes a code.
 - Literals: numbers, `4.5%`, `"text"`/`'text'` (and `''`), `#2026-12-31#`,
   `#2026-12-31T10:00:00#`, `true`/`false`, `null`, items `[eba_qEC:qx01]`;
   escaped names such as `` `x.y` `` for keys.
@@ -254,6 +261,17 @@ to (`max_aggr` is `max`), `CALL_NAMES` all of them; `textmate_grammar()` builds 
   `{c0010} in {tT, r*, c0020}` tests against the column's values. Sets cannot
   be compared or appear in a rule's result; a set `default` on a cell
   selection is an error.
+- **References.** `{p_Name, type}` reads `parameter(Name)` and checks its
+  type (Python numbers become `Number`, text becomes an item or date for those
+  types, a list or set becomes a set); a missing value takes the `default` or
+  is null. `{g_Group, …}` selects from every table the provider's
+  `table_group(code)` lists, keyed by table code `t` when there are several
+  (the tables must share their keys). `{o_Code, …}` evaluates the expression
+  the provider's `operation(code)` returns; its axes keep the result's
+  matching `r`/`c`/`s` records (dropping a key selected by one code),
+  `default` fills nulls and `interval: false` makes numbers exact. Without
+  those provider methods the rule is `unsupported`; an operation that refers
+  to itself is an error.
 - **Key names** in `where`, `group by`, `sub` and `get` match with or without
   the DPM 2.0 `q` prefix and ignore case (`EBB` finds `qEBB`).
 - **Items** compare by code and category, ignoring the `eba_` prefix and a

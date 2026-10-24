@@ -20,7 +20,7 @@ from .explain import explain
 from .parser import DpmXlSyntaxError, parse
 from .provider import CellKey, MemoryProvider, TableLayout
 from .references import references
-from .values import Number, Value
+from .values import Number, Value, ValueSet
 
 JSON_SCHEMA_VERSION = 1
 """Version of the ``--json`` output layout; it changes only with a new major."""
@@ -286,7 +286,9 @@ def load_memory_provider(document: dict[str, Any]) -> MemoryProvider:
 
     The document has ``tables`` (code, rows, columns, sheets, open_keys),
     ``facts`` (table, row, column, sheet, keys, value, decimals, type),
-    ``reported`` template codes and ``parameters``.
+    ``reported`` template codes, ``parameters`` (a list is a set),
+    ``table_groups`` (group code to table codes) and ``operations``
+    (operation code to expression).
 
     Returns:
         MemoryProvider: The in-memory report.
@@ -332,7 +334,15 @@ def _memory_provider(document: dict[str, Any]) -> MemoryProvider:
         name: _typed(value) for name, value in document.get("parameters", {}).items()
     }
     return MemoryProvider(
-        tables, values, reported=document.get("reported"), parameters=parameters
+        tables,
+        values,
+        reported=document.get("reported"),
+        parameters=parameters,
+        table_groups={
+            code: tuple(group)
+            for code, group in document.get("table_groups", {}).items()
+        },
+        operations=dict(document.get("operations", {})),
     )
 
 
@@ -341,6 +351,8 @@ def _typed(
 ) -> Value:
     if value is None:
         return None
+    if isinstance(value, list):
+        return ValueSet.of(_typed(member, kind) for member in value)
     if kind == "number" or (
         isinstance(value, int | float) and not isinstance(value, bool)
     ):

@@ -103,3 +103,22 @@ def test_eval_reports_bad_data_cleanly(tmp_path, capsys, fact, message) -> None:
     error = capsys.readouterr().err
     assert error.startswith("error: ")
     assert message in error
+
+
+def test_eval_reads_groups_operations_and_set_parameters(tmp_path, capsys) -> None:
+    data = tmp_path / "data.json"
+    data.write_text(
+        json.dumps(
+            {
+                "tables": [{"code": "A", "rows": ["0010"], "columns": ["0010"]}],
+                "facts": [{"table": "A", "row": "0010", "column": "0010", "value": 2}],
+                "parameters": {"Allowed": [1, 2]},
+                "table_groups": {"G": ["A"]},
+                "operations": {"v1": "{tA, r0010, c0010} * 2"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    rules = "{g_G, r0010, c0010} in {p_Allowed, set-number} and {o_v1} = 4"
+    assert main(["eval", rules, str(data)]) == 0
+    assert "status: passed" in capsys.readouterr().out

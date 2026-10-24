@@ -29,7 +29,8 @@ from collections.abc import (
     Mapping,
     Sequence,
 )
-from dataclasses import dataclass, field
+from contextlib import suppress
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
 from functools import lru_cache
@@ -54,6 +55,7 @@ from .ast import (
     SetLiteral,
     Sub,
     TableReported,
+    TypedParameter,
     Unary,
     Where,
     With,
@@ -64,6 +66,7 @@ from .provider import (
     CellQuery,
     DataPoint,
     DataProvider,
+    axis_matcher,
     declared_open_keys,
     normalize_code,
 )
@@ -234,6 +237,7 @@ class Evaluator:
         # evaluated; they override the context's where on those keys.
         self._overrides: tuple[str, ...] = ()
         self._members: dict[int, list[Value]] = {}
+        self._operations: list[str] = []
 
     def run(self, node: Node) -> Evaluation:
         """Evaluate a complete expression.
@@ -280,7 +284,11 @@ class Evaluator:
             case Literal_():
                 return Recordset.scalar(_literal_value(node))
             case Selection(spec=spec):
-                selected = self._selection(spec.merged_into(context))
+                merged = spec.merged_into(context)
+                if merged.table_group is None and merged.operation is None:
+                    selected = self._selection(merged)
+                else:
+                    selected = self._indirect(merged)
                 for condition in self._context_conditions:
                     kept = _context_condition(condition, self._overrides, selected.keys)
                     if kept is not None:
@@ -288,6 +296,8 @@ class Evaluator:
                 return selected
             case TableReported(table=table):
                 return Recordset.scalar(self.provider.table_reported(table))
+            case TypedParameter():
+                return Recordset.scalar(self._typed_parameter(node))
             case Parameter(name=name):
                 value = self.provider.parameter(name)
                 if value is None:
@@ -496,6 +506,72 @@ class Evaluator:
             result.records[key] = Record(value, (point,))
         return result
 
+    def _indirect(self, spec: SelectionSpec) -> Recordset:
+        """Select from a table group or another operation's result.
+
+        Returns:
+            Recordset: The records.
+
+        Raises:
+            UnsupportedError: If the provider cannot resolve the reference.
+            EvaluationError: For tables of a group with different keys.
+        """
+        if spec.operation is not None:
+            return _restrict(self._operation(spec.operation), spec)
+        code = cast(str, spec.table_group)
+        method = getattr(self.provider, "table_group", None)
+        tables = method(code) if callable(method) else None
+        if not tables:
+            raise UnsupportedError(
+                f"table group {code} needs a provider that resolves table groups"
+            )
+        parts = [
+            (table, self._selection(replace(spec, table=table, table_group=None)))
+            for table in tables
+        ]
+        if len(parts) == 1:
+            return parts[0][1]
+        keys = parts[0][1].keys
+        if any(part.keys != keys for _, part in parts):
+            raise EvaluationError(f"the tables of group {code} have different keys")
+        result = Recordset(("t", *keys))
+        for table, part in parts:
+            for key, record in part.records.items():
+                result.records[table, *key] = record
+        return result
+
+    def _operation(self, code: str) -> Recordset:
+        method = getattr(self.provider, "operation", None)
+        expression = method(code) if callable(method) else None
+        if expression is None:
+            raise UnsupportedError(
+                f"operation {code} needs a provider that resolves operations"
+            )
+        if code in self._operations:
+            raise EvaluationError(f"operation {code} refers to itself")
+        node = parse_cached(expression) if isinstance(expression, str) else expression
+        saved = self._context_conditions, self._overrides
+        self._operations.append(code)
+        self._context_conditions, self._overrides = [], ()
+        try:
+            return self.evaluate(node, SelectionSpec(), None)
+        finally:
+            self._operations.pop()
+            self._context_conditions, self._overrides = saved
+
+    def _typed_parameter(self, node: TypedParameter) -> Value:
+        value = self.provider.parameter(node.name)
+        if value is None:
+            default = node.default
+            if isinstance(default, Literal_):
+                value = _literal_value(default)
+            elif isinstance(default, SetLiteral):
+                value = self.evaluate(default, SelectionSpec(), None).records[()].value
+            else:
+                self._notes.append(f"report parameter {node.name!r} is not available")
+                return None
+        return _parameter_value(node.name, node.type, value)
+
     # Calls ---------------------------------------------------------------
 
     def _call(
@@ -703,6 +779,108 @@ class Evaluator:
         return _checked(record.value) if record else None
 
 
+def _restrict(data: Recordset, spec: SelectionSpec) -> Recordset:
+    """Apply a selection's axes and options to an operation's result.
+
+    Returns:
+        Recordset: The records whose ``r``, ``c`` and ``s`` keys match the
+        selected coordinates; an axis selecting one coordinate is no longer a
+        key. ``default`` fills null values and ``interval: false`` makes
+        numbers exact.
+
+    Raises:
+        EvaluationError: If the result lacks a selected axis key.
+    """
+    result = data
+    for key, selector in (("r", spec.rows), ("c", spec.columns), ("s", spec.sheets)):
+        if selector is None or selector.wildcard:
+            continue
+        if key not in result.keys:
+            raise EvaluationError(
+                f"operation {spec.operation} has no {key} key to select"
+            )
+        position = result.keys.index(key)
+        matches = axis_matcher(selector)
+        single = selector.is_single
+        kept = Recordset(
+            result.keys[:position] + result.keys[position + 1 :]
+            if single
+            else result.keys
+        )
+        for record_key, record in result.records.items():
+            code = record_key[position]
+            if matches(code if isinstance(code, str) else str(code)):
+                if single:
+                    record_key = record_key[:position] + record_key[position + 1 :]
+                kept.records[record_key] = record
+        result = kept
+    default = (
+        _literal_value(spec.default) if isinstance(spec.default, Literal_) else None
+    )
+    if default is not None or spec.interval is False:
+        exact = spec.interval is False
+
+        def fill(value: Value) -> Value:
+            if value is None:
+                return default
+            if exact and isinstance(value, Number):
+                return value.exact()
+            return value
+
+        result = result.map(fill)
+    return result
+
+
+def _parameter_value(name: str, kind: str, value: Value) -> Value:
+    """Check a parameter value against its declared type.
+
+    Returns:
+        Value: The value; integers, decimals and floats become numbers,
+        text becomes an item or date for those types, and a Python
+        collection becomes a set.
+
+    Raises:
+        EvaluationError: If the value does not have the type.
+    """
+    if kind.startswith("set-"):
+        members: Any = value
+        if isinstance(value, ValueSet):
+            members = value.members
+        elif not isinstance(value, list | tuple | set | frozenset):
+            raise EvaluationError(f"parameter {name} is not a set")
+        return _value_set(
+            _parameter_value(name, kind[4:], member) for member in members
+        )
+    found: Any = value
+    if kind in {"number", "integer"}:
+        if isinstance(found, int | float | Decimal) and not isinstance(found, bool):
+            found = Number(Decimal(str(found)))
+        if not isinstance(found, Number) or (
+            kind == "integer" and found.value != found.value.to_integral_value()
+        ):
+            raise EvaluationError(f"parameter {name} is not {_ARTICLES[kind]}")
+        return found
+    if kind == "item" and isinstance(found, str):
+        found = Item.parse(found)
+    if kind == "date" and isinstance(found, str):
+        with suppress(ValueError):
+            found = date.fromisoformat(found)
+    expected = {"string": str, "boolean": bool, "item": Item, "date": date}[kind]
+    if not isinstance(found, expected):
+        raise EvaluationError(f"parameter {name} is not {_ARTICLES[kind]}")
+    return found
+
+
+_ARTICLES = {
+    "number": "a number",
+    "integer": "an integer",
+    "string": "text",
+    "boolean": "a Boolean",
+    "item": "an item",
+    "date": "a date",
+}
+
+
 def _context_condition(
     condition: Node, overrides: tuple[str, ...], keys: tuple[str, ...]
 ) -> Node | None:
@@ -897,6 +1075,8 @@ def is_boolean(node: Node) -> bool:
             return op in _COMPARISONS or op in _BOOLEAN
         case Unary(op="not") | In() | TableReported():
             return True
+        case TypedParameter(type=kind):
+            return kind == "boolean"
         case Call(name="nvl", args=args):
             return any(is_boolean(arg) for arg in args)
         case Call(name="filter", args=(data, *_)):

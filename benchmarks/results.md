@@ -4,10 +4,10 @@ Measured on 2026-10-24 on AMD Ryzen 7 4700U with Radeon Graphics, 8 cores, Linux
 
 | | dpm-xl 1.0.0 | pydpm-xl 0.3.12 | dpmcore 0.2.1 |
 | --- | --- | --- | --- |
-| Syntax check of the corpus (whole process) | 3.46 s, 23 MB | 27.68 s, 108 MB | 29.50 s, 113 MB |
-| Per expression | 244 µs | 1,953 µs | 2,081 µs |
-| `import` (whole process) | 0.20 s, 18 MB | 2.17 s, 97 MB | 2.24 s, 102 MB |
-| Installed environment | 1 distributions, 1 MB | 17 distributions, 142 MB | 15 distributions, 144 MB |
+| Syntax check of the corpus (whole process) | 1.61 s, 23 MB | 14.85 s, 109 MB | 15.23 s, 113 MB |
+| Per expression | 113 µs | 1,047 µs | 1,075 µs |
+| `import` (whole process) | 0.09 s, 18 MB | 0.75 s, 97 MB | 0.85 s, 101 MB |
+| Installed environment | 1 distributions, 1 MB | 17 distributions, 142 MB | 15 distributions, 143 MB |
 
 #### Coverage of the EBA corpus
 

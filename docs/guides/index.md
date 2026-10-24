@@ -19,6 +19,8 @@ shown (the test suite executes them).
   cells to highlight.
 - [From an XBRL report to explained failures](end-to-end.md): read a report
   with dpm-xbrl, bind it to a provider, evaluate and explain.
+- [Toolkit tour](toolkit-tour.md): generate a report with dpm-synth, read it
+  with dpm-xbrl, then evaluate and explain its rules.
 
 **Scale up**
 

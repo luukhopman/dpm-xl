@@ -14,8 +14,8 @@ Every Markdown page under ``docs/`` (and the README) is checked:
 ``<!-- docs: skip -->`` on the line before a block leaves it out, and
 ``<!-- docs: invalid -->`` before a ``dpm-xl`` block expects a syntax error
 on every line.
-Pages that import ``polars`` or ``dpmxbrl`` are skipped when those are not
-installed (``uv sync`` installs them with the ``docs`` group).
+Pages that import ``polars``, ``dpmxbrl`` or ``dpmsynth`` are skipped when
+those are not installed (``uv sync`` installs them with the ``docs`` group).
 
 The docstring examples of every module run as doctests.
 """
@@ -38,8 +38,13 @@ from dpmxl import DpmXlSyntaxError, parse_program
 from dpmxl.cli import main
 
 ROOT = Path(__file__).parent.parent
-PAGES = [*sorted((ROOT / "docs").rglob("*.md")), ROOT / "README.md"]
-OPTIONAL_MODULES = {"polars", "dpmxbrl"}
+PAGES = [
+    *sorted(
+        path for path in (ROOT / "docs").rglob("*.md") if ".snippets" not in path.parts
+    ),
+    ROOT / "README.md",
+]
+OPTIONAL_MODULES = {"polars", "dpmxbrl", "dpmsynth"}
 FENCE = re.compile(r"^(?P<indent> *)```(?P<lang>[\w-]*)[^\n]*$")
 MARKER = re.compile(r"^\s*<!-- docs: (?P<marker>[\w-]+) -->\s*$")
 

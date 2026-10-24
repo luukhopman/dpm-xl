@@ -1,0 +1,33 @@
+{
+  "format": "dpm-synth-template/1",
+  "release": "1.0",
+  "module": "TOUR",
+  "entry_point": "https://example.com/taxonomy/tour/1.0/mod/tour.json",
+  "reference_date": "2026-12-31",
+  "decimals": {"m": -3},
+  "tables": [
+    {
+      "code": "T_01.00",
+      "filing_indicator": "T_01.00",
+      "cells": [
+        {"id": "T_01.00/r0010", "row": "0010", "column": "0010", "datapoint": "dp101", "data_type": "m"},
+        {"id": "T_01.00/r0020", "row": "0020", "column": "0010", "datapoint": "dp102", "data_type": "m"},
+        {"id": "T_01.00/r0030", "row": "0030", "column": "0010", "datapoint": "dp103", "data_type": "m"}
+      ]
+    },
+    {
+      "code": "T_02.00",
+      "filing_indicator": "T_02.00",
+      "open_keys": [{"code": "qCP", "column": "qCP"}],
+      "cells": [
+        {"id": "T_02.00/c0010", "row": null, "column": "0010", "datapoint": "dp201", "data_type": "m"}
+      ]
+    }
+  ],
+  "rules": [
+    {"code": "v1", "expression": "with {tT_01.00, c0010, default: 0, interval: true}: {r0010} = {r0020} + {r0030}", "precondition": "{v_T_01.00}"},
+    {"code": "v2", "expression": "with {tT_01.00, c0010}: {(r0020, r0030)} >= 0", "precondition": "{v_T_01.00}"},
+    {"code": "v3", "expression": "{tT_02.00, c0010} >= 0", "precondition": "{v_T_02.00}"},
+    {"code": "v4", "expression": "sum({tT_02.00, c0010, default: 0}) <= {tT_01.00, r0010, c0010}"}
+  ]
+}

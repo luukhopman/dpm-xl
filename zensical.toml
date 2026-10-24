@@ -29,6 +29,7 @@ nav = [
     { "Build editor support" = "guides/editor.md" },
     { "Analyse rules statically" = "guides/analyse.md" },
     { "From an XBRL report to explained failures" = "guides/end-to-end.md" },
+    { "Toolkit tour" = "guides/toolkit-tour.md" },
   ] },
   { "Concepts" = [
     "concepts/index.md",

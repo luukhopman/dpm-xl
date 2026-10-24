@@ -10,6 +10,8 @@ XBRL-XML reports but evaluates no rules. This guide connects the two: it
 reads an EBA-style xBRL-CSV report, binds its facts to table cells, evaluates
 validation rules with the columnar engine (falling back to the reference
 evaluator where needed) and explains every failure.
+To start from a generated report instead, see the
+[toolkit tour](toolkit-tour.md).
 
 ```bash
 pip install dpm-xbrl "dpm-xl[columnar]"

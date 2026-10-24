@@ -1,0 +1,74 @@
+# AGENTS.md
+
+Instructions for coding agents working on this repository. Users of the
+library want https://luukhopman.github.io/dpm-xl/agents/ instead.
+
+## What this is
+
+dpm-xl is a dependency-free Python (3.11+) parser and evaluator for DPM-XL,
+the EBA validation-rule language. It is an independent project, not
+affiliated with or endorsed by the European Banking Authority.
+
+## Layout
+
+| Path | Content |
+| --- | --- |
+| `src/dpmxl/` | The package. `parser.py` (tokenizer, recursive-descent parser), `grammar.py` (vocabulary, TextMate grammar), `ast.py` (frozen node classes), `values.py` (`Number` with interval tolerance), `recordset.py` (keyed records, joins), `evaluator.py` (reference evaluator), `explain.py`, `references.py` (static analysis), `provider.py` (`DataProvider`, `MemoryProvider`), `columnar.py` (polars evaluator, optional), `cli.py`. |
+| `tests/` | pytest suite. `test_columnar.py` checks both evaluators agree; `test_grammar_coverage.py` covers every grammar alternative; `test_docs.py` runs every docs example and docstring doctest; `data/eba_expressions.txt` samples EBA rules. |
+| `docs/` | Documentation site (Zensical + mkdocstrings), configured in `zensical.toml`. |
+| `scripts/build_docs.py` | Strict site build plus `llms.txt`, `llms-full.txt` and Markdown page copies. |
+| `examples/` | Runnable examples and data used by the docs and tests. |
+| `benchmarks/` | Comparison scripts; not run by the tests. |
+| `editors/dpm-xl.tmLanguage.json` | Generated from `dpmxl.grammar`. |
+
+## Commands
+
+```bash
+uv sync                                    # install with test, lint and docs tools
+uv run pytest                              # tests, docs examples and doctests
+uv run ruff check . && uv run ruff format --check . && uv run ty check
+uv run python scripts/build_docs.py        # strict docs build into site/
+uv run zensical serve                      # preview the docs
+```
+
+Regenerate the editor grammar after changing `src/dpmxl/grammar.py`:
+
+```bash
+uv run python -c "import json; from dpmxl.grammar import textmate_grammar; print(json.dumps(textmate_grammar(), indent=2))" > editors/dpm-xl.tmLanguage.json
+```
+
+## Conventions
+
+- No new runtime dependencies; polars stays optional (`columnar` extra).
+  Docs tools belong in the `docs` dependency group.
+- Google-style docstrings for every public name, with `Examples:` doctests
+  where they help; cross-references as `` [`Name`][dpmxl.module.Name] ``
+  (the defining module), never Sphinx roles.
+- Keep `__all__`, docstrings and `docs/` in step: a new public name goes in
+  its module's `__all__`, gets a docstring, and appears in the relevant docs
+  page. Public API = every name in a module's `__all__`.
+- Tests for every behaviour. A change to evaluation semantics needs a case
+  in `tests/test_columnar.py` (both evaluators must agree) or a reason why
+  the columnar evaluator raises `ColumnarUnsupported` for it.
+- Every `python` and `console` block in `docs/` and `README.md` is executed;
+  a `text` block directly after a `python` block must equal its output. Use
+  `<!-- docs: skip -->` sparingly. Real outputs only.
+- `evaluate_rule` never raises for bad rules or data; it returns a status.
+  Keep it that way.
+- Statuses, record keys, field names and the CLI JSON layout
+  (`schema_version`) are stable; explanation and error wording may change in
+  minor releases.
+- Conventional Commits (`fix(evaluator): ...`, `docs: ...`), imperative,
+  subject under 72 characters, no trailing period.
+- User-visible changes get one short bullet in `CHANGELOG.md`.
+- British or neutral spelling; plain, precise, concise prose.
+- Do not edit `.github/workflows/publish.yml` or the version without the
+  maintainer.
+
+## Release process
+
+1. `uv version X.Y.Z`, move the changelog entries under a `## X.Y.Z - date`
+   heading, commit `build: release X.Y.Z`.
+2. Tag `vX.Y.Z` and publish a GitHub release; `publish.yml` tests, builds and
+   uploads to PyPI through trusted publishing.
+3. `docs.yml` deploys the site from `main`.

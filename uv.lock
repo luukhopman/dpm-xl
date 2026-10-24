@@ -149,6 +149,15 @@ wheels = [
 ]
 
 [[package]]
+name = "dpm-synth"
+version = "1.0.0"
+source = { git = "https://github.com/luukhopman/dpm-synth?branch=main#a29b5225c986baab665782751c7b9fb2cf91636a" }
+dependencies = [
+    { name = "dpm-xbrl" },
+    { name = "dpm-xl" },
+]
+
+[[package]]
 name = "dpm-xbrl"
 version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -169,6 +178,7 @@ columnar = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "dpm-synth" },
     { name = "dpm-xbrl" },
     { name = "mkdocstrings-python" },
     { name = "polars" },
@@ -179,6 +189,7 @@ dev = [
     { name = "zensical" },
 ]
 docs = [
+    { name = "dpm-synth" },
     { name = "dpm-xbrl" },
     { name = "mkdocstrings-python" },
     { name = "polars" },
@@ -199,6 +210,7 @@ provides-extras = ["columnar"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "dpm-synth", git = "https://github.com/luukhopman/dpm-synth?branch=main" },
     { name = "dpm-xbrl", specifier = ">=1.0,<2" },
     { name = "mkdocstrings-python", specifier = ">=2.0.10,<3" },
     { name = "polars", specifier = ">=2.0,<3" },
@@ -209,6 +221,7 @@ dev = [
     { name = "zensical", specifier = ">=0.0.72,<0.1" },
 ]
 docs = [
+    { name = "dpm-synth", git = "https://github.com/luukhopman/dpm-synth?branch=main" },
     { name = "dpm-xbrl", specifier = ">=1.0,<2" },
     { name = "mkdocstrings-python", specifier = ">=2.0.10,<3" },
     { name = "polars", specifier = ">=2.0,<3" },

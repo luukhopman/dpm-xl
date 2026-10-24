@@ -41,6 +41,10 @@ uv run python -c "import json; from dpmxl.grammar import textmate_grammar; print
 
 - No new runtime dependencies; polars stays optional (`columnar` extra).
   Docs tools belong in the `docs` dependency group.
+- The `docs` group takes dpm-synth from its GitHub `main` branch through
+  `[tool.uv.sources]`, for the toolkit tour, because dpm-synth 1.0.0 is not
+  on PyPI yet. Once it is published, remove that source and run `uv lock`
+  so dpm-synth resolves from PyPI like dpm-xbrl.
 - Google-style docstrings for every public name, with `Examples:` doctests
   where they help; cross-references as `` [`Name`][dpmxl.module.Name] ``
   (the defining module), never Sphinx roles.

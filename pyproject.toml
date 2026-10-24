@@ -54,6 +54,7 @@ docs = [
 dev = [
     { include-group = "test" },
     { include-group = "lint" },
+    "dpm-synth>=1.0,<2",
     { include-group = "docs" },
 ]
 
@@ -64,6 +65,11 @@ default = true
 [tool.ruff]
 target-version = "py311"
 line-length = 88
+
+# dpm-synth 1.0.0 is not on PyPI yet; the docs group takes it from GitHub
+# until it is (see AGENTS.md).
+[tool.uv.sources]
+dpm-synth = { git = "https://github.com/luukhopman/dpm-synth", branch = "main" }
 
 [tool.ruff.lint]
 preview = true

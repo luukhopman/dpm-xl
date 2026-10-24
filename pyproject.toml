@@ -31,6 +31,7 @@ Homepage = "https://github.com/luukhopman/dpm-xl"
 Source = "https://github.com/luukhopman/dpm-xl"
 Issues = "https://github.com/luukhopman/dpm-xl/issues"
 Changelog = "https://github.com/luukhopman/dpm-xl/blob/main/CHANGELOG.md"
+Documentation = "https://luukhopman.github.io/dpm-xl/"
 
 [project.scripts]
 dpm-xl = "dpmxl.cli:main"
@@ -43,7 +44,17 @@ columnar = [
 [dependency-groups]
 test = ["pytest", "pytest-cov>=7.1,<8"]
 lint = ["ruff", "ty"]
-dev = [{ include-group = "test" }, { include-group = "lint" }]
+docs = [
+    "zensical>=0.0.72,<0.1",
+    "mkdocstrings-python>=2.0.10,<3",
+    "polars>=2.0,<3",
+    "dpm-xbrl>=0.1.1",
+]
+dev = [
+    { include-group = "test" },
+    { include-group = "lint" },
+    { include-group = "docs" },
+]
 
 [[tool.uv.index]]
 url = "https://pypi.org/simple"
@@ -69,6 +80,8 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D", "S", "line-too-long"]
 "examples/*" = ["DOC"]
+"benchmarks/*" = ["DOC", "S", "ambiguous-unicode-character-string"]
+"scripts/*" = ["S"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

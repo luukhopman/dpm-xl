@@ -5,3 +5,6 @@ __pycache__/
 .coverage
 htmlcov/
 dist/
+site/
+.cache/
+/envs/

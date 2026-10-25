@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org).
 
-## Unreleased
+## 1.2.0 - 2026-10-25
 
 ### Added
 
@@ -11,11 +11,6 @@ All notable changes to this project are documented here. The project follows
   null and interval behaviour, errors and examples whose results the tests
   compute, and a new quick reference has the language and its grammar on
   one page. The tests check that the reference covers `dpmxl.grammar`.
-
-## 1.2.0 - 2026-10-25
-
-### Added
-
 - `Recordset.default`: the record of a key a record set lacks, from a
   selection's `default`. `Recordset.map` carries it and `Recordset.lookup`
   returns it for a missing key.

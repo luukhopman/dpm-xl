@@ -52,7 +52,7 @@ failed {'passed': 1, 'failed': 1, 'null': 0}
 On the command line, against a JSON data file:
 
 ```bash
-dpm-xl check rules.json            # parse every expression and precondition
+dpm-xl check rules.json            # report every problem in every expression
 dpm-xl eval rules.json data.json   # evaluate and explain every rule
 ```
 
@@ -63,6 +63,9 @@ dpm-xl eval rules.json data.json   # evaluate and explain every rule
   expressions, about 0.1 ms each).
 - Evaluates them with EBA's interval arithmetic, null logic and key joins, and
   points each failure at the cells involved.
+- Finds problems before evaluation, for editors and CI: every syntax error,
+  unknown functions and tables, coordinates a table lacks, keys and operand
+  types, each with its position and, where one fits, a suggested fix.
 - Has no dependencies. The optional `columnar` extra adds a polars evaluator
   for reports with millions of open-table rows.
 - Reads no files and knows no DPM release: data comes through a three-method

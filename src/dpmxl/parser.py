@@ -10,6 +10,8 @@ whole. [`parse`][dpmxl.parser.parse] builds the expression tree of
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Literal, NamedTuple, cast
@@ -113,12 +115,22 @@ class DpmXlSyntaxError(ValueError):
             {tA, r0010} +* 1
                          ^
         """
-        start = self.expression.rfind("\n", 0, self.position) + 1
-        end = self.expression.find("\n", self.position)
-        line_end = end if end >= 0 else len(self.expression)
-        line = self.expression[start:line_end]
-        width = max(min(self.end, line_end) - self.position, 1)
-        return f"{line}\n{' ' * (self.position - start)}^{'~' * (width - 1)}"
+        return _pointer(self.expression, self.position, self.end)
+
+
+def _pointer(expression: str, position: int, end: int) -> str:
+    """Render the source line of ``position`` and mark ``[position, end)``.
+
+    Returns:
+        str: The line, and below it ``^`` at the start and ``~`` under the
+        rest of the range on that line.
+    """
+    start = expression.rfind("\n", 0, position) + 1
+    newline = expression.find("\n", position)
+    line_end = newline if newline >= 0 else len(expression)
+    line = expression[start:line_end]
+    width = max(min(end, line_end) - position, 1)
+    return f"{line}\n{' ' * (position - start)}^{'~' * (width - 1)}"
 
 
 class Token(NamedTuple):
@@ -503,34 +515,55 @@ def parse(expression: str) -> Node:
         parser.expect_end()
         return node
     program = parse_program(expression)
+    errors = _rule_errors(program, expression)
+    if errors:
+        raise errors[0]
+    return program.statements[0]
+
+
+def _rule_errors(program: Program, expression: str) -> list[DpmXlSyntaxError]:
+    """Return why a parsed program is not a single rule expression.
+
+    The messages speak to someone typing a rule; parse_program is the entry
+    point for scripts with several statements or assignments.
+
+    Returns:
+        list[DpmXlSyntaxError]: The problems, the one ``parse`` raises
+        first; empty for one plain expression.
+    """
+    errors: list[DpmXlSyntaxError] = []
     first = program.statements[0]
-    # The messages speak to someone typing a rule; parse_program is the
-    # entry point for scripts with several statements or assignments.
     if len(program.statements) > 1:
         second = program.statements[1]
-        raise DpmXlSyntaxError(
-            "a rule is one expression; ';' separates the statements of a "
-            "script (parse_program)",
-            expression,
-            second.span[0],
-            second.span[1],
+        errors.append(
+            DpmXlSyntaxError(
+                "a rule is one expression; ';' separates the statements of a "
+                "script (parse_program)",
+                expression,
+                second.span[0],
+                second.span[1],
+            )
         )
     if isinstance(first, PersistentAssignment):
         arrow = expression.find("<-", first.target.span[1])
-        raise DpmXlSyntaxError(
-            "'<-' assigns a value; to compare with a negative number, write '< -'",
-            expression,
-            arrow,
-            arrow + 2,
+        errors.append(
+            DpmXlSyntaxError(
+                "'<-' assigns a value; to compare with a negative number, write '< -'",
+                expression,
+                arrow,
+                arrow + 2,
+            )
         )
-    if isinstance(first, Assignment):
-        raise DpmXlSyntaxError(
-            "':=' names a value for later statements of a script "
-            "(parse_program); a rule is one expression",
-            expression,
-            *first.span,
+    elif isinstance(first, Assignment):
+        errors.append(
+            DpmXlSyntaxError(
+                "':=' names a value for later statements of a script "
+                "(parse_program); a rule is one expression",
+                expression,
+                *first.span,
+            )
         )
-    return first
+    return errors
 
 
 def parse_program(source: str) -> Program:
@@ -567,6 +600,73 @@ def parse_program(source: str) -> Program:
     )
 
 
+def _parse_recovering(
+    source: str, *, program: bool = False
+) -> tuple[Program | None, list[DpmXlSyntaxError]]:
+    """Parse as far as possible, collecting every syntax error.
+
+    Unlike [`parse_program`][dpmxl.parser.parse_program] the parse carries on
+    after an error: a missing token is taken as left out, unreadable text up
+    to where the enclosing construct can continue is skipped, and an
+    unreadable selection component is dropped. An error that starts inside
+    an earlier one is not reported. Lexical errors (an unterminated string
+    or brace, an unknown character) and too deep nesting end the parse.
+
+    Args:
+        source: The expression or program.
+        program: Accept a script (``;``, ``:=`` and ``<-``); otherwise the
+            text must be one rule expression, as for
+            [`parse`][dpmxl.parser.parse].
+
+    Returns:
+        tuple[Program | None, list[DpmXlSyntaxError]]: The statements read,
+        with placeholders for unreadable text, or ``None`` when the parse
+        ended early; and the errors in source order.
+    """
+    if not source or not source.strip():
+        return None, [DpmXlSyntaxError("empty expression", source or "", 0)]
+    try:
+        tokens = _scan(source)
+    except DpmXlSyntaxError as error:
+        return None, [error]
+    parser = _Parser(source, tokens, recover=True)
+    statements: list[Node] = []
+    try:
+        while True:
+            statements.append(parser.parse_statement())
+            if parser.accept(";"):
+                if parser.current.kind == "eof":
+                    break
+                continue
+            if parser.current.kind == "eof":
+                break
+            parser.report(
+                parser.error(
+                    f"expected end of expression, found {_describe(parser.current)}"
+                )
+            )
+            separator = parser.find(
+                lambda token: token.kind == "punctuation" and token.text == ";"
+            )
+            if separator is None:
+                break
+            parser.index = separator + 1
+            if parser.current.kind == "eof":
+                break
+    except (_TooDeep, RecursionError) as error:
+        if isinstance(error, RecursionError):  # pragma: no cover - MAX_NESTING
+            error = DpmXlSyntaxError("expression too deeply nested", source, 0)
+        parser.report(error)
+        return None, sorted(parser.errors, key=lambda found: found.position)
+    tree = Program(
+        tuple(statements), span=(statements[0].span[0], statements[-1].span[1])
+    )
+    errors = list(parser.errors)
+    if not program:
+        errors.extend(_rule_errors(tree, source))
+    return tree, sorted(errors, key=lambda found: found.position)
+
+
 def _may_be_program(expression: str) -> bool:
     return ";" in expression or ":=" in expression or "<-" in expression
 
@@ -599,12 +699,27 @@ def parse_selection(
     return parser.parse_spec(offset, closing="")
 
 
+class _TooDeep(DpmXlSyntaxError):
+    """Nesting beyond MAX_NESTING; a recovering parse stops on it."""
+
+
+@dataclass(frozen=True, slots=True)
+class _Invalid(Node):
+    """Text a recovering parse could not read; it has no children."""
+
+
 class _Parser:
-    def __init__(self, expression: str, tokens: list[Token]) -> None:
+    def __init__(
+        self, expression: str, tokens: list[Token], *, recover: bool = False
+    ) -> None:
         self.expression = expression
         self.tokens = tokens
         self.index = 0
         self.depth = 0
+        # A recovering parse records errors and carries on; see
+        # _parse_recovering.
+        self.recover = recover
+        self.errors: list[DpmXlSyntaxError] = []
 
     # Token helpers -----------------------------------------------------
 
@@ -642,24 +757,142 @@ class _Parser:
     def expect(self, text: str) -> Token:
         if self.at(text):
             return self.advance()
-        raise self.error(
+        error = self.error(
             f"expected {text!r}, found {_describe(self.tokens[self.index])}"
         )
+        return self.missing(
+            error, lambda token: token.text == text and token.kind in _SYMBOL_KINDS
+        )
 
-    def expect_keyword(self, word: str) -> Token:
+    def expect_keyword(self, word: str, message: str | None = None) -> Token:
         if self.at_keyword(word):
             return self.advance()
-        raise self.error(
-            f"expected {word!r}, found {_describe(self.tokens[self.index])}"
+        error = self.error(
+            message or f"expected {word!r}, found {_describe(self.tokens[self.index])}"
         )
+        return self.missing(error, lambda token: _is_keyword(token, word))
 
     def expect_kind(self, kind: str) -> Token:
         if self.tokens[self.index].kind == kind:
             return self.advance()
         wanted = _KIND_NAMES.get(kind, repr(kind))
-        raise self.error(
+        error = self.error(
             f"expected {wanted}, found {_describe(self.tokens[self.index])}"
         )
+        return self.missing(error, None)
+
+    # Recovery ----------------------------------------------------------
+
+    def fail(self, error: DpmXlSyntaxError) -> None:
+        """Raise ``error``, or record it and carry on when recovering.
+
+        Raises:
+            DpmXlSyntaxError: Unless the parse is recovering.
+        """
+        if not self.recover:
+            raise error
+        self.report(error)
+
+    def report(self, error: DpmXlSyntaxError) -> None:
+        """Record an error, unless it follows from one already recorded.
+
+        The parse reads left to right, so an error that starts before the
+        last one, or inside an earlier one's text, results from an earlier
+        error; only the first is kept.
+        """
+        if self.errors and error.position < self.errors[-1].position:
+            return
+        for earlier in self.errors:
+            if (
+                earlier.position
+                <= error.position
+                < max(earlier.end, earlier.position + 1)
+            ):
+                return
+        self.errors.append(error)
+
+    def missing(
+        self, error: DpmXlSyntaxError, wanted: Callable[[Token], bool] | None
+    ) -> Token:
+        """Recover from a token that is not the one the grammar needs.
+
+        When the wanted token follows later in the same group, the text
+        before it is skipped; otherwise it is taken as left out.
+
+        Returns:
+            Token: The wanted token, or an empty one where it is missing.
+
+        Raises:
+            DpmXlSyntaxError: Unless the parse is recovering.
+        """
+        self.fail(error)
+        found = self.find(wanted) if wanted is not None else None
+        if found is not None:
+            self.index = found
+            return self.advance()
+        start = self.tokens[self.index].start
+        return Token("eof", "", start, start)
+
+    def find(self, wanted: Callable[[Token], bool]) -> int | None:
+        """Return the index of the next wanted token in the current group.
+
+        The search skips nested brackets and stops at the group's end, a
+        ``;`` and the branch keywords of an enclosing ``if``.
+
+        Returns:
+            int | None: The token's index, or ``None`` when it is not there.
+        """
+        depth = 0
+        for position in range(self.index, len(self.tokens)):
+            token = self.tokens[position]
+            if depth == 0 and wanted(token):
+                return position
+            if token.kind == "eof":
+                return None
+            if _opens(token):
+                depth += 1
+            elif _closes(token):
+                if depth == 0:
+                    return None
+                depth -= 1
+            elif depth == 0 and (
+                (token.kind == "punctuation" and token.text == ";")
+                or (token.kind == "keyword" and _keyword(token) in _BRANCH_WORDS)
+            ):
+                return None
+        return None
+
+    def skip_to_follower(self, start: int) -> None:
+        """Move past unreadable text to a token that can follow an operand.
+
+        Brackets opened at or after ``start`` are skipped whole, so the parse
+        resumes in the group the failed operand belongs to.
+        """
+        depth = 0
+        position = start
+        while True:
+            token = self.tokens[position]
+            if token.kind == "eof":
+                break
+            at_or_after = position >= self.index
+            if at_or_after and depth == 0 and _follows_operand(token):
+                break
+            if _opens(token):
+                depth += 1
+            elif _closes(token) and depth > 0:
+                depth -= 1
+            position += 1
+        self.index = max(position, self.index)
+
+    def invalid(self, start: int) -> _Invalid:
+        """Return a placeholder for the tokens from ``start`` to here.
+
+        Returns:
+            _Invalid: A node spanning the skipped text (empty when none was).
+        """
+        first = self.tokens[start].start
+        end = self.tokens[self.index - 1].end if self.index > start else first
+        return _Invalid(span=(first, max(first, end)))
 
     def expect_name(self) -> str:
         return _name(self.expect_kind("identifier"))
@@ -676,7 +909,10 @@ class _Parser:
     def nest(self) -> None:
         self.depth += 1
         if self.depth > MAX_NESTING:
-            raise self.error("expression too deeply nested")
+            token = self.tokens[self.index]
+            raise _TooDeep(
+                "expression too deeply nested", self.expression, token.start, token.end
+            )
 
     def span(self, start: int, end_token: Token | None = None) -> tuple[int, int]:
         end = (end_token or self.tokens[max(self.index - 1, 0)]).end
@@ -709,11 +945,15 @@ class _Parser:
                 if isinstance(target, TableReported):
                     target = Parameter(target.table, span=target.span)
                 elif not isinstance(target, Selection | Parameter):
-                    raise self.error("assignment target must be a selection", token)
+                    self.fail(
+                        self.error("assignment target must be a selection", token)
+                    )
                 self.advance()
                 value = self.parse_root()
                 return PersistentAssignment(
-                    target, value, span=(token.start, value.span[1])
+                    cast(Selection | Parameter, target),
+                    value,
+                    span=(token.start, value.span[1]),
                 )
         return self.parse_root()
 
@@ -748,11 +988,27 @@ class _Parser:
     def parse_expression(self) -> Node:
         # Every nested expression (in parentheses, if, calls, clause conditions
         # and sets) starts here; parse_postfix counts chained clauses. A
-        # syntax error ends the parse, so the depth needs no unwinding.
-        self.nest()
-        node = self.parse_or()
-        self.depth -= 1
-        return node
+        # syntax error ends a strict parse, so the depth needs no unwinding.
+        if not self.recover:
+            self.nest()
+            node = self.parse_or()
+            self.depth -= 1
+            return node
+        start, depth = self.index, self.depth
+        try:
+            self.nest()
+            node = self.parse_or()
+            self.depth -= 1
+            return node
+        except _TooDeep:
+            raise
+        except DpmXlSyntaxError as error:
+            # An error without a recovery of its own: skip to where the
+            # enclosing construct can carry on.
+            self.report(error)
+            self.depth = depth
+            self.skip_to_follower(start)
+            return self.invalid(start)
 
     def parse_or(self) -> Node:
         left = self.parse_and()
@@ -832,7 +1088,10 @@ class _Parser:
         if not self.at("}"):
             while True:
                 if self.at(",") or self.at("}"):
-                    raise self.error("empty set member")
+                    self.fail(self.error("empty set member"))
+                    if self.accept(","):
+                        continue
+                    break
                 items.append(self.parse_expression())
                 if not self.accept(","):
                     break
@@ -888,7 +1147,8 @@ class _Parser:
             if token.text == "%" and token.kind == "operator":
                 self.advance()
                 if not (isinstance(node, Literal_) and node.kind == "number"):
-                    raise self.error("'%' must follow a number", token)
+                    self.fail(self.error("'%' must follow a number", token))
+                    continue
                 assert isinstance(node.value, Decimal)
                 node = Literal_(
                     node.value.scaleb(-2, DECIMAL_CONTEXT),
@@ -896,7 +1156,8 @@ class _Parser:
                     span=(node.span[0], token.end),
                 )
                 if self.at("%"):
-                    raise self.error("'%' must follow a number, not a percentage")
+                    self.fail(self.error("'%' must follow a number, not a percentage"))
+                    self.advance()
                 continue
             if token.text == "[" and token.kind == "punctuation":
                 # Each clause wraps the node once more.
@@ -927,9 +1188,7 @@ class _Parser:
         pairs: list[tuple[str, str]] = []
         while True:
             old = self.expect_name()
-            if not self.at_keyword("to"):
-                raise self.error("expected 'to' in rename clause")
-            self.advance()
+            self.expect_keyword("to", "expected 'to' in rename clause")
             pairs.append((old, self.expect_name()))
             if not self.accept(","):
                 break
@@ -944,14 +1203,24 @@ class _Parser:
             try:
                 value = _number(token.text)
             except InvalidOperation as error:
-                raise self.error("number out of range", token) from error
+                if not self.recover:
+                    raise self.error("number out of range", token) from error
+                self.report(self.error("number out of range", token))
+                return _Invalid(span=(token.start, token.end))
             return Literal_(value, "number", span=(token.start, token.end))
         if kind == "string":
             self.advance()
             return Literal_(token.text[1:-1], "string", span=(token.start, token.end))
         if kind == "date":
             self.advance()
-            return Literal_(_date(self, token), "date", span=(token.start, token.end))
+            try:
+                value = _date(self, token)
+            except DpmXlSyntaxError as error:
+                if not self.recover:
+                    raise
+                self.report(error)
+                return _Invalid(span=(token.start, token.end))
+            return Literal_(value, "date", span=(token.start, token.end))
         if kind == "item":
             self.advance()
             return Literal_(_item(token.text), "item", span=(token.start, token.end))
@@ -968,7 +1237,7 @@ class _Parser:
         if kind == "keyword":
             if _keyword(token) == "if":
                 return self.parse_if()
-            raise self.error(f"unexpected keyword {token.text!r}")
+            return self.no_operand(self.error(f"unexpected keyword {token.text!r}"))
         if kind == "brace" and token.text == "{":
             self.advance()
             return self.parse_brace(token)
@@ -984,8 +1253,33 @@ class _Parser:
                 return self.parse_call(token)
             return Name(_name(token), span=(token.start, token.end))
         if kind == "eof":
-            raise self.error("expression ends where an operand is expected")
-        raise self.error(f"unexpected {_describe(token)} where an operand is expected")
+            return self.no_operand(
+                self.error("expression ends where an operand is expected")
+            )
+        return self.no_operand(
+            self.error(f"unexpected {_describe(token)} where an operand is expected")
+        )
+
+    def no_operand(self, error: DpmXlSyntaxError) -> Node:
+        """Recover where an operand is missing.
+
+        Text that can neither start nor follow an operand, such as the second
+        ``=`` of ``a = = 1``, is skipped; the next operand is read in place of
+        the missing one, or a placeholder stands in for it.
+
+        Returns:
+            Node: The operand read after the skipped text, or a placeholder.
+
+        Raises:
+            DpmXlSyntaxError: Unless the parse is recovering.
+        """
+        self.fail(error)
+        start = self.tokens[self.index].start
+        while not _follows_operand(self.current) and not _starts_operand(self.current):
+            self.advance()
+        if _starts_operand(self.current):
+            return self.parse_unary()
+        return _Invalid(span=(start, start))
 
     def parse_if(self) -> Node:
         start = self.expect_keyword("if").start
@@ -1020,19 +1314,19 @@ class _Parser:
                     break
         end = self.expect(")")
         if function in ANALYTIC_FUNCTIONS:
-            raise self.error(f"{function} needs an over clause", end)
+            self.fail(self.error(f"{function} needs an over clause", name))
         if function in FUNCTION_ALIASES:
             # max_aggr/min_aggr are the aggregate forms of max/min, which the
             # evaluators recognise by their single operand.
             if len(args) != 1:
-                raise self.error(f"{function} takes one operand")
+                self.fail(self.error(f"{function} takes one operand", name))
             function = FUNCTION_ALIASES[function]
         return Call(function, tuple(args), group_by, span=self.span(name.start, end))
 
     def parse_analytic(self, name: Token, function: str, operand: Node) -> Node:
         over = self.advance()
         if function not in _ANALYTIC_NAMES:
-            raise self.error(f"{function} takes no over clause", over)
+            self.fail(self.error(f"{function} takes no over clause", over))
         self.expect("(")
         partition: list[str] = []
         order: list[tuple[str, bool]] = []
@@ -1061,7 +1355,7 @@ class _Parser:
         self.expect(")")
         end = self.expect(")")
         if function == "rank" and not order:
-            raise self.error("rank needs an order by clause", over)
+            self.fail(self.error("rank needs an order by clause", over))
         return Analytic(
             FUNCTION_ALIASES.get(function, function),
             operand,
@@ -1090,7 +1384,7 @@ class _Parser:
             return WindowBound("current data point")
         count = self.expect_kind("number")
         if not count.text.isdigit():
-            raise self.error("a window offset is a whole number", count)
+            self.fail(self.error("a window offset is a whole number", count))
         period = None
         if self.tokens[self.index].kind in {"period", "identifier"} and (
             self.tokens[self.index].text in TIME_PERIODS
@@ -1104,7 +1398,8 @@ class _Parser:
         self.advance()
         return WindowBound(
             "preceding" if _keyword(direction) == "preceding" else "following",
-            int(count.text),
+            # A recovering parse may have read a fraction or nothing here.
+            int(count.text) if count.text.isdigit() else 0,
             period,
         )
 
@@ -1126,7 +1421,8 @@ class _Parser:
                 return Parameter(body[1:], span=span)
             if body[1:2] == "`":
                 return Parameter(_reference_name(body), span=span)
-            raise self.error(f"unknown selection component {body!r}", first)
+            self.fail(self.error(f"unknown selection component {body!r}", first))
+            return _Invalid(span=span)
         if first.kind == "parameter":
             return self.parse_parameter(opening)
         spec = self.parse_spec(opening.end)
@@ -1166,7 +1462,12 @@ class _Parser:
             closing: ``"}"``, or ``""`` to read up to the end of the tokens.
 
         Returns:
-            SelectionSpec: The selection.
+            SelectionSpec: The selection; when recovering, without the
+            components that could not be read.
+
+        Raises:
+            DpmXlSyntaxError: On a malformed component, unless recovering.
+            _TooDeep: When a default nests too deeply.
         """
         fields: dict[str, Any] = {}
         if self._at_spec_end(closing):
@@ -1174,49 +1475,89 @@ class _Parser:
             return SelectionSpec()
         while True:
             token = self.tokens[self.index]
-            if token.text in {",", "}"} or token.kind == "eof":
-                raise self.error("empty selection component")
-            if token.kind == "keyword" and _keyword(token) in {"default", "interval"}:
-                name = _keyword(self.advance())
-                if name in fields:
-                    raise self.error(f"duplicate {name} option", token)
-                self.expect(":")
-                if name == "interval":
-                    value = self.tokens[self.index]
-                    if value.kind != "boolean":
-                        raise self.error("interval must be true or false", token)
+            try:
+                self._spec_component(token, fields)
+                if self.accept(","):
+                    continue
+                if self._at_spec_end(closing):
+                    self._finish_spec(closing)
+                    return SelectionSpec(**fields)
+                raise self._unknown_component(token)
+            except _TooDeep:
+                raise
+            except DpmXlSyntaxError as error:
+                if not self.recover:
+                    raise
+                # Skip the rest of the component; the others still count.
+                self.report(error)
+                self._skip_component()
+                if self.accept(","):
+                    continue
+                if closing and self.at(closing):
                     self.advance()
-                    fields[name] = value.text.casefold() == "true"
-                else:
-                    fields[name] = self.parse_default()
-            elif token.kind in _SOURCES:
-                if (
-                    "table" in fields
-                    or "table_group" in fields
-                    or "operation" in fields
-                ):
-                    raise self.error("duplicate table", token)
-                self.advance()
-                fields[_SOURCES[token.kind]] = _reference_name(token.text)
-            elif token.kind == "axis" or (
-                token.kind == "punctuation" and token.text == "("
-            ):
-                selector, axis = self.parse_axis()
-                if axis in fields:
-                    raise self.error(f"duplicate {axis} selector", token)
-                fields[axis] = selector
-            else:
-                raise self.error(
-                    f"unknown selection component {self._component(token)!r}", token
-                )
-            if self.accept(","):
-                continue
-            if self._at_spec_end(closing):
-                self._finish_spec(closing)
                 return SelectionSpec(**fields)
-            raise self.error(
-                f"unknown selection component {self._component(token)!r}", token
-            )
+
+    def _spec_component(self, token: Token, fields: dict[str, Any]) -> None:
+        """Parse one selection component into ``fields``.
+
+        Raises:
+            DpmXlSyntaxError: On an empty, unknown or malformed component.
+        """
+        if token.text in {",", "}"} or token.kind == "eof":
+            raise self.error("empty selection component")
+        if token.kind == "keyword" and _keyword(token) in {"default", "interval"}:
+            name = _keyword(self.advance())
+            duplicate = name in fields
+            if duplicate:
+                self.fail(self.error(f"duplicate {name} option", token))
+            self.expect(":")
+            if name == "interval":
+                value = self.tokens[self.index]
+                if value.kind != "boolean":
+                    raise self.error("interval must be true or false", token)
+                self.advance()
+                if not duplicate:
+                    fields[name] = value.text.casefold() == "true"
+            else:
+                default = self.parse_default()
+                if not duplicate:
+                    fields[name] = default
+        elif token.kind in _SOURCES:
+            if "source_span" in fields:
+                self.fail(self.error("duplicate table", token))
+                self.advance()
+                return
+            self.advance()
+            fields[_SOURCES[token.kind]] = _reference_name(token.text)
+            fields["source_span"] = (token.start, token.end)
+        elif token.kind == "axis" or (
+            token.kind == "punctuation" and token.text == "("
+        ):
+            selector, axis = self.parse_axis()
+            if axis in fields:
+                self.fail(self.error(f"duplicate {axis} selector", token))
+                return
+            fields[axis] = selector
+        else:
+            raise self._unknown_component(token)
+
+    def _skip_component(self) -> None:
+        """Move to the ``,`` or ``}`` that ends the current selection component."""
+        depth = 0
+        while True:
+            token = self.tokens[self.index]
+            if token.kind == "eof":
+                return
+            if depth == 0 and (
+                (token.kind == "punctuation" and token.text == ",")
+                or (token.kind == "brace" and token.text == "}")
+            ):
+                return
+            if _opens(token):
+                depth += 1
+            elif _closes(token):
+                depth -= 1
+            self.advance()
 
     def _at_spec_end(self, closing: str) -> bool:
         if closing:
@@ -1226,6 +1567,20 @@ class _Parser:
     def _finish_spec(self, closing: str) -> None:
         if closing:
             self.advance()
+
+    def _unknown_component(self, token: Token) -> DpmXlSyntaxError:
+        """Describe the unreadable selection component starting at ``token``.
+
+        Returns:
+            DpmXlSyntaxError: An error spanning the whole component.
+        """
+        component = self._component(token)
+        return DpmXlSyntaxError(
+            f"unknown selection component {component!r}",
+            self.expression,
+            token.start,
+            token.start + len(component),
+        )
 
     def _component(self, token: Token) -> str:
         """Return the source of the selection component starting at ``token``.
@@ -1240,32 +1595,39 @@ class _Parser:
         token = self.tokens[self.index]
         if token.kind == "axis":
             self.advance()
-            return _axis_part(token.text)
+            return _axis_part(token)
         opening = self.expect("(")
         if self.at(")"):
             raise self.error("empty axis list", opening)
         parts: list[str | tuple[str, str]] = []
+        spans: list[tuple[int, int]] = []
         axis: str | None = None
         while True:
             part = self.tokens[self.index]
             if part.kind != "axis":
                 if part.text in {",", ")"}:
                     raise self.error("empty axis list member", part)
-                raise self.error(
-                    f"unknown selection component {self._component(part)!r}", part
-                )
+                raise self._unknown_component(part)
             self.advance()
-            selector, part_axis = _axis_part(part.text)
+            selector, part_axis = _axis_part(part)
             if axis is not None and part_axis != axis:
                 raise self.error("axis list mixes axes", part)
             if selector.wildcard:
                 raise self.error("wildcard inside an axis list", part)
             axis = part_axis
             parts.extend(selector.parts)
+            spans.extend(selector.spans)
             if not self.accept(","):
                 break
-        self.expect(")")
-        return AxisSelector(parts=tuple(parts)), axis
+        closing = self.expect(")")
+        return (
+            AxisSelector(
+                parts=tuple(parts),
+                span=(opening.start, closing.end),
+                spans=tuple(spans),
+            ),
+            axis,
+        )
 
     def parse_default(self) -> Literal_ | SetLiteral:
         token = self.tokens[self.index]
@@ -1326,6 +1688,57 @@ class _Parser:
 
 
 _SYMBOL_KINDS = frozenset({"punctuation", "brace", "operator"})
+# Keywords that end an if branch; a recovering search does not pass them.
+_BRANCH_WORDS = frozenset({"then", "else", "endif"})
+# Keywords that may follow an operand, where a recovering parse resumes.
+_FOLLOW_WORDS = _BRANCH_WORDS | {"and", "or", "xor", "in", "group by", "over", "to"}
+_FOLLOW_SYMBOLS = frozenset({")", "]", "}", ",", ";", ":"})
+
+
+def _opens(token: Token) -> bool:
+    return (token.kind == "punctuation" and token.text in {"(", "["}) or (
+        token.kind == "brace" and token.text == "{"
+    )
+
+
+def _closes(token: Token) -> bool:
+    return (token.kind == "punctuation" and token.text in {")", "]"}) or (
+        token.kind == "brace" and token.text == "}"
+    )
+
+
+def _follows_operand(token: Token) -> bool:
+    """Whether a token can come right after an operand, ending it.
+
+    Returns:
+        bool: True for the end, closing brackets, separators and keywords
+        such as ``then`` and ``and``.
+    """
+    if token.kind == "eof":
+        return True
+    if token.kind in {"punctuation", "brace"}:
+        return token.text in _FOLLOW_SYMBOLS
+    return token.kind == "keyword" and _keyword(token) in _FOLLOW_WORDS
+
+
+def _starts_operand(token: Token) -> bool:
+    """Whether a token can start an operand below ``not``.
+
+    Returns:
+        bool: True for literals, names, calls, braces, ``(``, signs and ``if``.
+    """
+    kind = token.kind
+    if kind in _LITERAL_KINDS or kind in {"identifier", "function", "period"}:
+        return True
+    if kind == "brace":
+        return token.text == "{"
+    if kind == "punctuation":
+        return token.text == "("
+    if kind == "operator":
+        return token.text in {"+", "-"}
+    return kind == "keyword" and _keyword(token) == "if"
+
+
 _ANALYTIC_NAMES = AGGREGATE_FUNCTIONS | ANALYTIC_FUNCTIONS | {"max", "min"}
 _LITERAL_KINDS = frozenset({"number", "string", "date", "item", "boolean", "null"})
 
@@ -1407,15 +1820,22 @@ def _date_value(text: str) -> date:
     return date.fromisoformat(text)
 
 
-def _axis_part(text: str) -> tuple[AxisSelector, str]:
+def _axis_part(token: Token) -> tuple[AxisSelector, str]:
+    text = token.text
     axis = AXIS_PREFIXES[text[0]]
     value = text[1:]
+    span = (token.start, token.end)
     if value == "*":
-        return AxisSelector(wildcard=True), axis
+        return AxisSelector(wildcard=True, span=span), axis
+    part: str | tuple[str, str] = value
     if "-" in value:
         low, high = value.split("-", 1)
-        return AxisSelector(parts=((low, high),)), axis
-    return AxisSelector(parts=(value,)), axis
+        letter = text[0]
+        # A range may repeat its axis letter (see AxisSelector).
+        if high[:1] == letter and low[:1] != letter:
+            high = high[1:]
+        part = (low, high)
+    return AxisSelector(parts=(part,), span=span, spans=(span,)), axis
 
 
 def _with_span(node: Node, span: tuple[int, int]) -> Node:

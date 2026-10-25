@@ -123,6 +123,7 @@ from .ast import (
 )
 from .evaluator import (
     AGGREGATES,
+    _check_call,
     _context_condition,
     _key_names,
     _parse_cached,
@@ -809,20 +810,17 @@ class ColumnarEvaluator:
 
     def _call(self, node: Call, context: SelectionSpec) -> Frame:
         name = node.name
+        _check_call(node)
         if name == "time_shift":
             # Even without another report, a date key can be shifted.
             raise ColumnarUnsupported("time_shift")
         if name == "annualise":
             raise ColumnarUnsupported("annualise")
-        if name in AGGREGATES and (len(node.args) == 1 or node.group_by is not None):
-            if len(node.args) != 1:
-                raise EvaluationError(f"{name} with group by takes one operand")
+        if name in AGGREGATES and len(node.args) == 1:
             return _aggregate(name, self.evaluate(node.args[0], context), node.group_by)
         if node.group_by is not None:
             raise EvaluationError(f"group by is not allowed in {name}")
         if name == "filter":
-            if len(node.args) != 2:
-                raise EvaluationError("filter takes 2 operands")
             # Like a branch, the data's records the condition drops may fail.
             return _filter(
                 self._branch(node.args[0], context),
@@ -830,22 +828,17 @@ class ColumnarEvaluator:
             )
         args = [self.evaluate(arg, context) for arg in node.args]
         if name == "abs":
-            _arity(name, args, 1)
             return _map_numeric(args[0], lambda num, thr: (num.abs(), thr))
         if name == "isnull":
-            _arity(name, args, 1)
             frame = args[0]
             return _with_values(frame, flag=_is_null())
         if name == "nvl":
-            _arity(name, args, 2)
             return _nvl(args[0], args[1])
         if name == "match":
-            _arity(name, args, 2)
             return _match(args[0], args[1])
         if name in {"max", "min"}:
             return _extreme(name, args)
         if name in {"len", "length"}:
-            _arity(name, args, 1)
             return _length(args[0])
         raise ColumnarUnsupported(f"function {name}")
 
@@ -909,11 +902,6 @@ class ColumnarEvaluator:
             keys[keys.index(key)] = new
             mapping[_key(key)] = _key(new)
         return Frame(tuple(keys), frame.df.rename(mapping))
-
-
-def _arity(name: str, args: Sequence[Frame], count: int) -> None:
-    if len(args) != count:
-        raise EvaluationError(f"{name} takes {count} operands")
 
 
 def _literal_value(node: Literal_) -> Value:

@@ -7,7 +7,7 @@ import json
 import sys
 from collections import Counter
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date
 from decimal import InvalidOperation
 from importlib.metadata import PackageNotFoundError, version
@@ -15,9 +15,10 @@ from pathlib import Path
 from typing import Any
 
 from .ast import Item
+from .diagnostics import LayoutLookup, diagnose
 from .evaluator import RuleResult, evaluate_rule
 from .explain import explain
-from .parser import DpmXlSyntaxError, parse_program
+from .parser import parse_program
 from .provider import CellKey, MemoryProvider, TableLayout
 from .references import references
 from .values import Number, Value, ValueSet
@@ -28,6 +29,7 @@ JSON_SCHEMA_VERSION = 1
 _DESCRIPTION = "Parse and evaluate EBA DPM-XL validation rules."
 _EPILOG = """examples:
   dpm-xl check rules.json
+  dpm-xl check rules.json --layouts data.json
   dpm-xl check "with {tC_01.00}: {r0010} >= 0" --references
   dpm-xl eval "{tC_01.00, r0010, c0010} >= 0" data.json
   dpm-xl eval rules.json data.json --json
@@ -42,9 +44,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI.
 
     Returns:
-        int: Process exit code: 0 when everything parsed or held, 1 when an
-        expression did not parse or a rule failed, 3 for an evaluation error
-        or unreadable input (argparse uses 2 for usage errors).
+        int: Process exit code: 0 when everything parsed (with ``--strict``:
+        had no errors) or every rule held, 1 when an expression did not parse
+        (with ``--strict``: had an error) or a rule failed, 3 for an
+        evaluation error or unreadable input (argparse uses 2 for usage
+        errors).
     """
     parser = argparse.ArgumentParser(
         prog="dpm-xl",
@@ -55,9 +59,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--version", action="version", version=f"%(prog)s {_version()}")
     commands = parser.add_subparsers(dest="command", required=True)
     check = commands.add_parser(
-        "check", help="parse expressions and report syntax errors"
+        "check", help="report syntax errors and other problems in expressions"
     )
     check.add_argument("source", help="an expression or a rule file")
+    check.add_argument(
+        "--layouts",
+        type=Path,
+        metavar="DATA",
+        help="JSON data file whose tables and parameters to check against",
+    )
+    check.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit with status 1 for any error, not only syntax errors",
+    )
     check.add_argument("--references", action="store_true", help="print selections")
     check.add_argument("--json", action="store_true", help="print JSON")
     run = commands.add_parser(
@@ -76,6 +91,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             arguments.source,
             show_references=arguments.references,
             as_json=arguments.json,
+            layouts=arguments.layouts,
+            strict=arguments.strict,
         )
     return _evaluate(
         arguments.source,
@@ -165,49 +182,111 @@ def _expressions(rules: Iterable[_Rule]) -> Iterable[tuple[str, str]]:
             yield f"{rule.label}:precondition", rule.precondition
 
 
-def _check(source: str, *, show_references: bool, as_json: bool = False) -> int:
+def _check(
+    source: str,
+    *,
+    show_references: bool,
+    as_json: bool = False,
+    layouts: Path | None = None,
+    strict: bool = False,
+) -> int:
     try:
         rules = _rules(source)
     except (OSError, ValueError) as error:
         print(f"error: {source}: {error}", file=sys.stderr)
         return INVALID_INPUT
+    try:
+        lookup, tables, parameters = _layouts(layouts)
+    except (OSError, ValueError) as error:
+        print(f"error: {layouts}: {error}", file=sys.stderr)
+        return INVALID_INPUT
     total = 0
+    unparsed = 0
     errors: list[dict[str, Any]] = []
+    found: list[dict[str, Any]] = []
     selections: list[dict[str, str]] = []
+    counts: Counter[str] = Counter()
     for label, expression in _expressions(rules):
         total += 1
-        try:
-            node = parse_program(expression)
-        except DpmXlSyntaxError as error:
-            errors.append(
-                {
-                    "source": label,
-                    "message": error.message,
-                    "position": error.position,
-                    "end": error.end,
-                }
-            )
+        diagnostics = diagnose(
+            expression, lookup, tables=tables, parameters=parameters, program=True
+        )
+        syntax = [item for item in diagnostics if item.code == "syntax"]
+        unparsed += bool(syntax)
+        errors.extend(
+            {
+                "source": label,
+                "message": item.message,
+                "position": item.start,
+                "end": item.end,
+            }
+            for item in syntax
+        )
+        for item in diagnostics:
+            counts[item.severity] += 1
+            found.append({"source": label, **asdict(item)})
             if not as_json:
-                print(f"{label}: {error.message}\n{error.pointer()}", file=sys.stderr)
-            continue
-        if show_references:
-            for reference in references(node):
+                print(
+                    f"{label}: {item.severity}: {item.message}\n"
+                    f"{item.pointer(expression)}",
+                    file=sys.stderr,
+                )
+        if show_references and not syntax:
+            for reference in references(parse_program(expression)):
                 selections.append({"source": label, "selection": reference.spec.text()})
                 if not as_json:
                     print(f"{label}: {reference.spec.text()}")
     if as_json:
         document: dict[str, Any] = {
             "schema_version": JSON_SCHEMA_VERSION,
-            "parsed": total - len(errors),
+            "parsed": total - unparsed,
             "total": total,
         }
         document["errors"] = errors
+        document["diagnostics"] = found
         if show_references:
             document["selections"] = selections
         print(json.dumps(document, indent=2))
     else:
-        print(f"{total - len(errors)}/{total} expressions parsed")
-    return 1 if errors else 0
+        problems = [
+            f"{counts[severity]} {severity}{'' if counts[severity] == 1 else 's'}"
+            for severity in ("error", "warning")
+            if counts[severity]
+        ]
+        print(
+            f"{total - unparsed}/{total} expressions parsed"
+            + (f"; {' and '.join(problems)}" if problems else "")
+        )
+    if strict:
+        return 1 if counts["error"] else 0
+    return 1 if unparsed else 0
+
+
+def _layouts(
+    path: Path | None,
+) -> tuple[LayoutLookup | None, tuple[str, ...] | None, tuple[str, ...] | None]:
+    """Read the tables and parameter names ``check --layouts`` checks against.
+
+    Returns:
+        tuple: A layout lookup, the table codes and the parameter names;
+        ``None`` each without a data file.
+
+    Raises:
+        ValueError: For a malformed data file.
+    """
+    if path is None:
+        return None, None, None
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise ValueError("a data file must hold a JSON object")
+    try:
+        layouts = {
+            table.code: table for table in map(_table, document.get("tables", ()))
+        }
+        parameters = tuple(document.get("parameters", {}))
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError(f"malformed data document ({error!r})") from error
+    return layouts.get, tuple(layouts), parameters
 
 
 INVALID_INPUT = 3
@@ -313,7 +392,8 @@ def _print_result(
 def load_memory_provider(document: dict[str, Any]) -> MemoryProvider:
     """Build a [`MemoryProvider`][dpmxl.provider.MemoryProvider] from a JSON document.
 
-    The document has ``tables`` (code, rows, columns, sheets, open_keys),
+    The document has ``tables`` (code, rows, columns, sheets, open_keys,
+    template, open_axes and data_types),
     ``facts`` (table, row, column, sheet, keys, value, decimals, type),
     ``reported`` template codes, ``parameters`` (a list is a set),
     ``table_groups`` (group code to table codes), ``operations``
@@ -332,18 +412,24 @@ def load_memory_provider(document: dict[str, Any]) -> MemoryProvider:
         raise ValueError(f"malformed data document ({error!r})") from error
 
 
+def _table(table: dict[str, Any]) -> TableLayout:
+    return TableLayout(
+        code=table["code"],
+        rows=tuple(table.get("rows", ())),
+        columns=tuple(table.get("columns", ())),
+        sheets=tuple(table.get("sheets", ())),
+        open_keys=tuple(table.get("open_keys", ())),
+        template=table.get("template"),
+        open_axes=tuple(table.get("open_axes", ())),
+        data_types={
+            (cell.get("row"), cell.get("column"), cell.get("sheet")): cell["type"]
+            for cell in table.get("data_types", ())
+        },
+    )
+
+
 def _memory_provider(document: dict[str, Any]) -> MemoryProvider:
-    tables = [
-        TableLayout(
-            code=table["code"],
-            rows=tuple(table.get("rows", ())),
-            columns=tuple(table.get("columns", ())),
-            sheets=tuple(table.get("sheets", ())),
-            open_keys=tuple(table.get("open_keys", ())),
-            template=table.get("template"),
-        )
-        for table in document.get("tables", ())
-    ]
+    tables = [_table(table) for table in document.get("tables", ())]
     values: dict[CellKey, Value] = {}
     for index, fact in enumerate(document.get("facts", ()), start=1):
         try:

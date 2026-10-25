@@ -3,7 +3,14 @@ from decimal import Decimal
 
 import pytest
 
-from dpmxl import DpmXlSyntaxError, parse, references, reported_templates, tables
+from dpmxl import (
+    DpmXlSyntaxError,
+    parse,
+    parse_selection,
+    references,
+    reported_templates,
+    tables,
+)
 from dpmxl.ast import (
     AxisSelector,
     Binary,
@@ -217,3 +224,46 @@ def test_the_right_of_in_is_a_whole_operand() -> None:
     assert isinstance(clause, In) and isinstance(clause.values, Where)
     plain = parse("x in {[qC:a], [qC:b]}")
     assert isinstance(plain, In) and isinstance(plain.values, SetLiteral)
+
+
+def test_selections_keep_component_spans() -> None:
+    source = "with {tC_01.00, c0010}: {(r0010, r0020-0050), s*} > 0"
+    node = parse(source)
+    assert isinstance(node, With)
+    assert source[slice(*node.context.source_span)] == "tC_01.00"
+    assert isinstance(node.body, Binary)
+    selection = node.body.left
+    assert isinstance(selection, Selection)
+    rows = selection.spec.rows
+    assert rows is not None
+    assert source[slice(*rows.span)] == "(r0010, r0020-0050)"
+    assert [source[slice(*span)] for span in rows.spans] == ["r0010", "r0020-0050"]
+    sheets = selection.spec.sheets
+    assert sheets is not None and source[slice(*sheets.span)] == "s*"
+    assert sheets.spans == ()
+    merged = selection.spec.merged_into(node.context)
+    assert source[slice(*merged.source_span)] == "tC_01.00"
+    # Spans take no part in equality, hashing or repr.
+    assert rows == AxisSelector(parts=("0010", ("0020", "0050")))
+    assert hash(rows) == hash(AxisSelector(parts=("0010", ("0020", "0050"))))
+    assert "span" not in repr(rows) and "span" not in repr(selection.spec)
+
+
+@pytest.mark.parametrize(
+    ("selection", "parts"),
+    [
+        ("tT, r0010-r0050", (("0010", "0050"),)),
+        ("tT, (r0010, r0020-r0040)", ("0010", ("0020", "0040"))),
+        ("tT, sx01-sx05", (("x01", "x05"),)),
+        ("tT, r1-r10", (("1", "10"),)),
+        # A code that starts with the axis letter keeps it.
+        ("tT, rr1-rr10", (("r1", "rr10"),)),
+        ("tT, rr1-r10", (("r1", "r10"),)),
+    ],
+)
+def test_a_range_may_repeat_its_axis_letter(
+    selection: str, parts: tuple[object, ...]
+) -> None:
+    spec = parse_selection(selection)
+    selector = spec.rows or spec.sheets
+    assert selector is not None and selector.parts == parts

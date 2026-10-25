@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal, localcontext
+from typing import Any, cast
 
 import pytest
 
@@ -547,3 +548,38 @@ def test_explanations_of_huge_values_with_intervals() -> None:
         assert explanation.summary.startswith("1 should equal ")
         assert explanation.right is not None
         assert explanation.right.low is not None
+
+
+def test_table_layouts_reject_inconsistent_axes_and_types() -> None:
+    from dpmxl import TableLayout
+
+    with pytest.raises(ValueError, match="unknown open axis 'row'"):
+        TableLayout("T", open_axes=cast(Any, ("row",)))
+    with pytest.raises(ValueError, match="open rows of T cannot have codes"):
+        TableLayout("T", rows=("0010",), open_axes=("rows",))
+    with pytest.raises(ValueError, match="unknown data type 'text'"):
+        TableLayout("T", data_types={(None, None, None): "text"})
+
+
+def test_open_axes_and_data_types_do_not_change_evaluation() -> None:
+    from dpmxl import MemoryProvider, Number, TableLayout, evaluate_rule
+
+    values: dict[CellKey, Value] = {
+        ("C", None, "0010", None, (("qK", "a"),)): Number.of(5, 0)
+    }
+    plain = TableLayout("C", columns=("0010",), open_keys=("qK",))
+    described = TableLayout(
+        "C",
+        columns=("0010",),
+        open_keys=("qK",),
+        open_axes=("rows",),
+        data_types={(None, "0010", None): "number"},
+    )
+    # Data types take no part in equality; open axes do.
+    assert described != plain
+    assert described == TableLayout(
+        "C", columns=("0010",), open_keys=("qK",), open_axes=("rows",)
+    )
+    for layout in (plain, described):
+        result = evaluate_rule("{tC, c0010} > 0", MemoryProvider([layout], values))
+        assert result.status == "passed"

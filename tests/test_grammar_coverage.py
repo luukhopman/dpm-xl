@@ -429,3 +429,51 @@ def _key_text(value: object) -> str:
 def _plain(value: Value) -> str:
     text = format_value(value)
     return text[1:-1] if isinstance(value, str) else text
+
+
+def test_every_call_name_has_a_signature() -> None:
+    from dpmxl.grammar import CALL_NAMES, SIGNATURES
+
+    assert set(SIGNATURES) == CALL_NAMES
+
+
+@pytest.mark.parametrize(
+    ("name", "count", "group_by", "problem"),
+    [
+        ("abs", 1, False, None),
+        ("abs", 2, False, "abs takes 1 operand, not 2"),
+        ("power", 1, False, "power takes 2 operands, not 1"),
+        ("substr", 0, False, "substr takes 1 to 3 operands, not 0"),
+        ("time_shift", 5, False, "time_shift takes 3 or 4 operands, not 5"),
+        ("union", 1, False, "union takes 2 or more operands, not 1"),
+        ("max", 3, False, None),
+        ("max", 2, True, "max with group by takes 1 operand, not 2"),
+        ("sum", 1, True, None),
+        ("abs", 1, True, "group by is not allowed in abs"),
+    ],
+)
+def test_signatures_describe_operand_problems(
+    name: str, count: int, group_by: bool, problem: str | None
+) -> None:
+    from dpmxl.grammar import SIGNATURES
+
+    assert SIGNATURES[name].problem(name, count, group_by=group_by) == problem
+
+
+@pytest.mark.parametrize(
+    ("expression", "message"),
+    [
+        ("abs(1, 2) > 0", "abs takes 1 operand, not 2"),
+        ("annualise({tT, r0010, c0010}, 12, 3) > 0", "annualise needs a key name"),
+        ("time_shift({tT, r0010, c0010}, A, 1, 2) > 0", "time_shift needs a key"),
+    ],
+)
+def test_the_evaluator_checks_calls_against_the_signatures(
+    expression: str, message: str
+) -> None:
+    from dpmxl import MemoryProvider, TableLayout, evaluate_rule
+
+    provider = MemoryProvider([TableLayout("T", rows=("0010",), columns=("0010",))], {})
+    result = evaluate_rule(expression, provider)
+    assert result.status == "error"
+    assert result.message is not None and result.message.startswith(message)

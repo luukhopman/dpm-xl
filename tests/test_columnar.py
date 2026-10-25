@@ -69,6 +69,8 @@ EXPRESSIONS = [
     "with {tT, r0010, default: 0}: if {c*} > 200 then {c*} > 1000 else {c*} < 0 endif",
     "{tT, r*, c0010} > {tONE, r*, c0010}",
     "{tT, r0010-0020, c0010} + {tT, r0020-0030, c0010} > 0",
+    # A range may repeat its axis letter; it still ends at r0020.
+    "sum({tT, r0010-r0020, c0010}) = 160",
     "not(isnull({tT, r0010, c0010})) and isnull({tT, r0010, c0020, default: null}) = false",
     "{tO, r0010, c0010} in {0, 10}",
     "true > false",

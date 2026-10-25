@@ -214,8 +214,8 @@ def test_in_takes_any_set_operand() -> None:
     [
         ("{1} = {1}", "cannot compare set with set"),
         ("{tT, r0010, c0010, default: {1}} > 0", "a set default applies only to set"),
-        ("union({1}) = {1}", "union takes at least 2 operands"),
-        ("setdiff({1}, {2}, {3}) = {1}", "setdiff takes 2 operands"),
+        ("union({1}) = {1}", "union takes 2 or more operands, not 1"),
+        ("setdiff({1}, {2}, {3}) = {1}", "setdiff takes 2 operands, not 3"),
         ("{{1}} = 1", "unknown selection component '{'"),
     ],
 )
@@ -865,11 +865,20 @@ def test_percentages_inside_braces(expression: str, expected: Value) -> None:
     assert value(expression) == expected
 
 
-@pytest.mark.parametrize("expression", ["sum() > 0", "count() > 0", "max() > 0"])
-def test_aggregates_without_an_operand_are_errors(expression: str) -> None:
+@pytest.mark.parametrize(
+    ("expression", "message"),
+    [
+        ("sum() > 0", "sum takes 1 operand, not 0"),
+        ("count() > 0", "count takes 1 operand, not 0"),
+        ("max() > 0", "max takes 1 or more operands, not 0"),
+    ],
+)
+def test_aggregates_without_an_operand_are_errors(
+    expression: str, message: str
+) -> None:
     result = evaluate_rule(expression, report())
     assert result.status == "error"
-    assert "takes one operand" in (result.message or "")
+    assert result.message == message
 
 
 def test_variable_names_may_contain_dots() -> None:

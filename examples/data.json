@@ -1,7 +1,7 @@
 {
   "tables": [
     {"code": "C_01.00", "rows": ["0010", "0020", "0030"], "columns": ["0010", "0020"]},
-    {"code": "C_27.00", "columns": ["0010"], "open_keys": ["qCPI"]}
+    {"code": "C_27.00", "columns": ["0010"], "open_keys": ["qCPI"], "open_axes": ["rows"]}
   ],
   "facts": [
     {"table": "C_01.00", "row": "0010", "column": "0010", "value": 100, "decimals": 0},

@@ -27,15 +27,36 @@ class AxisSelector:
     """Selected coordinates on one table axis.
 
     ``parts`` holds single codes (``"0010"``) and inclusive ranges
-    (``("0010", "0050")``) exactly as written, without the axis prefix.
+    (``("0010", "0050")``) as written, without the axis prefix. A range may
+    repeat the axis letter before its upper bound: ``r0010-r0050`` is
+    ``("0010", "0050")``. The letter is dropped only when the lower bound
+    does not start with it, so a code that does is read as written:
+    ``rr1-rr10`` is ``("r1", "rr10")``; write ``rr1-r10`` for ``("r1",
+    "r10")``.
+
+    A parsed selector keeps its source positions; like node spans they take
+    no part in equality, hashing or ``repr``, and selectors built directly
+    have none.
 
     Attributes:
         wildcard: Whether the selector is ``*`` (every coordinate).
         parts: Single codes and ``(low, high)`` ranges.
+        span: Source span of the whole selector, such as ``r0010-0050`` or
+            ``(r0010, r0020)``; ``(0, 0)`` when built directly.
+        spans: Source span of each part, in the order of ``parts``; empty for
+            a wildcard or a selector built directly.
+
+    Examples:
+        >>> from dpmxl import parse_selection
+        >>> rows = parse_selection("tT, (r0010, r0020-0050)").rows
+        >>> rows.parts, rows.span, rows.spans
+        (('0010', ('0020', '0050')), (4, 23), ((5, 10), (12, 22)))
     """
 
     wildcard: bool = False
     parts: tuple[str | tuple[str, str], ...] = ()
+    span: Span = field(default=(0, 0), compare=False, repr=False, kw_only=True)
+    spans: tuple[Span, ...] = field(default=(), compare=False, repr=False, kw_only=True)
 
     @property
     def is_single(self) -> bool:
@@ -107,6 +128,12 @@ class SelectionSpec:
         interval: The ``interval:`` option, or ``None`` when not written.
         table_group: Table group code of a ``{g_...}`` selection.
         operation: Operation code of an ``{o_...}`` reference.
+        source_span: Source span of the table, table group or operation
+            reference, such as ``tC_01.00``; ``(0, 0)`` when there is none or
+            the selection was built directly. Like the selectors' spans it
+            takes no part in equality, hashing or ``repr``, and
+            [`merged_into`][dpmxl.ast.SelectionSpec.merged_into] keeps the
+            span of the source it keeps.
     """
 
     table: str | None = None
@@ -117,6 +144,7 @@ class SelectionSpec:
     interval: bool | None = None
     table_group: str | None = None
     operation: str | None = None
+    source_span: Span = field(default=(0, 0), compare=False, repr=False, kw_only=True)
 
     def merged_into(self, context: SelectionSpec) -> SelectionSpec:
         """Return this selection completed by an inherited ``with`` context.
@@ -132,13 +160,19 @@ class SelectionSpec:
             '{tC_01.00, r0020, c0010, interval: true}'
         """
         if self.table is None and self.table_group is None and self.operation is None:
-            table, group, operation = (
+            table, group, operation, source_span = (
                 context.table,
                 context.table_group,
                 context.operation,
+                context.source_span,
             )
         else:
-            table, group, operation = self.table, self.table_group, self.operation
+            table, group, operation, source_span = (
+                self.table,
+                self.table_group,
+                self.operation,
+                self.source_span,
+            )
         return SelectionSpec(
             table=table,
             rows=self.rows if self.rows is not None else context.rows,
@@ -148,6 +182,7 @@ class SelectionSpec:
             interval=self.interval if self.interval is not None else context.interval,
             table_group=group,
             operation=operation,
+            source_span=source_span,
         )
 
     def axis(self, name: AxisName) -> AxisSelector | None:

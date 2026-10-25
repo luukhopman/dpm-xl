@@ -3,6 +3,53 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org).
 
+## Unreleased
+
+### Added
+
+- `diagnose()` finds problems without report data, as positioned
+  `Diagnostic`s with a stable `code`, the `subject` concerned and a
+  `suggestion` to replace the text with: every syntax error (parsing
+  resumes after one), keywords run together (`ornot`), unknown functions,
+  wrong operand counts and selections without a table. Given table layouts
+  it also reports unknown tables, rows, columns and sheets, empty ranges,
+  clause names that are not keys and, with cell data types, operands of the
+  wrong type; given the report parameters, names that resolve to nothing.
+  An error means the rule fails, is inapplicable or cannot be evaluated as
+  written; a code on an open axis or one the table lacks, whose outcome is
+  up to the provider, is a warning.
+  `Diagnostic.pointer()` renders one; `DIAGNOSTIC_CODES` lists the codes.
+- `dpmxl.grammar.SIGNATURES`: each function's `Signature` (operand counts,
+  `group by`, key and period operands), which both evaluators and
+  `diagnose()` check calls against.
+- `TableLayout.open_axes` and `TableLayout.data_types` describe open axes
+  and cell data types (`dpmxl.provider.CELL_TYPES`; it may be partial); data
+  files accept them.
+- Parsed selections keep source positions: `AxisSelector.span` and `spans`,
+  and `SelectionSpec.source_span`.
+- `dpm-xl check` reports every problem `diagnose()` finds, also as
+  `diagnostics` in `--json`. `--layouts DATA` checks against a data file's
+  tables and parameters; `--strict` fails on any error, not only syntax
+  errors.
+
+### Changed
+
+- Calls with the wrong operands fail with one wording in both evaluators,
+  such as `abs takes 1 operand, not 2`, before their operands are evaluated.
+- `dpm-xl check --json` lists every syntax error, so `errors` may hold
+  several entries for one expression: count failing expressions with
+  `total - parsed`, not `len(errors)`.
+- The errors for `max_aggr` and `min_aggr` with several operands and for
+  `rank` without `over` point at the function name; an unknown selection
+  component's error spans the whole component.
+
+### Fixed
+
+- A range that repeats its axis letter, such as `r0440-r0480`, selected every
+  coordinate from its lower bound up; it now selects what `r0440-0480` does.
+  The letter is dropped only when the lower bound does not start with it, so
+  `rr1-rr10` reads as written (see `AxisSelector`).
+
 ## 1.0.0 - 2026-10-24
 
 ### Added

@@ -5,7 +5,7 @@ description: The dpm-xl command line - check and eval, every option, the exit st
 # CLI
 
 ```text
-dpm-xl check [--references] [--json] SOURCE
+dpm-xl check [--layouts DATA] [--strict] [--references] [--json] SOURCE
 dpm-xl eval [--precondition EXPRESSION] [--json] RULES DATA
 dpm-xl --version
 dpm-xl [COMMAND] --help
@@ -33,11 +33,17 @@ the rule itself: `argument` becomes `expression`, the others `<code>` and
 
 ## `dpm-xl check`
 
-Parses every expression and precondition of a rule source and reports syntax
-errors. Expressions may be scripts with `;`, `:=` and `<-`.
+Checks every expression and precondition of a rule source with
+[`diagnose`][dpmxl.diagnostics.diagnose]: every syntax error, unknown
+functions, calls with the wrong operands and selections without a table.
+Expressions may be scripts with `;`, `:=` and `<-`. Every problem is
+printed; the exit status is 1 when an expression does not parse, or with
+`--strict` when any expression has an error. Warnings never change it.
 
 | Option | Effect |
 | --- | --- |
+| `--layouts DATA` | Also check tables, coordinates, open-table keys and, when the tables give `data_types`, operand types against the `tables` of a [data file](data-formats.md#data-files), and names against its `parameters`. |
+| `--strict` | Exit with status 1 for any error, not only for syntax errors. |
 | `--references` | Also print every selection, with its `with` context applied. |
 | `--json` | Print one JSON document instead of text. |
 
@@ -46,15 +52,25 @@ $ dpm-xl check "with {tC_01.00}: {r0010} >= 0" --references
 argument: {tC_01.00, r0010}
 1/1 expressions parsed
 $ dpm-xl check "{tC_01.00, r0010} >="
-argument: expression ends where an operand is expected
+argument: error: expression ends where an operand is expected
 {tC_01.00, r0010} >=
                     ^
-0/1 expressions parsed
+0/1 expressions parsed; 1 error
+$ echo $?
+1
+$ dpm-xl check "{tC_01.00, r0011, c0010} > 0 or {tC_27.00, r0010, c0010} > 0" --layouts examples/data.json --strict
+argument: error: row 0011 is not in table C_01.00; did you mean r0010?
+{tC_01.00, r0011, c0010} > 0 or {tC_27.00, r0010, c0010} > 0
+           ^~~~~
+argument: warning: the rows of C_27.00 are open (key qCPI), so they have no codes such as r0010; select them with r* or leave them out
+{tC_01.00, r0011, c0010} > 0 or {tC_27.00, r0010, c0010} > 0
+                                           ^~~~~
+1/1 expressions parsed; 1 error and 1 warning
 $ echo $?
 1
 ```
 
-Syntax errors go to standard error; the summary goes to standard output.
+Problems go to standard error; the summary goes to standard output.
 
 ### JSON output
 
@@ -65,6 +81,7 @@ $ dpm-xl check "with {tC_01.00}: {r0010} >= 0" --references --json
   "parsed": 1,
   "total": 1,
   "errors": [],
+  "diagnostics": [],
   "selections": [
     {
       "source": "argument",
@@ -80,6 +97,7 @@ $ dpm-xl check "with {tC_01.00}: {r0010} >= 0" --references --json
 | `parsed` | integer | Expressions and preconditions that parsed. |
 | `total` | integer | Expressions and preconditions checked. |
 | `errors` | list | One object per syntax error: `source` (the label), `message` (plain words), `position` and `end` (zero-based character offsets of the problem in that expression). |
+| `diagnostics` | list | One object per problem, syntax errors included: `source` (the label) and the fields of a [`Diagnostic`][dpmxl.diagnostics.Diagnostic]: `severity`, `code`, `message`, `start`, `end`, `subject` and `suggestion`. |
 | `selections` | list | Only with `--references`: `source` and `selection` (normalized DPM-XL text) per selection. |
 
 ## `dpm-xl eval`
@@ -171,8 +189,8 @@ statuses and keys may not.
 
 | Status | `check` | `eval` |
 | --- | --- | --- |
-| 0 | Everything parsed. | Every rule passed or did not apply. |
-| 1 | An expression or precondition does not parse. | A rule failed. |
+| 0 | Everything parsed; with `--strict`, nothing has an error. | Every rule passed or did not apply. |
+| 1 | An expression or precondition does not parse; with `--strict`, one has an error. | A rule failed. |
 | 2 | Usage error (unknown command or option). | Usage error. |
 | 3 | The rule file cannot be read or is malformed. | A rule is `error` or `unsupported`, or the rule or data file cannot be read or is malformed. |
 

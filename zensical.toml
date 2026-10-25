@@ -60,6 +60,7 @@ nav = [
       { "dpmxl.values" = "reference/api/values.md" },
       { "dpmxl.recordset" = "reference/api/recordset.md" },
       { "dpmxl.references" = "reference/api/references.md" },
+      { "dpmxl.diagnostics" = "reference/api/diagnostics.md" },
     ] },
   ] },
   { "AI agents" = "agents.md" },

@@ -101,6 +101,7 @@ from .ast import (
     With,
     walk,
 )
+from .grammar import SIGNATURES
 from .parser import _may_be_program, parse, parse_program
 from .provider import (
     CellQuery,
@@ -695,25 +696,19 @@ class Evaluator:
         bindings: Mapping[str, Value] | None,
     ) -> Recordset:
         name = node.name
+        _check_call(node)
         if name == "time_shift":
             return self._time_shift(node, context, bindings)
         if name == "annualise":
             return self._annualise(node, context, bindings)
         if name in _SET_FUNCTIONS:
             return self._set_function(node, context, bindings)
-        if name in AGGREGATES and (
-            not node.args or (len(node.args) > 1 and name not in {"max", "min"})
-        ):
-            raise EvaluationError(f"{name} takes one operand")
-        if name in AGGREGATES and (len(node.args) == 1 or node.group_by is not None):
-            if len(node.args) != 1:
-                raise EvaluationError(f"{name} with group by takes one operand")
+        if name in AGGREGATES and len(node.args) == 1:
             operand = self.evaluate(node.args[0], context, bindings)
             return _aggregate(name, operand, node.group_by)
         if node.group_by is not None:
             raise EvaluationError(f"group by is not allowed in {name}")
         if name == "filter":
-            _arity(node, 2)
             data = self.evaluate(node.args[0], context, bindings)
             condition = self.evaluate(node.args[1], context, bindings)
             joined = combine(
@@ -735,14 +730,9 @@ class Evaluator:
                 },
             )
         args = [self.evaluate(arg, context, bindings) for arg in node.args]
-        function = _SCALAR_FUNCTIONS.get(name)
-        if function is None:
+        implementation = _SCALAR_FUNCTIONS.get(name)
+        if implementation is None:
             raise UnsupportedError(f"unknown function {name!r}")
-        arity, implementation = function
-        if arity is not None and len(args) not in arity:
-            raise EvaluationError(
-                f"{name} takes {' or '.join(map(str, arity))} operands"
-            )
         return combine(args, _per_record(implementation))
 
     def _time_shift(
@@ -751,14 +741,10 @@ class Evaluator:
         context: SelectionSpec,
         bindings: Mapping[str, Value] | None,
     ) -> Recordset:
-        if node.group_by is not None or len(node.args) not in {3, 4}:
-            raise EvaluationError("time_shift takes 3 or 4 operands")
         operand, period_node, count_node = node.args[:3]
         period = _period(period_node)
         count = self._integer_operand(count_node, "time_shift", context, bindings)
-        key = node.args[3] if len(node.args) == 4 else None
-        if key is not None and not isinstance(key, Name):
-            raise EvaluationError("time_shift needs a key name as its fourth operand")
+        key = cast(Name, node.args[3]) if len(node.args) == 4 else None
         if key is not None:
             # A trial on this report: its trace is kept only if the key turns
             # out to be one of the operand's, so that explanations of the
@@ -806,11 +792,8 @@ class Evaluator:
         context: SelectionSpec,
         bindings: Mapping[str, Value] | None,
     ) -> Recordset:
-        if node.group_by is not None or len(node.args) != 3:
-            raise EvaluationError("annualise takes 3 operands")
         operand, end_node, key = node.args
-        if not isinstance(key, Name):
-            raise EvaluationError("annualise needs a key name as its third operand")
+        assert isinstance(key, Name)
         fiscal_end = self._integer_operand(end_node, "annualise", context, bindings)
         if not 1 <= fiscal_end <= 12:
             raise EvaluationError("annualise needs a fiscal year end month of 1 to 12")
@@ -861,17 +844,6 @@ class Evaluator:
         bindings: Mapping[str, Value] | None,
     ) -> Recordset:
         name = node.name
-        if node.group_by is not None:
-            raise EvaluationError(f"group by is not allowed in {name}")
-        count = len(node.args)
-        if (name == "set_of" and count != 1) or (
-            name in {"setdiff", "symdiff"} and count != 2
-        ):
-            raise EvaluationError(
-                f"{name} takes {1 if name == 'set_of' else 2} operands"
-            )
-        if name in {"union", "intersect"} and count < 2:
-            raise EvaluationError(f"{name} takes at least 2 operands")
         operands = [self.evaluate(arg, context, bindings) for arg in node.args]
         found = [self._as_set(operand, name) for operand in operands]
         points = unique_points(
@@ -1992,34 +1964,54 @@ def _float_number(value: float | complex) -> Value:
     return Number(Decimal(repr(value)))
 
 
-_SCALAR_FUNCTIONS: dict[
-    str, tuple[tuple[int, ...] | None, Callable[[list[Value]], Value]]
-] = {
-    "abs": ((1,), _null_safe(_abs)),
-    "isnull": ((1,), _isnull),
-    "nvl": ((2,), _nvl),
-    "len": ((1,), _null_safe(_length)),
-    "length": ((1,), _null_safe(_length)),
-    "match": ((2,), _null_safe(_match)),
-    "max": (None, _elementwise_extreme("max")),
-    "min": (None, _elementwise_extreme("min")),
-    "exp": ((1,), _null_safe(_math(math.exp, "exp"))),
-    "ln": ((1,), _null_safe(_math(math.log, "ln"))),
-    "sqrt": ((1,), _null_safe(_math(math.sqrt, "sqrt"))),
-    "power": ((2,), _null_safe(_power)),
-    "log": ((2,), _null_safe(_log)),
-    "substr": ((1, 2, 3), _null_safe(_substr)),
-    "date": ((3,), _null_safe(_make_date)),
+# Operand counts are checked against dpmxl.grammar.SIGNATURES first.
+_SCALAR_FUNCTIONS: dict[str, Callable[[list[Value]], Value]] = {
+    "abs": _null_safe(_abs),
+    "isnull": _isnull,
+    "nvl": _nvl,
+    "len": _null_safe(_length),
+    "length": _null_safe(_length),
+    "match": _null_safe(_match),
+    "max": _elementwise_extreme("max"),
+    "min": _elementwise_extreme("min"),
+    "exp": _null_safe(_math(math.exp, "exp")),
+    "ln": _null_safe(_math(math.log, "ln")),
+    "sqrt": _null_safe(_math(math.sqrt, "sqrt")),
+    "power": _null_safe(_power),
+    "log": _null_safe(_log),
+    "substr": _null_safe(_substr),
+    "date": _null_safe(_make_date),
     **{
-        name: ((1,), _null_safe(_date_part(name)))
+        name: _null_safe(_date_part(name))
         for name in ("year", "semester", "quarter", "month", "week", "day")
     },
 }
 
 
-def _arity(node: Call, count: int) -> None:
-    if len(node.args) != count:
-        raise EvaluationError(f"{node.name} takes {count} operands")
+def _check_call(node: Call) -> None:
+    """Check a call's operands against its [`Signature`][dpmxl.grammar.Signature].
+
+    Both evaluators call this before evaluating a call's operands.
+
+    Raises:
+        EvaluationError: For a wrong operand count, a ``group by`` the
+            function does not take, or a key operand that is not a name.
+    """
+    signature = SIGNATURES.get(node.name)
+    if signature is None:
+        return
+    problem = signature.problem(
+        node.name, len(node.args), group_by=node.group_by is not None
+    )
+    if problem is not None:
+        raise EvaluationError(problem)
+    position = signature.key_operand
+    if (
+        position is not None
+        and position < len(node.args)
+        and not isinstance(node.args[position], Name)
+    ):
+        raise EvaluationError(signature.key_problem(node.name))
 
 
 # Rule evaluation -------------------------------------------------------------

@@ -11,6 +11,7 @@ Typical use::
 
 from ._version import __version__
 from .ast import AxisSelector, Item, Node, SelectionSpec
+from .diagnostics import Diagnostic, diagnose
 from .evaluator import (
     Evaluation,
     Evaluator,
@@ -47,6 +48,7 @@ __all__ = [
     "CellQuery",
     "DataPoint",
     "DataProvider",
+    "Diagnostic",
     "DpmXlSyntaxError",
     "Evaluation",
     "EvaluationError",
@@ -71,6 +73,7 @@ __all__ = [
     "axis_matcher",
     "axis_matches",
     "compare",
+    "diagnose",
     "evaluate_rule",
     "explain",
     "format_value",

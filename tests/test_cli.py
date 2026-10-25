@@ -139,3 +139,119 @@ def test_check_json_errors_carry_the_end_offset(capsys) -> None:
     assert main(["check", "{tA} >=", "--json"]) == 1
     error = json.loads(capsys.readouterr().out)["errors"][0]
     assert error["position"] <= error["end"]
+
+
+def layouts_file(tmp_path) -> str:
+    data = tmp_path / "layouts.json"
+    data.write_text(
+        json.dumps(
+            {
+                "tables": [
+                    {
+                        "code": "C_01.00",
+                        "rows": ["0010", "0020"],
+                        "columns": ["0010"],
+                        "data_types": [
+                            {"row": "0010", "column": "0010", "type": "number"},
+                            {"row": "0020", "column": "0010", "type": "number"},
+                        ],
+                    },
+                    {
+                        "code": "C_27.00",
+                        "columns": ["0010"],
+                        "open_keys": ["qCPI"],
+                        "open_axes": ["rows"],
+                    },
+                ],
+                "parameters": {"refPeriod": "2026-12-31"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    return str(data)
+
+
+def test_check_reports_problems_beyond_syntax(capsys) -> None:
+    # Without --strict only syntax errors fail, as before.
+    assert main(["check", "summ({tC_01.00, r0010}) > 0"]) == 0
+    output = capsys.readouterr()
+    assert "argument: error: unknown function 'summ'; did you mean 'sum'?" in output.err
+    assert output.out.strip() == "1/1 expressions parsed; 1 error"
+    assert main(["check", "summ({tC_01.00, r0010}) > 0", "--strict"]) == 1
+
+
+def test_check_against_layouts(tmp_path, capsys) -> None:
+    layouts = layouts_file(tmp_path)
+    source = "{tC_01.00, r0011, c0010} + 'x' > 0 or {tC_27.00, r0010, c0010} > 0"
+    assert main(["check", source, "--layouts", layouts, "--strict"]) == 1
+    output = capsys.readouterr()
+    assert "row 0011 is not in table C_01.00; did you mean r0010?" in output.err
+    assert "the rows of C_27.00 are open (key qCPI)" in output.err
+    assert "'+' needs numbers, but 'x' is a string" in output.err
+    assert (
+        "warning: the rows of C_27.00 are open (key qCPI), so they have no codes "
+        "such as r0010" in output.err
+    )
+    assert output.out.strip() == "1/1 expressions parsed; 2 errors and 1 warning"
+    strict = ["--layouts", layouts, "--strict"]
+    assert main(["check", "refPeriod > #2026-01-01#", *strict]) == 0
+    assert main(["check", "refDate > #2026-01-01#", *strict]) == 1
+
+
+def test_check_warnings_do_not_fail(tmp_path, capsys) -> None:
+    layouts = layouts_file(tmp_path)
+    assert (
+        main(
+            [
+                "check",
+                "{tC_01.00, (r0010, r0030-0050), c0010} > 0",
+                "--layouts",
+                layouts,
+                "--strict",
+            ]
+        )
+        == 0
+    )
+    output = capsys.readouterr()
+    assert "warning: rows 0030-0050 select no row of table C_01.00" in output.err
+    assert output.out.strip() == "1/1 expressions parsed; 1 warning"
+
+
+def test_check_json_lists_diagnostics(tmp_path, capsys) -> None:
+    assert main(["check", "abs(1, 2) > (", "--json"]) == 1
+    document = json.loads(capsys.readouterr().out)
+    assert document["parsed"] == 0
+    assert [error["message"] for error in document["errors"]] == [
+        "expression ends where an operand is expected"
+    ]
+    assert [
+        (item["code"], item["start"], item["end"]) for item in document["diagnostics"]
+    ] == [("operand-count", 0, 3), ("syntax", 13, 13)]
+    assert set(document["diagnostics"][0]) == {
+        "source",
+        "severity",
+        "code",
+        "message",
+        "start",
+        "end",
+        "subject",
+        "suggestion",
+    }
+
+
+def test_check_rejects_an_unreadable_layouts_file(tmp_path, capsys) -> None:
+    data = tmp_path / "bad.json"
+    data.write_text('{"tables": [{"rows": []}]}', encoding="utf-8")
+    assert main(["check", "1 = 1", "--layouts", str(data)]) == 3
+    assert f"error: {data}: malformed data document" in capsys.readouterr().err
+
+
+def test_check_names_the_file_it_cannot_read(tmp_path, capsys) -> None:
+    rules = tmp_path / "bad.json"
+    rules.write_text("[1]", encoding="utf-8")
+    assert main(["check", str(rules)]) == 3
+    assert capsys.readouterr().err == f"error: {rules}: rule 1 is not a JSON object\n"
+    broken = tmp_path / "broken.json"
+    broken.write_text("{nope", encoding="utf-8")
+    assert main(["check", "1 = 1", "--layouts", str(broken)]) == 3
+    assert capsys.readouterr().err.startswith(f"error: {broken}: Expecting")

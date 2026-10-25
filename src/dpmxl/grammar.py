@@ -8,6 +8,9 @@ case; the tokenizer matches keywords in any case.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any
 
 KEYWORDS = frozenset(
@@ -154,6 +157,139 @@ CALL_NAMES = frozenset(
 ``{canonical_function(name) for name in AGGREGATE_FUNCTIONS}``, which equals
 ``dpmxl.evaluator.AGGREGATES``. Analytic functions (``rank``, and aggregates
 with ``over``) parse to [`Analytic`][dpmxl.ast.Analytic] instead of a call."""
+
+_ORDINALS = ("first", "second", "third", "fourth")
+
+
+@dataclass(frozen=True, slots=True)
+class Signature:
+    """How many operands a function takes, and where it takes a key name.
+
+    Both evaluators check calls against these signatures, and
+    [`diagnose`][dpmxl.diagnostics.diagnose] reports the same problems before
+    evaluation, so the three never disagree.
+
+    Attributes:
+        minimum: The fewest operands.
+        maximum: The most operands, or ``None`` for no limit.
+        group_by: Whether ``group by`` may follow the (single) operand.
+        key_operand: Zero-based position of an operand that must be a key
+            name, such as ``qDATE`` in ``annualise(x, 12, qDATE)``; ``None``
+            when there is none.
+        period_operand: Zero-based position of an operand that is a period
+            code from `TIME_PERIODS`, such as ``Q`` in ``time_shift(x, Q, 1)``;
+            ``None`` when there is none.
+
+    Examples:
+        >>> SIGNATURES["substr"].problem("substr", 4)
+        'substr takes 1 to 3 operands, not 4'
+        >>> SIGNATURES["sum"].problem("sum", 1, group_by=True) is None
+        True
+        >>> SIGNATURES["abs"].problem("abs", 1, group_by=True)
+        'group by is not allowed in abs'
+    """
+
+    minimum: int
+    maximum: int | None
+    group_by: bool = False
+    key_operand: int | None = None
+    period_operand: int | None = None
+
+    def operands(self) -> str:
+        """Describe the accepted operand count.
+
+        Returns:
+            str: For example ``1 operand``, ``3 or 4 operands``, ``1 to 3
+            operands`` or ``2 or more operands``.
+        """
+        low, high = self.minimum, self.maximum
+        noun = "operand" if low == high == 1 else "operands"
+        if high is None:
+            return f"{low} or more {noun}"
+        if low == high:
+            return f"{low} {noun}"
+        if high == low + 1:
+            return f"{low} or {high} {noun}"
+        return f"{low} to {high} {noun}"
+
+    def problem(self, name: str, count: int, *, group_by: bool = False) -> str | None:
+        """Return what is wrong with a call's operand count, if anything.
+
+        Args:
+            name: The function's ``Call.name``, for the message.
+            count: The number of operands written.
+            group_by: Whether the call has a ``group by`` clause.
+
+        Returns:
+            str | None: A message such as ``abs takes 1 operand, not 2``, or
+            ``None`` when the call is well formed.
+        """
+        if group_by:
+            if not self.group_by:
+                return f"group by is not allowed in {name}"
+            if count != 1:
+                return f"{name} with group by takes 1 operand, not {count}"
+            return None
+        if count < self.minimum or (self.maximum is not None and count > self.maximum):
+            return f"{name} takes {self.operands()}, not {count}"
+        return None
+
+    def key_problem(self, name: str) -> str:
+        """Describe a call whose key operand is not a key name.
+
+        Returns:
+            str: For example ``annualise needs a key name as its third
+            operand``.
+        """
+        position = self.key_operand if self.key_operand is not None else 0
+        return f"{name} needs a key name as its {_ORDINALS[position]} operand"
+
+
+def _signatures() -> dict[str, Signature]:
+    one = Signature(1, 1)
+    two = Signature(2, 2)
+    signatures = {
+        # Aggregates; max and min with several operands compare them instead.
+        **{
+            name: Signature(1, 1, group_by=True)
+            for name in ("avg", "count", "median", "sum")
+        },
+        **{name: Signature(1, None, group_by=True) for name in ("max", "min")},
+        "filter": two,
+        "time_shift": Signature(3, 4, key_operand=3, period_operand=1),
+        "annualise": Signature(3, 3, key_operand=2),
+        "set_of": one,
+        "setdiff": two,
+        "symdiff": two,
+        "union": Signature(2, None),
+        "intersect": Signature(2, None),
+        **dict.fromkeys(
+            (
+                "abs",
+                "isnull",
+                "len",
+                "length",
+                "exp",
+                "ln",
+                "sqrt",
+                "year",
+                "semester",
+                "quarter",
+                "month",
+                "week",
+                "day",
+            ),
+            one,
+        ),
+        **dict.fromkeys(("nvl", "match", "power", "log"), two),
+        "substr": Signature(1, 3),
+        "date": Signature(3, 3),
+    }
+    return dict(sorted(signatures.items()))
+
+
+SIGNATURES: Mapping[str, Signature] = MappingProxyType(_signatures())
+"""The [`Signature`][dpmxl.grammar.Signature] of every name in `CALL_NAMES`."""
 
 OPERATORS = frozenset(
     {
@@ -361,9 +497,11 @@ __all__ = [
     "PUNCTUATION",
     "REFERENCE_PREFIXES",
     "SELECTION_KEYWORDS",
+    "SIGNATURES",
     "TIME_PERIODS",
     "TOKEN_KINDS",
     "WINDOW_KEYWORDS",
+    "Signature",
     "canonical_function",
     "textmate_grammar",
 ]

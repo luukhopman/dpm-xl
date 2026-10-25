@@ -16,10 +16,11 @@ importable from the `dpmxl` package itself.
 | [`dpmxl.columnar`](columnar.md) | The same semantics on polars frames (`columnar` extra); the frame schema. |
 | [`dpmxl.parser`](parser.md) | Tokenizer and recursive-descent parser. Nodes keep source spans. |
 | [`dpmxl.ast`](ast.md) | Expression tree, selections, axis selectors and item literals. |
-| [`dpmxl.grammar`](grammar.md) | Keywords, operators and function names; the TextMate grammar. |
+| [`dpmxl.grammar`](grammar.md) | Keywords, operators, function names and signatures; the TextMate grammar. |
 | [`dpmxl.values`](values.md) | `Number` with interval tolerance, comparison and formatting. |
 | [`dpmxl.recordset`](recordset.md) | Keyed record sets and the natural join used by every operator. |
 | [`dpmxl.references`](references.md) | Static selections (with `with` context applied) and `{v_…}` templates. |
+| [`dpmxl.diagnostics`](diagnostics.md) | Positioned problems for editors: syntax, calls, tables and coordinates. |
 
 The command line (`dpmxl.cli`) is documented in the [CLI reference](../cli.md).
 
@@ -32,7 +33,7 @@ print(dpmxl.__all__)
 ```
 
 ```text
-['AxisSelector', 'CellQuery', 'DataPoint', 'DataProvider', 'DpmXlSyntaxError', 'Evaluation', 'EvaluationError', 'Evaluator', 'Explanation', 'Item', 'MemoryProvider', 'Node', 'Number', 'Operand', 'Outcome', 'Recordset', 'Reference', 'RuleResult', 'SelectionCache', 'SelectionSpec', 'TableLayout', 'UnsupportedError', 'Value', 'ValueSet', '__version__', 'axis_matcher', 'axis_matches', 'compare', 'evaluate_rule', 'explain', 'format_value', 'iter_points', 'normalize_code', 'parse', 'parse_cached', 'parse_program', 'parse_selection', 'references', 'reported_templates', 'tables', 'unique_points']
+['AxisSelector', 'CellQuery', 'DataPoint', 'DataProvider', 'Diagnostic', 'DpmXlSyntaxError', 'Evaluation', 'EvaluationError', 'Evaluator', 'Explanation', 'Item', 'MemoryProvider', 'Node', 'Number', 'Operand', 'Outcome', 'Recordset', 'Reference', 'RuleResult', 'SelectionCache', 'SelectionSpec', 'TableLayout', 'UnsupportedError', 'Value', 'ValueSet', '__version__', 'axis_matcher', 'axis_matches', 'compare', 'diagnose', 'evaluate_rule', 'explain', 'format_value', 'iter_points', 'normalize_code', 'parse', 'parse_cached', 'parse_program', 'parse_selection', 'references', 'reported_templates', 'tables', 'unique_points']
 ```
 
 | Name | Defined in |
@@ -45,5 +46,6 @@ print(dpmxl.__all__)
 | [`Number`][dpmxl.values.Number], [`Value`][dpmxl.values.Value], [`ValueSet`][dpmxl.values.ValueSet], [`compare`][dpmxl.values.compare], [`format_value`][dpmxl.values.format_value] | `dpmxl.values` |
 | [`Recordset`][dpmxl.recordset.Recordset], [`EvaluationError`][dpmxl.recordset.EvaluationError], [`UnsupportedError`][dpmxl.recordset.UnsupportedError], [`iter_points`][dpmxl.recordset.iter_points], [`unique_points`][dpmxl.recordset.unique_points] | `dpmxl.recordset` |
 | [`references`][dpmxl.references.references], [`Reference`][dpmxl.references.Reference], [`tables`][dpmxl.references.tables], [`reported_templates`][dpmxl.references.reported_templates] | `dpmxl.references` |
+| [`diagnose`][dpmxl.diagnostics.diagnose], [`Diagnostic`][dpmxl.diagnostics.Diagnostic] | `dpmxl.diagnostics` |
 
 `dpmxl.__version__` is the installed version.

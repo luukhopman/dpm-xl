@@ -25,6 +25,10 @@ validation into a reporting platform, or analyse and edit DPM-XL rules.
   expressions, about 0.1 ms each).
 - Evaluates them with EBA's interval arithmetic, null logic and key joins, and
   points each failure at the cells involved.
+- Finds problems before evaluation, for [editors](guides/editor.md) and
+  [CI](guides/ci.md): every syntax error, unknown functions and tables,
+  coordinates a table lacks, keys and operand types, each with its position
+  and, where one fits, a suggested fix.
 - Has no dependencies. The optional `columnar` extra adds a polars evaluator
   for reports with millions of open-table rows.
 - Reads no files and knows no DPM release: data comes through a three-method

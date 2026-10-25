@@ -21,7 +21,7 @@ from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from typing import Any, Protocol, TypeAlias, runtime_checkable
 
-from .ast import AxisSelector
+from .ast import AxisName, AxisSelector
 from .values import Value
 
 
@@ -393,19 +393,64 @@ def axis_matches(code: str | None, selector: AxisSelector | None) -> bool:
 CellKey: TypeAlias = tuple[str, str | None, str | None, str | None, tuple[Any, ...]]
 
 
+_AXES = ("rows", "columns", "sheets")
+
+CELL_TYPES = frozenset({"boolean", "date", "integer", "item", "number", "string"})
+"""Data types a [`TableLayout`][dpmxl.provider.TableLayout] gives its cells."""
+
+
 @dataclass(frozen=True, slots=True)
 class TableLayout:
-    """Closed coordinates and open key names of one table for MemoryProvider.
+    """The coordinates, open keys and cell data types of one table.
+
+    [`MemoryProvider`][dpmxl.provider.MemoryProvider] serves cells from
+    layouts, and [`diagnose`][dpmxl.diagnostics.diagnose] checks selections
+    against them. An axis is closed (its ``rows``, ``columns`` or ``sheets``
+    codes), open (named in ``open_axes``: its rows, columns or sheets are
+    identified by the ``open_keys``, not by codes) or absent (neither).
+
+    When a table has been split into several, as when ``C_02.00`` became
+    ``C_02.00.a`` and ``C_02.00.b``, rules may still select the original,
+    abstract code; describe it with the union of its parts' coordinates.
 
     Attributes:
         code: The table code, such as ``C_01.00``.
-        rows: Row codes; empty for a table without rows.
-        columns: Column codes; empty for a table without columns.
-        sheets: Sheet codes; empty for a table without sheets.
+        rows: Row codes; empty for a table without closed rows.
+        columns: Column codes; empty for a table without closed columns.
+        sheets: Sheet codes; empty for a table without closed sheets.
         open_keys: Open key names, such as ``("qCPI",)``; empty for a closed
             table.
         template: The template code when it differs from ``code``, so
             ``{v_TEMPLATE}`` holds when any of its tables was reported.
+        open_axes: The open axes among ``rows``, ``columns`` and ``sheets``.
+            Optional: without it, an axis without codes of a table with open
+            keys is taken to be open or absent, and selections of it are not
+            checked. What a provider selects for a code on an open or absent
+            axis is up to it: a ``MemoryProvider`` ignores the selector, other
+            providers may select nothing. ``diagnose`` reports such a code as
+            a warning.
+        data_types: The data type of each cell by its ``(row, column,
+            sheet)``, with ``None`` for an open or absent axis: ``number``,
+            ``integer``, ``string``, ``date``, ``boolean`` or ``item``.
+            Optional; [`diagnose`][dpmxl.diagnostics.diagnose] uses it to
+            find operands of the wrong type. It may be partial: a selection
+            that covers a cell without a type has no known type, so it is
+            not checked. It takes no part in equality.
+
+    Raises:
+        ValueError: For an unknown axis in ``open_axes``, an open axis with
+            codes, or an unknown data type.
+
+    Examples:
+        >>> layout = TableLayout(
+        ...     "C_27.00",
+        ...     columns=("0010", "0020"),
+        ...     open_keys=("qCPI",),
+        ...     open_axes=("rows",),
+        ...     data_types={(None, "0010", None): "number"},
+        ... )
+        >>> layout.open_axes, layout.data_types[None, "0010", None]
+        (('rows',), 'number')
     """
 
     code: str
@@ -414,6 +459,31 @@ class TableLayout:
     sheets: tuple[str, ...] = ()
     open_keys: tuple[str, ...] = ()
     template: str | None = None
+    open_axes: tuple[AxisName, ...] = ()
+    data_types: Mapping[tuple[str | None, str | None, str | None], str] = field(
+        default_factory=dict, compare=False, repr=False
+    )
+
+    def __post_init__(self) -> None:
+        """Check the open axes and data types.
+
+        Raises:
+            ValueError: For an unknown or coded open axis, or an unknown
+                data type.
+        """
+        for axis in self.open_axes:
+            if axis not in _AXES:
+                raise ValueError(
+                    f"unknown open axis {axis!r}; use rows, columns or sheets"
+                )
+            if getattr(self, axis):
+                raise ValueError(f"open {axis} of {self.code} cannot have codes")
+        for data_type in set(self.data_types.values()):
+            if data_type not in CELL_TYPES:
+                raise ValueError(
+                    f"unknown data type {data_type!r} in {self.code}; use one of "
+                    + ", ".join(sorted(CELL_TYPES))
+                )
 
     def coordinates(self) -> Iterable[tuple[str | None, str | None, str | None]]:
         """Yield every closed (row, column, sheet) combination.
@@ -590,6 +660,7 @@ class MemoryProvider:
 
 
 __all__ = [
+    "CELL_TYPES",
     "AxisMatcher",
     "CellQuery",
     "DataPoint",

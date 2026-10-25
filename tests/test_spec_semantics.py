@@ -228,3 +228,62 @@ def test_non_boolean_if_conditions_fail_only_their_records() -> None:
     rule = "(if {tO, r0010, c0010} then true endif) [where qKEY = [qK:zz]]"
     assert status(rule, data) == "not_applicable"
     assert status("if {tO, r0010, c0010} then true endif", data) == "error"
+
+
+def parts(a_rows=(), b_rows=()) -> MemoryProvider:
+    # Two parts of one open-keyed template, each filed for its own keys.
+    tables = [
+        TableLayout("A", columns=("0010", "0020"), open_keys=("qKEY",)),
+        TableLayout("B", columns=("0010",), open_keys=("qKEY",)),
+    ]
+    data: dict[CellKey, Value] = {}
+    for table, rows in (("A", a_rows), ("B", b_rows)):
+        for key, column, value in rows:
+            data[table, None, column, None, (("qKEY", key),)] = Number.of(value, 0)
+    return MemoryProvider(tables, data)
+
+
+def keyed(result) -> list[tuple[str, bool | None]]:
+    return sorted((str(o.key["qKEY"]), o.passed) for o in result.outcomes)
+
+
+def test_default_fills_records_an_operand_lacks() -> None:
+    # A selection with a default stands for its default where another operand
+    # has a record it lacks, as the fallback value of a fact variable does.
+    data = parts(a_rows=[("y", "0010", 1)], b_rows=[("x", "0010", 2)])
+    rule = (
+        "with {default: null}: if not isnull({tB, c0010}) then "
+        "not isnull({tA, c0010}) and not isnull({tB, c0010}) endif"
+    )
+    result = evaluate_rule(rule, data)
+    assert result.status == "failed"
+    assert keyed(result) == [("x", False)]
+    both = parts(a_rows=[("x", "0010", 1)], b_rows=[("x", "0010", 2)])
+    assert evaluate_rule(rule, both).status == "passed"
+    # A branch lacking the condition's key takes its default too.
+    rule = "with {default: null}: if not isnull({tB, c0010}) then not isnull({tA, c0010}) endif"
+    assert keyed(evaluate_rule(rule, data)) == [("x", False)]
+
+
+def test_operands_with_defaults_join_on_every_key() -> None:
+    data = parts(
+        a_rows=[("x", "0010", 1), ("y", "0010", 5)],
+        b_rows=[("x", "0010", 1), ("z", "0010", 3)],
+    )
+    result = evaluate_rule("with {default: 0}: {tA, c0010} = {tB, c0010}", data)
+    assert keyed(result) == [("x", True), ("y", False), ("z", False)]
+    # Only the operand with a default is filled in.
+    result = evaluate_rule("{tA, c0010} >= {tB, c0010, default: 0}", data)
+    assert keyed(result) == [("x", True), ("y", True)]
+    result = evaluate_rule("{tA, c0010, default: 0} < {tB, c0010}", data)
+    assert keyed(result) == [("x", False), ("z", True)]
+
+
+def test_operands_without_defaults_join_on_shared_keys() -> None:
+    data = parts(a_rows=[("y", "0010", 1)], b_rows=[("x", "0010", 2)])
+    assert status("{tA, c0010} = {tB, c0010}", data) == "not_applicable"
+    rule = (
+        "if not isnull({tB, c0010}) then "
+        "not isnull({tA, c0010}) and not isnull({tB, c0010}) endif"
+    )
+    assert status(rule, data) == "not_applicable"

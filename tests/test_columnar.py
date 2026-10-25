@@ -452,6 +452,53 @@ def test_set_defaults_go_to_the_reference_engine() -> None:
     assert evaluate_rule(expression, data()).status == "error"
 
 
+def parts(a_keys: tuple[str, ...], b_keys: tuple[str, ...]) -> MemoryProvider:
+    # Two parts of one open-keyed template.
+    tables = [
+        TableLayout("A", columns=("0010",), open_keys=("qKEY",)),
+        TableLayout("B", columns=("0010",), open_keys=("qKEY",)),
+    ]
+    values: dict[CellKey, Value] = {}
+    for table, keys in (("A", a_keys), ("B", b_keys)):
+        for index, key in enumerate(keys):
+            values[table, None, "0010", None, (("qKEY", key),)] = Number.of(index, 0)
+    return MemoryProvider(tables, values)
+
+
+DEFAULTED = [
+    "with {default: null}: if not isnull({tB, c0010}) then "
+    "not isnull({tA, c0010}) and not isnull({tB, c0010}) endif",
+    "with {default: null}: if isnull({tA, c0010}) then false "
+    "else isnull({tB, c0010}) endif",
+    "with {default: 0}: {tA, c0010} = {tB, c0010}",
+    "{tA, c0010} >= {tB, c0010, default: 0}",
+    "with {default: 0}: max({tA, c0010}, {tB, c0010}) >= 0",
+]
+
+
+@pytest.mark.parametrize("expression", DEFAULTED)
+def test_defaults_for_missing_records_go_to_the_reference_engine(
+    expression: str,
+) -> None:
+    # The reference evaluator fills in the default where a part lacks a key.
+    provider = parts(("x", "y"), ("y", "z"))
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    assert evaluate_rule(expression, provider).status in {"passed", "failed"}
+
+
+@pytest.mark.parametrize("expression", [*DEFAULTED, "{tA, c0010} = {tB, c0010}"])
+def test_defaults_with_partners_stay_columnar(expression: str) -> None:
+    provider = parts(("y", "x"), ("x", "y"))
+    reference = evaluate_rule(expression, provider)
+    columnar = evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    assert (columnar.status, columnar.passed, columnar.failed) == (
+        reference.status,
+        reference.counts["passed"],
+        reference.counts["failed"],
+    )
+
+
 @pytest.mark.parametrize("expression", ["{g_G, r0010, c0010} > 0", "{o_X} > 0"])
 def test_groups_and_operations_go_to_the_reference_engine(expression: str) -> None:
     provider = MemoryProvider(

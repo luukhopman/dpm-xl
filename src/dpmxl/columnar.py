@@ -18,7 +18,8 @@ mathematical and the date functions), typed parameter, operation and
 table-group references, values that do not fit
 ``Decimal(38, 12)``, arithmetic that would overflow it, any record error (a
 zero divisor or a type error, which the reference evaluator confines to its
-record) and ordering items and text that may be an item.
+record), ordering items and text that may be an item, and a ``default``
+standing in for a record another operand has.
 
 Values are ``Decimal(38, 12)``: sums and differences are exact, products and
 quotients round to 12 decimals (thresholds of quotients round up), where the
@@ -57,7 +58,10 @@ Inside the evaluator a record set is a [`Frame`][dpmxl.columnar.Frame]: key
 columns ``k:<name>`` (``k:r``, ``k:c``, ``k:s`` for varying closed axes, open
 keys such as ``k:qEBB``) as canonical strings, plus the same value columns.
 Operators natural-join their operands on shared keys exactly like
-[`combine`][dpmxl.recordset.combine].
+[`combine`][dpmxl.recordset.combine]. Where an operand with a ``default``
+lacks a record another operand has, which the reference evaluator fills in
+with the default, this module raises
+[`ColumnarUnsupported`][dpmxl.columnar.ColumnarUnsupported].
 
 ## Threads
 
@@ -222,10 +226,15 @@ class Frame:
         keys: Key names, such as ``("c",)`` or ``("qCPI",)``.
         df: One row per record: a ``k:<name>`` column per key and the value
             columns ``num``, ``thr``, ``txt`` and ``flag``.
+        has_default: Whether the records come from a selection with a
+            ``default`` through per-record operations, so that the reference
+            evaluator fills in a default for keys they lack (see
+            [`Recordset`][dpmxl.recordset.Recordset]).
     """
 
     keys: tuple[str, ...]
     df: pl.DataFrame
+    has_default: bool = False
 
     @cached_property
     def kinds(self) -> frozenset[str]:
@@ -994,7 +1003,7 @@ def _build_selection(raw: pl.DataFrame, spec: SelectionSpec) -> Frame:
     else:
         threshold = pl.when(pl.col(NUM).is_not_null()).then(pl.lit(ZERO, DEC))
     df = df.with_columns(threshold.cast(DEC).alias(THR))
-    return Frame(keys, df)
+    return Frame(keys, df, isinstance(default, Literal_))
 
 
 # Joining -----------------------------------------------------------------------
@@ -1100,6 +1109,7 @@ def _joined(frames: Sequence[Frame]) -> tuple[tuple[str, ...], pl.DataFrame]:
     aligned = _aligned(frames)
     if aligned is not None:
         return aligned
+    _require_partners(frames)
     keys: list[str] = []
     result: pl.DataFrame | None = None
     for index, frame in enumerate(frames):
@@ -1119,6 +1129,39 @@ def _joined(frames: Sequence[Frame]) -> tuple[tuple[str, ...], pl.DataFrame]:
     return tuple(keys), result
 
 
+def _require_partners(frames: Sequence[Frame]) -> None:
+    """Leave defaults standing in for missing records to the reference evaluator.
+
+    [`combine`][dpmxl.recordset.combine] fills in an operand's default where
+    another operand with its keys has a record it lacks; an inner join would
+    drop that record instead.
+
+    Raises:
+        ColumnarUnsupported: When an operand with a default lacks a partner.
+    """
+    for frame in frames:
+        if not frame.has_default or not frame.keys:
+            continue
+        columns = frame.key_columns
+        mine = frame.df.select(columns).unique()
+        for other in frames:
+            if other is frame or not set(frame.keys) <= set(other.keys):
+                continue
+            theirs = other.df.select(columns).unique()
+            if theirs.join(mine, on=columns, how="anti", nulls_equal=True).height:
+                raise ColumnarUnsupported("a default for records an operand lacks")
+
+
+def _all_defaults(frames: Sequence[Frame]) -> bool:
+    """Whether the result of combining frames has a default, as in ``combine``.
+
+    Returns:
+        bool: True when every keyed frame has a default.
+    """
+    keyed = [frame for frame in frames if frame.keys]
+    return bool(keyed) and all(frame.has_default for frame in keyed)
+
+
 def _combine(frames: Sequence[Frame], outputs: Mapping[str, pl.Expr]) -> Frame:
     keys, df = _joined(frames)
     selected = [pl.col(_key(key)) for key in keys]
@@ -1128,7 +1171,7 @@ def _combine(frames: Sequence[Frame], outputs: Mapping[str, pl.Expr]) -> Frame:
         .alias(column)
         for column in VALUE_COLUMNS
     )
-    return Frame(keys, df.select(selected))
+    return Frame(keys, df.select(selected), _all_defaults(frames))
 
 
 def _c(column: str, index: int) -> pl.Expr:
@@ -1148,7 +1191,7 @@ def _with_values(frame: Frame, **values: pl.Expr) -> Frame:
         .alias(column)
         for column in VALUE_COLUMNS
     ]
-    return Frame(frame.keys, frame.df.with_columns(exprs))
+    return Frame(frame.keys, frame.df.with_columns(exprs), frame.has_default)
 
 
 def _require_numeric(frames: Sequence[Frame], operation: str) -> None:
@@ -1223,6 +1266,7 @@ def _divide(frames: Sequence[Frame]) -> Frame:
             df.select([pl.col(_key(k)) for k in keys]).with_columns(
                 [pl.lit(None, _VALUE_SCHEMA[c]).alias(c) for c in VALUE_COLUMNS]
             ),
+            _all_defaults(frames),
         )
     # Interval division needs the four endpoint quotients; do it exactly in
     # Python decimals, row by row, only for rows that have thresholds.
@@ -1258,7 +1302,7 @@ def _divide(frames: Sequence[Frame]) -> Frame:
     columns[TXT] = pl.Series(TXT, [None] * len(nums), dtype=pl.String)
     columns[FLAG] = pl.Series(FLAG, [None] * len(nums), dtype=pl.Boolean)
     out = pl.DataFrame(columns)
-    return Frame(keys, out)
+    return Frame(keys, out, _all_defaults(frames))
 
 
 def _compare(op: str, frames: Sequence[Frame]) -> Frame:
@@ -1338,7 +1382,7 @@ def _compare(op: str, frames: Sequence[Frame]) -> Frame:
         pl.lit(None, pl.String).alias(TXT),
         result.alias(FLAG),
     ]
-    return Frame(keys, df.select(selected))
+    return Frame(keys, df.select(selected), _all_defaults(frames))
 
 
 def _item_ambiguity(left: pl.Expr, right: pl.Expr) -> pl.Expr:
@@ -1410,6 +1454,11 @@ def _conditional(
             # Rare in EBA rules; the reference evaluator widens the result.
             raise ColumnarUnsupported("if branches with keys the condition lacks")
     result = condition.df.select([*condition.key_columns, pl.col(FLAG).alias("_cond")])
+
+    def cond_taken(index: int) -> pl.Expr:
+        verdict = pl.col("_cond")
+        return verdict.fill_null(False) if index == 1 else ~verdict.fill_null(False)
+
     for index, branch in ((1, then), (2, otherwise)):
         if branch is None:
             continue
@@ -1417,6 +1466,15 @@ def _conditional(
             {column: f"{column}_{index}" for column in VALUE_COLUMNS}
         )
         if branch.keys:
+            if branch.has_default:
+                # The reference evaluator takes the branch's default where it
+                # lacks a condition record's key.
+                taken = cond_taken(index)
+                lacking = result.filter(taken).join(
+                    branch.df, on=branch.key_columns, how="anti", nulls_equal=True
+                )
+                if lacking.height:
+                    raise ColumnarUnsupported("a default for records a branch lacks")
             result = result.join(renamed, on=branch.key_columns, how="left")
         else:
             result = (
@@ -1564,7 +1622,7 @@ def _extreme(name: str, frames: Sequence[Frame]) -> Frame:
         pl.lit(None, pl.String).alias(TXT),
         pl.lit(None, pl.Boolean).alias(FLAG),
     ]
-    return Frame(keys, df.select(selected))
+    return Frame(keys, df.select(selected), _all_defaults(frames))
 
 
 def _filter(data: Frame, condition: Frame) -> Frame:

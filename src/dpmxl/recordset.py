@@ -4,7 +4,9 @@ A selection evaluates to records keyed by its varying components: closed axes
 that select more than one coordinate (``r``, ``c``, ``s``) and open key
 components such as ``qEBB``. Operators combine operands with a natural join on
 shared keys, so ``{r0010} = {r0020}`` under ``with {c*}`` compares column by
-column, and a scalar broadcasts to every record.
+column, and a scalar broadcasts to every record. An operand with a
+[`default`][dpmxl.recordset.Recordset] stands for that default where it lacks a
+record another operand has.
 """
 
 from __future__ import annotations
@@ -69,13 +71,24 @@ class Record:
 class Recordset:
     """Records indexed by a tuple of key values aligned with ``keys``.
 
+    A selection with a ``default`` keeps it as ``default``: the record of every
+    key the set lacks. [`combine`][dpmxl.recordset.combine] then fills in the
+    default where another operand has a record, and
+    [`lookup`][dpmxl.recordset.Recordset.lookup] returns it for a missing key.
+    Per-record operations carry it along (see
+    [`map`][dpmxl.recordset.Recordset.map]); clauses, aggregates and ``if``
+    drop it.
+
     Attributes:
         keys: Key names, such as ``("r", "qCPI")``; empty for a scalar.
         records: Records by key values, aligned with ``keys``.
+        default: The record of a key the set lacks, or ``None`` when a
+            missing key has no record.
     """
 
     keys: tuple[str, ...]
     records: dict[tuple[Hashable, ...], Record] = field(default_factory=dict)
+    default: Record | None = None
 
     @classmethod
     def scalar(cls, value: Value, points: tuple[DataPoint, ...] = ()) -> Recordset:
@@ -111,11 +124,14 @@ class Recordset:
         """Return records consistent with a partial key binding.
 
         Returns:
-            list[Record]: Matching records (one when all keys are bound).
+            list[Record]: Matching records (one when all keys are bound; the
+            ``default`` when the set lacks that key and has one).
         """
         if all(key in binding for key in self.keys):
             # Every key bound (the usual lookup): one record at most.
             record = self.records.get(tuple([binding[key] for key in self.keys]))
+            if record is None:
+                record = self.default
             return [record] if record is not None else []
         bound = [
             (index, binding[key])
@@ -129,17 +145,19 @@ class Recordset:
         ]
 
     def map(self, function: Callable[[Value], Value]) -> Recordset:
-        """Apply a function to every value.
+        """Apply a function to every value, the ``default`` included.
 
         Returns:
             Recordset: Same keys, transformed values.
         """
+        default = self.default
         return Recordset(
             self.keys,
             {
                 key: Record(function(record.value), record.points)
                 for key, record in self.records.items()
             },
+            None if default is None else Record(function(default.value)),
         )
 
 
@@ -148,17 +166,50 @@ def combine(
 ) -> Recordset:
     """Natural-join operands on shared keys and combine their values.
 
-    Records without a partner on a shared key are dropped. Operands without
-    any shared key form a cross product, which is only allowed when at most
-    one of them is keyed (scalar broadcast) to avoid accidental explosions.
+    Records without a partner on a shared key are dropped, unless the operand
+    lacking the partner has a ``default``: it then takes part with its default,
+    as a fact variable with a fallback value does. When every keyed operand
+    has a default, the result has a record for each key any operand with all
+    the keys has, and its own default combines theirs. Operands without any
+    shared key form a cross product, which is only allowed when at most one
+    of them is keyed (scalar broadcast) to avoid accidental explosions.
 
     Returns:
         Recordset: Keys in first-seen order across operands.
 
     Raises:
         EvaluationError: On incompatible key structures or oversized joins.
+
+    Examples:
+        >>> def numbers(values, default=None):
+        ...     records = {(key,): Record(value) for key, value in values}
+        ...     return Recordset(("qKEY",), records, default)
+        >>> def total(values):
+        ...     return sum(values)
+        >>> left = numbers([("a", 1), ("b", 2)])
+        >>> right = numbers([("b", 3), ("c", 4)], Record(0))
+        >>> def values(result):
+        ...     return {key: record.value for key, record in result.records.items()}
+        >>> values(combine([left, right], total))
+        {('a',): 1, ('b',): 5}
+        >>> left.default = Record(0)
+        >>> values(combine([left, right], total))
+        {('a',): 1, ('b',): 5, ('c',): 4}
     """
     check_structure(operands)
+    keyed = [operand for operand in operands if operand.keys]
+    if any(operand.default is not None for operand in keyed):
+        first = keyed[0]
+        if any(
+            operand.keys != first.keys or operand.records.keys() != first.records.keys()
+            for operand in keyed[1:]
+        ):
+            return _combine_defaults(operands, function)
+        # The same keys everywhere (as in one table): no record is missing.
+        aligned = _combine_aligned(operands, function)
+        assert aligned is not None
+        aligned.default = _combined_default(operands, function)
+        return aligned
     fast = _combine_aligned(operands, function)
     if fast is not None:
         return fast
@@ -197,6 +248,102 @@ def combine(
             function(values), points
         )
     return result
+
+
+def _combine_defaults(
+    operands: Sequence[Recordset], function: Callable[[list[Value]], Value]
+) -> Recordset:
+    """Combine operands of which at least one keyed operand has a default.
+
+    The result's keys come from the operands with every key (the reference
+    structure of [`check_structure`][dpmxl.recordset.check_structure]): from
+    those without a default, joined, or from all of them when each has one.
+    An operand lacking a key then contributes its default, or drops the key
+    when it has none.
+
+    Returns:
+        Recordset: The result.
+    """
+    keys: list[str] = []
+    for operand in operands:
+        keys.extend(key for key in operand.keys if key not in keys)
+    names = tuple(keys)
+    scalars = [
+        operand.records.get(()) if not operand.keys else None for operand in operands
+    ]
+    if any(
+        not operand.keys and record is None
+        for operand, record in zip(operands, scalars, strict=True)
+    ):
+        # An empty scalar operand: nothing to combine.
+        return Recordset(names)
+    full = [
+        operand
+        for operand in operands
+        if operand.keys and len(operand.keys) == len(names)
+    ]
+    required = [operand for operand in full if operand.default is None]
+    candidates: dict[tuple[Hashable, ...], None] = {}
+    for operand in required[:1] or full:
+        if operand.keys == names:
+            candidates.update(dict.fromkeys(operand.records))
+        else:
+            positions = [operand.keys.index(name) for name in names]
+            candidates.update(
+                dict.fromkeys(
+                    tuple([key[position] for position in positions])
+                    for key in operand.records
+                )
+            )
+    projections = [
+        None
+        if not operand.keys or operand.keys == names
+        else [names.index(name) for name in operand.keys]
+        for operand in operands
+    ]
+    result = Recordset(names)
+    for key in candidates:
+        values: list[Value] = []
+        parts: list[tuple[Any, ...]] = []
+        for operand, scalar, projection in zip(
+            operands, scalars, projections, strict=True
+        ):
+            if scalar is not None:
+                record: Record | None = scalar
+            else:
+                record = operand.records.get(
+                    key
+                    if projection is None
+                    else tuple([key[position] for position in projection])
+                )
+                if record is None:
+                    record = operand.default
+            if record is None:
+                break
+            values.append(record.value)
+            parts.append(record.points)
+        else:
+            result.records[key] = Record(function(values), tuple(parts))
+    result.default = _combined_default(operands, function)
+    return result
+
+
+def _combined_default(
+    operands: Sequence[Recordset], function: Callable[[list[Value]], Value]
+) -> Record | None:
+    """Combine the operands' defaults, scalars included.
+
+    Returns:
+        Record | None: The result's default, or ``None`` unless every keyed
+        operand has one and every scalar operand a record.
+    """
+    values: list[Value] = []
+    for operand in operands:
+        record = operand.default if operand.keys else operand.records.get(())
+        if record is None:
+            return None
+        values.append(record.value)
+    return Record(function(values))
 
 
 STANDARD_KEYS = frozenset({"r", "c", "s"})

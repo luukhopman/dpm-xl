@@ -3,6 +3,19 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org).
 
+## Unreleased
+
+### Fixed
+
+- An operand with a `default` stands for its default where another operand
+  has a record it lacks, as a fact variable's fallback value does, instead
+  of dropping that record from the join. `with {default: null}: if not
+  isnull({tA, c0010}) then not isnull({tB, c0010}) endif` over two parts of
+  an open table now fails for a key filed only in `A`; it was not evaluated.
+  Operands without a default still join on the keys they share.
+  `Recordset.default` holds the default, and the columnar evaluator leaves
+  such joins to the reference evaluator.
+
 ## 1.1.0 - 2026-10-25
 
 ### Added

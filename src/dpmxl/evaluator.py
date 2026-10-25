@@ -15,7 +15,8 @@ Semantics in brief:
 
 * A selection yields one record per selected data point, keyed by varying
   closed axes and open key components. Missing facts take the selection's
-  ``default`` (``null`` when none is written).
+  ``default`` (``null`` when none is written); a written default also stands
+  in where another operand has a key the selection lacks.
 * ``interval: true`` keeps each fact's decimals tolerance, so ``=`` holds when
   the intervals overlap; otherwise comparisons are exact.
 * Null propagates through arithmetic and comparisons; ``and``/``or`` use
@@ -578,7 +579,12 @@ class Evaluator:
             _literal_value(spec.default) if isinstance(spec.default, Literal_) else None
         )
         interval = bool(spec.interval)
-        result = Recordset(keys)
+        # A default also stands for the records of keys another operand has
+        # (see recordset.combine).
+        result = Recordset(
+            keys,
+            default=Record(default) if isinstance(spec.default, Literal_) else None,
+        )
         kept = [
             (position, self.only_keys[name])
             for position, name in enumerate(axis_keys)
@@ -934,7 +940,8 @@ class Evaluator:
             value = self.provider.parameter(name)
             if value is None:
                 raise EvaluationError(f"unknown key component or parameter {name!r}")
-            return data.map(lambda _value: value)
+            mapped = data.map(lambda _value: value)
+            return Recordset(mapped.keys, mapped.records)
         position = data.keys.index(key)
         # DPM-XL 11.3.6: records with a null fact value are omitted.
         return Recordset(
@@ -1301,8 +1308,9 @@ def _restrict(data: Recordset, spec: SelectionSpec) -> Recordset:
     Returns:
         Recordset: The records whose ``r``, ``c`` and ``s`` keys match the
         selected coordinates; an axis selecting one coordinate is no longer a
-        key. ``default`` fills null values and ``interval: false`` makes
-        numbers exact.
+        key. ``default`` fills null values and missing keys (see
+        [`Recordset`][dpmxl.recordset.Recordset]) and ``interval: false``
+        makes numbers exact.
 
     Raises:
         EvaluationError: If the result lacks a selected axis key.
@@ -1344,6 +1352,8 @@ def _restrict(data: Recordset, spec: SelectionSpec) -> Recordset:
             return value
 
         result = result.map(fill)
+    if isinstance(spec.default, Literal_):
+        result = Recordset(result.keys, result.records, Record(default))
     return result
 
 

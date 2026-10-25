@@ -389,3 +389,18 @@ def test_get_has_no_default() -> None:
     data = parts(a_rows=[("y", "0010", 1)], b_rows=[("x", "0010", 5)])
     rule = "{tA, c0010, default: 0} [get qKEY] = {tB, c0010, default: 0} [get qKEY]"
     assert keyed(evaluate_rule(rule, data)) == []
+
+
+def test_rename_to_an_existing_key_is_an_error() -> None:
+    table = TableLayout("O2", rows=("0010",), columns=("0010",), open_keys=("qA", "qB"))
+    data = MemoryProvider(
+        [table],
+        {("O2", "0010", "0010", None, (("qA", "a"), ("qB", "b"))): Number.of(1, 0)},
+    )
+    for rule in [
+        "{tO2} [rename qA to qB] = 1",
+        "{tO2} [rename qA to qC, qB to qC] = 1",
+    ]:
+        result = evaluate_rule(rule, data)
+        assert result.status == "error", rule
+        assert "already" in (result.message or ""), rule

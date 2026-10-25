@@ -152,7 +152,7 @@ failed [({'qEBB': 'B'}, False), ({'qEBB': 'C'}, True)]
 | `[where condition]` | Keeps the records whose keys satisfy the condition. |
 | `[get key]` | Replaces each value by the value of a key component; records whose fact is null are omitted. |
 | `[sub key = value]` | Fixes a key to a value and removes it from the key. |
-| `[rename a to b]` | Renames a key, so it joins with another operand's `b`. |
+| `[rename a to b]` | Renames a key, so it joins with another operand's `b`; an error if the record set already has `b`. |
 | `group by k, …` | In an aggregate: one record per value of the listed keys. |
 
 A `where` or `sub` on a selection inside a `with` body overrides the terms of

@@ -129,6 +129,7 @@ from .ast import (
 from .evaluator import (
     AGGREGATES,
     _check_call,
+    _check_rename,
     _context_condition,
     _key_names,
     _parse_cached,
@@ -912,6 +913,7 @@ class ColumnarEvaluator:
             key = resolve_key(old, keys)
             if key is None:
                 raise EvaluationError(f"unknown key component {old!r}")
+            _check_rename(new, [name for name in keys if name != key])
             keys[keys.index(key)] = new
             mapping[_key(key)] = _key(new)
         return Frame(tuple(keys), frame.df.rename(mapping), frame.has_default)

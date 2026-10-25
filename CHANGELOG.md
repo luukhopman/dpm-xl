@@ -27,6 +27,8 @@ All notable changes to this project are documented here. The project follows
   so a filtered operand falls back to it for keys the other operands bring;
   `get`, aggregates and analytic functions do not. The columnar evaluator
   leaves these cases to the reference evaluator.
+- `[rename a to b]` on a record set that already has a key `b` is an error;
+  it produced two keys of the same name.
 
 ## 1.1.0 - 2026-10-25
 

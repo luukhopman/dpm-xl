@@ -984,6 +984,7 @@ class Evaluator:
             key = resolve_key(old, keys)
             if key is None:
                 raise EvaluationError(f"unknown key component {old!r}")
+            _check_rename(new, [name for name in keys if name != key])
             keys[keys.index(key)] = new
         return Recordset(tuple(keys), dict(data.records), data.default)
 
@@ -1449,6 +1450,19 @@ def _context_condition(
     for term in terms[1:]:
         kept = Binary("and", kept, term, span=(kept.span[0], term.span[1]))
     return kept
+
+
+def _check_rename(new: str, others: Sequence[str]) -> None:
+    """Refuse a rename to a key component the record set already has.
+
+    Raises:
+        EvaluationError: If ``new`` names one of ``others``.
+    """
+    clash = resolve_key(new, others) or next(
+        (name for name in others if name.casefold() == new.casefold()), None
+    )
+    if clash is not None:
+        raise EvaluationError(f"rename: key component {clash} already exists")
 
 
 def _key_names(node: Node) -> tuple[str, ...]:

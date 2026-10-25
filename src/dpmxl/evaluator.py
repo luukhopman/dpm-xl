@@ -2070,7 +2070,11 @@ def _make_date(year: Value, month: Value, day: Value) -> Value:
     try:
         return date(*parts)
     except ValueError as error:
-        raise EvaluationError(f"invalid date: {error}") from error
+        # Python's own wording differs between versions; name the date.
+        year_part, month_part, day_part = parts
+        raise EvaluationError(
+            f"invalid date: {year_part:04d}-{month_part:02d}-{day_part:02d}"
+        ) from error
 
 
 def _float_number(value: float | complex) -> Value:

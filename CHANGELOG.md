@@ -3,6 +3,14 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org).
 
+## Unreleased
+
+### Fixed
+
+- `date()` with a day, month or year that does not exist raises `invalid
+  date: 2026-02-30` on every supported Python version; the message used to
+  repeat Python's own wording, which differs between versions.
+
 ## 1.2.0 - 2026-10-25
 
 ### Added

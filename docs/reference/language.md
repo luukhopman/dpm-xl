@@ -1172,7 +1172,7 @@ needs whole numbers`, `invalid date: …` for a day the month lacks.
 | --- | --- |
 | `date(2026, 2, 28)` | `2026-02-28` |
 | `date(2026, 12, 31) = #2026-12-31#` | `true` |
-| `date(2026, 2, 30)` | `error: invalid date: day 30 must be in range 1..28 for month 2 in year 2026` |
+| `date(2026, 2, 30)` | `error: invalid date: 2026-02-30` |
 
 ### Time functions {#time-functions}
 

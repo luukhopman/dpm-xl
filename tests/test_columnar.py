@@ -473,6 +473,15 @@ DEFAULTED = [
     "with {default: 0}: {tA, c0010} = {tB, c0010}",
     "{tA, c0010} >= {tB, c0010, default: 0}",
     "with {default: 0}: max({tA, c0010}, {tB, c0010}) >= 0",
+    "with {default: 0}: if {tA, c0010} > 0 then {tA, c0010} <= 10 "
+    "else {tB, c0010} = 0 endif",
+    "with {default: 0}: (if {tA, c0010} > 0 then {tA, c0010} else 0 endif) "
+    "= {tB, c0010}",
+    "with {default: 0}: (if false then {tA, c0010} > 0 endif) and {tB, c0010} > 0",
+    "with {default: 0}: nvl({tA, c0010}, {tB, c0010}) >= 0",
+    "with {default: 0}: {tA, c0010} [rename qKEY to qK] "
+    "<= {tB, c0010} [rename qKEY to qK]",
+    "with {default: 0}: sum(filter({tA, c0010}, {tB, c0010} >= 0)) >= 0",
 ]
 
 

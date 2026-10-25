@@ -76,7 +76,9 @@ class Recordset:
     default where another operand has a record, and
     [`lookup`][dpmxl.recordset.Recordset.lookup] returns it for a missing key.
     Per-record operations carry it along (see
-    [`map`][dpmxl.recordset.Recordset.map]); clauses, aggregates and ``if``
+    [`map`][dpmxl.recordset.Recordset.map]), as do ``rename``, a
+    ``time_shift`` of a date key and an ``if`` whose condition has one;
+    ``where``, ``sub``, ``get``, ``filter``, aggregates and analytic functions
     drop it.
 
     Attributes:

@@ -983,7 +983,7 @@ class Evaluator:
             if key is None:
                 raise EvaluationError(f"unknown key component {old!r}")
             keys[keys.index(key)] = new
-        return Recordset(tuple(keys), dict(data.records))
+        return Recordset(tuple(keys), dict(data.records), data.default)
 
     def _set_member(
         self,
@@ -1048,7 +1048,7 @@ def _shift_date(value: date, period: str, count: int) -> date:
 
 def _shift_key(data: Recordset, key: str, period: str, count: int) -> Recordset:
     position = data.keys.index(key)
-    result = Recordset(data.keys)
+    result = Recordset(data.keys, default=data.default)
     for record_key, record in data.records.items():
         moment = record_key[position]
         if not isinstance(moment, date):
@@ -1643,6 +1643,12 @@ def conditional(
     ``else`` branch. Without ``else``, the result is ``true`` when ``then`` is
     Boolean and null otherwise.
 
+    A condition with a [`default`][dpmxl.recordset.Recordset] also covers
+    the keys a branch has and it lacks, taking its default there, as in
+    [`combine`][dpmxl.recordset.combine]: each branch without a default must
+    have the key. A branch lacking a key takes its default, and the result
+    has a default when the condition's default picks one.
+
     Returns:
         Recordset: The result.
 
@@ -1672,6 +1678,7 @@ def conditional(
                     key: Record(fallback, item.points)
                     for key, item in then.records.items()
                 },
+                None if then.default is None else Record(fallback),
             )
         return Recordset.scalar(fallback, record.points if record else ())
     # Branch keys the condition lacks widen the result, as in a join: each
@@ -1711,7 +1718,16 @@ def conditional(
             )
         indexes.append(([condition.keys.index(name) for name in shared], index))
     result = Recordset(condition.keys + extra)
-    for key, record in condition.records.items():
+    records: Iterable[tuple[tuple[Hashable, ...], Record]] = condition.records.items()
+    if condition.default is not None:
+        records = [
+            *records,
+            *_branch_keys(condition, (then, otherwise)),
+        ]
+        result.default = _conditional_default(
+            verdict(condition.default.value), then, otherwise, fallback
+        )
+    for key, record in records:
         value = verdict(record.value)
         if type(value) is _Failed:
             # A failed condition fails its records whichever branch they take.
@@ -1746,6 +1762,58 @@ def conditional(
                 (record.points, chosen.points) if chosen else record.points,
             )
     return result
+
+
+def _branch_keys(
+    condition: Recordset, branches: Iterable[Recordset | None]
+) -> list[tuple[tuple[Hashable, ...], Record]]:
+    """Return the condition's default at the keys only branches have.
+
+    Keys come from the branches with every condition key; each branch
+    without a default must have the key.
+
+    Returns:
+        list[tuple[tuple[Hashable, ...], Record]]: Keys and the default.
+    """
+    assert condition.default is not None
+    keyed = [branch for branch in branches if branch is not None and branch.keys]
+    found: dict[tuple[Hashable, ...], None] = {}
+    for branch in keyed:
+        if not set(condition.keys) <= set(branch.keys):
+            continue
+        positions = [branch.keys.index(name) for name in condition.keys]
+        for key in branch.records:
+            part = tuple([key[position] for position in positions])
+            if part not in condition.records:
+                found[part] = None
+    required = [branch for branch in keyed if branch.default is None]
+    return [
+        (key, condition.default)
+        for key in found
+        if all(
+            branch.lookup(dict(zip(condition.keys, key, strict=True)))
+            for branch in required
+        )
+    ]
+
+
+def _conditional_default(
+    verdict: Value, then: Recordset, otherwise: Recordset | None, fallback: Value
+) -> Record | None:
+    """Return the default of an ``if`` whose condition has one.
+
+    Returns:
+        Record | None: The default of the branch the condition's default
+        takes (a key-less branch's value), or ``None`` when it has none.
+    """
+    if type(verdict) is _Failed:
+        return Record(verdict)
+    branch = then if verdict is True else otherwise
+    if branch is None:
+        return Record(fallback)
+    if branch.keys:
+        return branch.default
+    return branch.records.get(())
 
 
 def _value_set(values: Iterable[Value]) -> ValueSet:

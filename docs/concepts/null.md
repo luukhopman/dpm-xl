@@ -94,7 +94,8 @@ passed [True]
 
 The result has the condition's record structure. Branch keys the condition
 lacks widen it, so each condition record applies to every branch record that
-shares its keys.
+shares its keys. A condition with a `default` also covers the key values only
+a branch has ([Records and keys](records-and-keys.md#defaults-fill-in-missing-records)).
 
 ## Errors stay in their record
 

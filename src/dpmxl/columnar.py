@@ -59,8 +59,9 @@ columns ``k:<name>`` (``k:r``, ``k:c``, ``k:s`` for varying closed axes, open
 keys such as ``k:qEBB``) as canonical strings, plus the same value columns.
 Operators natural-join their operands on shared keys exactly like
 [`combine`][dpmxl.recordset.combine]. Where an operand with a ``default``
-lacks a record another operand has, which the reference evaluator fills in
-with the default, this module raises
+lacks a record another operand has, or an ``if`` condition with a default
+lacks a key a branch has, which the reference evaluator fills in with the
+default, this module raises
 [`ColumnarUnsupported`][dpmxl.columnar.ColumnarUnsupported].
 
 ## Threads
@@ -910,7 +911,7 @@ class ColumnarEvaluator:
                 raise EvaluationError(f"unknown key component {old!r}")
             keys[keys.index(key)] = new
             mapping[_key(key)] = _key(new)
-        return Frame(tuple(keys), frame.df.rename(mapping))
+        return Frame(tuple(keys), frame.df.rename(mapping), frame.has_default)
 
 
 def _literal_value(node: Literal_) -> Value:
@@ -1434,7 +1435,8 @@ def _conditional(
 
     Raises:
         _RecordError: For non-Boolean conditions, which fail their records.
-        ColumnarUnsupported: When a branch has keys the condition lacks.
+        ColumnarUnsupported: When a branch has keys the condition lacks, or
+            key values a condition with a default lacks.
     """
     df = condition.df
     if condition.kinds & {NUM, TXT}:
@@ -1453,6 +1455,21 @@ def _conditional(
         if branch is not None and not set(branch.keys) <= set(condition.keys):
             # Rare in EBA rules; the reference evaluator widens the result.
             raise ColumnarUnsupported("if branches with keys the condition lacks")
+        if (
+            condition.has_default
+            and branch is not None
+            and set(branch.keys) == set(condition.keys)
+            and branch.df.select(condition.key_columns)
+            .join(
+                condition.df.select(condition.key_columns),
+                on=condition.key_columns,
+                how="anti",
+                nulls_equal=True,
+            )
+            .height
+        ):
+            # The reference evaluator covers them with the condition's default.
+            raise ColumnarUnsupported("a default for keys only a branch has")
     result = condition.df.select([*condition.key_columns, pl.col(FLAG).alias("_cond")])
 
     def cond_taken(index: int) -> pl.Expr:
@@ -1502,7 +1519,11 @@ def _conditional(
             .cast(_VALUE_SCHEMA[column])
             .alias(column)
         )
-    return Frame(condition.keys, result.select([*condition.key_columns, *outputs]))
+    return Frame(
+        condition.keys,
+        result.select([*condition.key_columns, *outputs]),
+        condition.has_default,
+    )
 
 
 def _membership(

@@ -90,11 +90,28 @@ than a memory problem (`recordset.MAX_JOIN_RECORDS`).
 
 An open table has records only for the key combinations reported in it, so
 two tables, or two parts of one template, may each lack keys the other has.
-An operand with a `default` then stands for its default, as a fact variable
-with a fallback value does: when every keyed operand has a default, the
-result has a record for each key any of them has; otherwise the operands
-without a default decide the keys. Without defaults, the join keeps only
-the keys both sides have.
+An operand with a written `default` (`default: null` included) then stands
+for its default where it lacks a key, as a fact variable with a fallback
+value does. One rule covers every construct that combines keyed operands:
+
+- **Joins** (operators, and functions of several operands such as `nvl`,
+  `max`, `match` and `filter`): the operands without a default decide the
+  keys, keeping those all of them have, and the others fill in their
+  default. When every keyed operand has a default, the result has a record
+  for each key any operand with all the result's keys has. Without
+  defaults, a join keeps only the keys both sides have.
+- **`if`**: a keyed condition with a default also covers the keys a branch
+  has and it lacks, provided every branch without a default has them; the
+  condition takes its default there. A branch lacking a key takes its
+  default; without one, the record is null.
+- **Which results keep a default**: operations applied to each record on
+  its own keep it, applied to the default: unary operators, `in`, the
+  operators and functions above (when every keyed operand has a default),
+  `[rename]` and a `time_shift` that moves a date key. An `if` keeps the
+  default of the branch its condition's default takes. `[where]`, `[sub]`,
+  `[get]`, `filter`, a `with` context's `where`, aggregates, analytic
+  functions and sets select or build records, so their results have no
+  default and join on shared keys only.
 
 ```python
 show("{tO, c0010} = {tP, c0010}")
@@ -103,17 +120,18 @@ show("{tO, c0010} >= {tP, c0010, default: 0}")
 show(
     "with {default: null}: if not isnull({tP, c0010}) then not isnull({tO, c0010}) endif"
 )
+show(
+    "with {default: 0}: if {tO, c0010} > 0 then {tO, c0010} < 10 else {tP, c0010} = 0 endif"
+)
 ```
 
 ```text
 passed [({'qEBB': 'B'}, True)]
 failed [({'qEBB': 'A'}, False), ({'qEBB': 'B'}, True), ({'qEBB': 'C'}, False)]
 passed [({'qEBB': 'A'}, True), ({'qEBB': 'B'}, True)]
-failed [({'qEBB': 'B'}, True), ({'qEBB': 'C'}, False)]
+failed [({'qEBB': 'B'}, True), ({'qEBB': 'C'}, False), ({'qEBB': 'A'}, True)]
+failed [({'qEBB': 'A'}, True), ({'qEBB': 'B'}, False), ({'qEBB': 'C'}, False)]
 ```
-
-Clauses (`where`, `get`, `sub`, `rename`), aggregates and `if` produce
-records without a default, so their results join on shared keys only.
 
 ## Clauses change keys and records
 

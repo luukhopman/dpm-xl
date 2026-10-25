@@ -1,5 +1,6 @@
 """Behaviour required by the EBA DPM-XL operators specification v0.9."""
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -257,12 +258,13 @@ def test_default_fills_records_an_operand_lacks() -> None:
     )
     result = evaluate_rule(rule, data)
     assert result.status == "failed"
-    assert keyed(result) == [("x", False)]
+    # y, only in A, does not meet the condition (its default) and passes.
+    assert keyed(result) == [("x", False), ("y", True)]
     both = parts(a_rows=[("x", "0010", 1)], b_rows=[("x", "0010", 2)])
     assert evaluate_rule(rule, both).status == "passed"
     # A branch lacking the condition's key takes its default too.
     rule = "with {default: null}: if not isnull({tB, c0010}) then not isnull({tA, c0010}) endif"
-    assert keyed(evaluate_rule(rule, data)) == [("x", False)]
+    assert keyed(evaluate_rule(rule, data)) == [("x", False), ("y", True)]
 
 
 def test_operands_with_defaults_join_on_every_key() -> None:
@@ -287,3 +289,67 @@ def test_operands_without_defaults_join_on_shared_keys() -> None:
         "not isnull({tA, c0010}) and not isnull({tB, c0010}) endif"
     )
     assert status(rule, data) == "not_applicable"
+
+
+def test_if_with_defaults_covers_the_keys_of_its_branches() -> None:
+    # A key only a branch has is evaluated with the condition's default, as
+    # when every variable of the assertion has a fallback value.
+    data = parts(a_rows=[("y", "0010", 1)], b_rows=[("x", "0010", 5)])
+    rule = (
+        "with {default: 0}: if {tA, c0010} > 0 then {tA, c0010} <= 10 "
+        "else {tB, c0010} = 0 endif"
+    )
+    assert keyed(evaluate_rule(rule, data)) == [("x", False), ("y", True)]
+    # Without a default on the condition, its records decide the keys.
+    rule = "if {tA, c0010} > 0 then {tA, c0010} <= 10 else {tB, c0010} = 0 endif"
+    assert keyed(evaluate_rule(rule, data)) == [("y", True)]
+    # A branch without a default must have the key.
+    rule = (
+        "if {tA, c0010, default: 0} > 0 then {tA, c0010} <= 10 "
+        "else {tB, c0010, default: 0} = 0 endif"
+    )
+    assert keyed(evaluate_rule(rule, data)) == [("y", True)]
+
+
+def test_if_results_keep_a_default() -> None:
+    data = parts(a_rows=[("y", "0010", 1)], b_rows=[("x", "0010", 5)])
+    nested = (
+        "with {default: 0}: "
+        "(if {tA, c0010} > 0 then {tA, c0010} else 0 endif) = {tB, c0010}"
+    )
+    assert keyed(evaluate_rule(nested, data)) == [("x", False), ("y", False)]
+    guarded = (
+        "with {default: 0}: (if false then {tA, c0010} > 0 endif) and {tB, c0010} > 0"
+    )
+    assert keyed(evaluate_rule(guarded, data)) == [("x", True), ("y", False)]
+
+
+def test_rename_and_time_shift_keep_a_default() -> None:
+    # Neither selects records or depends on their values: the default holds.
+    data = parts(a_rows=[("y", "0010", 1)], b_rows=[("x", "0010", 5)])
+    rule = (
+        "with {default: 0}: {tA, c0010} [rename qKEY to qK] "
+        "<= {tB, c0010} [rename qKEY to qK]"
+    )
+    assert sorted(
+        (str(o.key["qK"]), o.passed) for o in evaluate_rule(rule, data).outcomes
+    ) == [
+        ("x", True),
+        ("y", False),
+    ]
+    dated = MemoryProvider(
+        [
+            TableLayout("D", columns=("0010",), open_keys=("qDAT",)),
+            TableLayout("E", columns=("0010",), open_keys=("qDAT",)),
+        ],
+        {
+            ("D", None, "0010", None, (("qDAT", date(2026, 3, 31)),)): Number.of(5, 0),
+            ("E", None, "0010", None, (("qDAT", date(2026, 3, 31)),)): Number.of(7, 0),
+        },
+    )
+    rule = "with {default: 0}: time_shift({tD, c0010}, Q, 1, qDAT) <= {tE, c0010}"
+    result = evaluate_rule(rule, dated)
+    assert sorted((str(o.key["qDAT"]), o.passed) for o in result.outcomes) == [
+        ("2026-03-31", True),
+        ("2026-06-30", False),
+    ]

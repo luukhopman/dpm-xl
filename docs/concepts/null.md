@@ -40,6 +40,8 @@ def show(expression):
 A cell with no fact takes the selection's `default`; with no default it is
 null. A provider must therefore return every defined cell of a closed
 selection, reported or not ([Connect your data](../guides/provider.md)).
+The default also stands in where another operand has an open key the
+selection lacks ([Records and keys](records-and-keys.md#defaults-fill-in-missing-records)).
 
 ```python
 show("{tT, r0030, c0010} > 0")

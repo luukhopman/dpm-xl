@@ -9,7 +9,7 @@ combination of keys, and each record passes, fails or is not evaluated. Keys
 are what make "row 0010 equals rows 0020 + 0030 *in every column*" one rule.
 
 The examples on this page use a closed table `T` (rows `0010`–`0030`,
-columns `0010`–`0020`) and an open table `O` keyed by `qEBB`:
+columns `0010`–`0020`) and open tables `O` and `P` keyed by `qEBB`:
 
 ```python
 from dpmxl import MemoryProvider, Number, TableLayout, evaluate_rule
@@ -18,6 +18,7 @@ provider = MemoryProvider(
     [
         TableLayout("T", rows=("0010", "0020", "0030"), columns=("0010", "0020")),
         TableLayout("O", columns=("0010", "0020"), open_keys=("qEBB",)),
+        TableLayout("P", columns=("0010",), open_keys=("qEBB",)),
     ],
     {
         ("T", "0010", "0010", None, ()): Number.of(10, 0),
@@ -28,6 +29,8 @@ provider = MemoryProvider(
         ("O", None, "0010", None, (("qEBB", "B"),)): Number.of(-1, 0),
         ("O", None, "0020", None, (("qEBB", "A"),)): Number.of(2, 0),
         ("O", None, "0020", None, (("qEBB", "B"),)): Number.of(0, 0),
+        ("P", None, "0010", None, (("qEBB", "B"),)): Number.of(-1, 0),
+        ("P", None, "0010", None, (("qEBB", "C"),)): Number.of(3, 0),
     },
 )
 
@@ -82,6 +85,35 @@ error operands have incompatible keys (r) and (c)
 
 A join that would produce more than 2,000,000 records is an error rather
 than a memory problem (`recordset.MAX_JOIN_RECORDS`).
+
+## Defaults fill in missing records
+
+An open table has records only for the key combinations reported in it, so
+two tables, or two parts of one template, may each lack keys the other has.
+An operand with a `default` then stands for its default, as a fact variable
+with a fallback value does: when every keyed operand has a default, the
+result has a record for each key any of them has; otherwise the operands
+without a default decide the keys. Without defaults, the join keeps only
+the keys both sides have.
+
+```python
+show("{tO, c0010} = {tP, c0010}")
+show("with {default: 0}: {tO, c0010} = {tP, c0010}")
+show("{tO, c0010} >= {tP, c0010, default: 0}")
+show(
+    "with {default: null}: if not isnull({tP, c0010}) then not isnull({tO, c0010}) endif"
+)
+```
+
+```text
+passed [({'qEBB': 'B'}, True)]
+failed [({'qEBB': 'A'}, False), ({'qEBB': 'B'}, True), ({'qEBB': 'C'}, False)]
+passed [({'qEBB': 'A'}, True), ({'qEBB': 'B'}, True)]
+failed [({'qEBB': 'B'}, True), ({'qEBB': 'C'}, False)]
+```
+
+Clauses (`where`, `get`, `sub`, `rename`), aggregates and `if` produce
+records without a default, so their results join on shared keys only.
 
 ## Clauses change keys and records
 

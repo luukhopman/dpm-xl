@@ -127,8 +127,10 @@ functions, the `&` operator, functions other than the aggregates, `filter`,
 parameter, operation and table-group references, values that do not fit
 `Decimal(38, 12)`, arithmetic that would overflow it, record-level errors
 (a zero divisor or a type error, which the reference evaluator confines to
-its record) and ordering items or text that may be an item all raise
-`ColumnarUnsupported`. Catch it and evaluate the rule with
+its record), ordering items or text that may be an item and a `default`
+standing in for a record another operand has
+([Records and keys](../concepts/records-and-keys.md#defaults-fill-in-missing-records))
+all raise `ColumnarUnsupported`. Catch it and evaluate the rule with
 [`evaluate_rule`][dpmxl.evaluator.evaluate_rule], which needs `select`. A
 provider can offer both: here `select` builds `DataPoint`s from the same
 frame.

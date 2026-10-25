@@ -48,7 +48,7 @@ at most once.
 | Range | `r0010-0050` | Inclusive; numeric when both ends are numbers |
 | List | `(c0010, c0030-0050)` | Several codes and ranges |
 | Wildcard | `r*`, `c*`, `s*` | Every coordinate on the axis |
-| `default: v` | `default: 0`, `default: ""`, `default: null` | Value for cells with no fact |
+| `default: v` | `default: 0`, `default: ""`, `default: null` | Value for cells with no fact and for keys [another operand has](../concepts/records-and-keys.md#defaults-fill-in-missing-records) |
 | `interval: b` | `interval: true` | Use [interval arithmetic](../concepts/intervals.md) |
 
 ```dpm-xl

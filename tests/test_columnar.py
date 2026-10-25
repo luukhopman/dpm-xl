@@ -496,6 +496,23 @@ def test_defaults_for_missing_records_go_to_the_reference_engine(
     assert evaluate_rule(expression, provider).status in {"passed", "failed"}
 
 
+FILTERED = [
+    '{tA, c0010, default: 10} [where qKEY = "y"] <= {tB, c0010}',
+    '{tB, c0010} >= {tA, c0010, default: 0} [sub qKEY = "q"]',
+    "{tB, c0010} >= filter({tA, c0010, default: 10}, {tA, c0010, default: 10} > 0)",
+    'with {c0010, default: 10} [where qKEY != "x"]: {tA} <= {tB}',
+    'if {tA, c0010, default: 0} [sub qKEY = "q"] > 0 then true else false endif',
+]
+
+
+@pytest.mark.parametrize("expression", FILTERED)
+def test_defaults_kept_by_clauses_go_to_the_reference_engine(expression: str) -> None:
+    provider = parts(("x", "y"), ("y", "z"))
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    assert evaluate_rule(expression, provider).status in {"passed", "failed"}
+
+
 @pytest.mark.parametrize("expression", [*DEFAULTED, "{tA, c0010} = {tB, c0010}"])
 def test_defaults_with_partners_stay_columnar(expression: str) -> None:
     provider = parts(("y", "x"), ("x", "y"))

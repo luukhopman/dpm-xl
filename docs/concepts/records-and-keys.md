@@ -104,14 +104,24 @@ value does. One rule covers every construct that combines keyed operands:
   has and it lacks, provided every branch without a default has them; the
   condition takes its default there. A branch lacking a key takes its
   default; without one, the record is null.
-- **Which results keep a default**: operations applied to each record on
-  its own keep it, applied to the default: unary operators, `in`, the
-  operators and functions above (when every keyed operand has a default),
-  `[rename]` and a `time_shift` that moves a date key. An `if` keeps the
-  default of the branch its condition's default takes. `[where]`, `[sub]`,
-  `[get]`, `filter`, a `with` context's `where`, aggregates, analytic
-  functions and sets select or build records, so their results have no
-  default and join on shared keys only.
+- **Which results keep a default**: everything that keeps a record's value
+  tied to the same fact keeps it, applied to the default: unary operators,
+  `in`, the operators and functions above (when every keyed operand has a
+  default), `[rename]`, a `time_shift` that moves a date key, and the
+  selecting clauses `[where]`, `[sub]`, `filter` and a `with` context's
+  `where`. A filter restricts the operand's own records, not the keys the
+  other operands bring: there the operand falls back to its default. An
+  `if` keeps the default of the branch its condition's default takes.
+- **Which results have none**: `[get]` turns key components into values,
+  and a default has no key components, so a key the operand lacks gives
+  no value (DPM-XL omits records without a fact). Aggregates and analytic
+  functions build each record from a group or window of records: a key
+  without records is no group, and its value is not the operand's default
+  (`sum` of nothing is null, not `0`). Their results join on shared keys
+  only.
+- A key-less operand without its record, such as `[sub]` on a key value
+  nobody reported, stands for its default next to keyed operands or
+  reported values; on its own, or with constants only, it yields no record.
 
 ```python
 show("{tO, c0010} = {tP, c0010}")
@@ -123,6 +133,7 @@ show(
 show(
     "with {default: 0}: if {tO, c0010} > 0 then {tO, c0010} < 10 else {tP, c0010} = 0 endif"
 )
+show('{tO, c0010, default: 0} [where qEBB = "A"] <= {tP, c0010}')
 ```
 
 ```text
@@ -131,6 +142,7 @@ failed [({'qEBB': 'A'}, False), ({'qEBB': 'B'}, True), ({'qEBB': 'C'}, False)]
 passed [({'qEBB': 'A'}, True), ({'qEBB': 'B'}, True)]
 failed [({'qEBB': 'B'}, True), ({'qEBB': 'C'}, False), ({'qEBB': 'A'}, True)]
 failed [({'qEBB': 'A'}, True), ({'qEBB': 'B'}, False), ({'qEBB': 'C'}, False)]
+failed [({'qEBB': 'B'}, False), ({'qEBB': 'C'}, True)]
 ```
 
 ## Clauses change keys and records

@@ -734,6 +734,7 @@ class Evaluator:
                     for key, record in joined.records.items()
                     if record.value is not _FILTERED
                 },
+                data.default,
             )
         args = [self.evaluate(arg, context, bindings) for arg in node.args]
         implementation = _SCALAR_FUNCTIONS.get(name)
@@ -912,7 +913,8 @@ class Evaluator:
     ) -> Recordset:
         if data.records and not data.keys:
             raise EvaluationError("where needs a keyed operand")
-        result = Recordset(data.keys)
+        # The default still stands in for the keys other operands have.
+        result = Recordset(data.keys, default=data.default)
         # The verdict depends only on the keys the condition names, and many
         # records share them (qEBB has a few values over thousands of rows).
         named = {resolve_key(name, data.keys) for name in _key_names(condition)}
@@ -964,7 +966,7 @@ class Evaluator:
             raise EvaluationError(f"unknown key component {name!r}")
         position = data.keys.index(key)
         keys = data.keys[:position] + data.keys[position + 1 :]
-        result = Recordset(keys)
+        result = Recordset(keys, default=data.default)
         for record_key, record in data.records.items():
             try:
                 equal = compare("=", _value_of_key(record_key[position]), value)
@@ -1665,7 +1667,7 @@ def conditional(
         return value
 
     if not condition.keys:
-        record = condition.single()
+        record = condition.single() or condition.default
         value = _checked(verdict(record.value if record else None))
         if value is True:
             return then

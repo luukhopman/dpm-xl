@@ -76,10 +76,10 @@ class Recordset:
     default where another operand has a record, and
     [`lookup`][dpmxl.recordset.Recordset.lookup] returns it for a missing key.
     Per-record operations carry it along (see
-    [`map`][dpmxl.recordset.Recordset.map]), as do ``rename``, a
-    ``time_shift`` of a date key and an ``if`` whose condition has one;
-    ``where``, ``sub``, ``get``, ``filter``, aggregates and analytic functions
-    drop it.
+    [`map`][dpmxl.recordset.Recordset.map]), as do ``where``, ``sub``,
+    ``filter``, ``rename``, a ``time_shift`` of a date key and an ``if``
+    whose condition has one; ``get``, aggregates and analytic functions drop
+    it.
 
     Attributes:
         keys: Key names, such as ``("r", "qCPI")``; empty for a scalar.
@@ -200,6 +200,22 @@ def combine(
     """
     check_structure(operands)
     keyed = [operand for operand in operands if operand.keys]
+    if any(
+        not operand.keys and not operand.records and operand.default is not None
+        for operand in operands
+    ):
+        # A key-less operand without its record (such as a [sub] that fixes
+        # a missing key) stands for its default too.
+        from_data = any(record.points for record in _scalar_records(operands))
+        operands = [
+            Recordset((), {(): operand.default}, operand.default)
+            if not operand.keys and not operand.records and operand.default
+            else operand
+            for operand in operands
+        ]
+        if not keyed and not from_data:
+            # Nothing but defaults and constants: no record of its own.
+            return Recordset((), default=_combined_default(operands, function))
     if any(operand.default is not None for operand in keyed):
         first = keyed[0]
         if any(
@@ -328,6 +344,15 @@ def _combine_defaults(
             result.records[key] = Record(function(values), tuple(parts))
     result.default = _combined_default(operands, function)
     return result
+
+
+def _scalar_records(operands: Sequence[Recordset]) -> list[Record]:
+    return [
+        record
+        for operand in operands
+        if not operand.keys
+        for record in operand.records.values()
+    ]
 
 
 def _combined_default(

@@ -862,7 +862,9 @@ class ColumnarEvaluator:
         checks: list[pl.Expr] = []
         predicate = _key_predicate(condition, frame.keys, self.provider, checks)
         _require_text_or_items(frame.df, checks)
-        return Frame(frame.keys, frame.df.filter(predicate.fill_null(False)))
+        return Frame(
+            frame.keys, frame.df.filter(predicate.fill_null(False)), frame.has_default
+        )
 
     def _get(self, frame: Frame, name: str) -> Frame:
         key = resolve_key(name, frame.keys)
@@ -900,7 +902,8 @@ class ColumnarEvaluator:
         test = _key_equals(_key_text_column(key), fixed, checks)
         _require_text_or_items(frame.df, checks)
         df = frame.df.filter(test).drop(_key(key))
-        return Frame(tuple(item for item in frame.keys if item != key), df)
+        keys = tuple(item for item in frame.keys if item != key)
+        return Frame(keys, df, frame.has_default)
 
     def _rename(self, frame: Frame, pairs: tuple[tuple[str, str], ...]) -> Frame:
         keys = list(frame.keys)
@@ -1105,8 +1108,14 @@ def _joined(frames: Sequence[Frame]) -> tuple[tuple[str, ...], pl.DataFrame]:
 
     Raises:
         EvaluationError: On operands with unrelated keys.
+        ColumnarUnsupported: Where a default would stand in for a record.
     """
     _check_structure(frames)
+    if any(
+        not frame.keys and not frame.df.height and frame.has_default for frame in frames
+    ):
+        # The reference evaluator takes the default of an empty key-less operand.
+        raise ColumnarUnsupported("a default for a missing key-less record")
     aligned = _aligned(frames)
     if aligned is not None:
         return aligned
@@ -1443,6 +1452,8 @@ def _conditional(
         raise _RecordError("if needs a boolean condition")
     fallback = {NUM: None, THR: None, TXT: None, FLAG: True if boolean_then else None}
     if not condition.keys:
+        if not df.height and condition.has_default:
+            raise ColumnarUnsupported("a default for a missing key-less condition")
         verdict = df.get_column(FLAG)[0] if df.height else None
         if verdict is True:
             return then
@@ -1651,7 +1662,7 @@ def _filter(data: Frame, condition: Frame) -> Frame:
     kept = df.filter(_c(FLAG, 0).fill_null(False))
     selected = [pl.col(_key(key)) for key in keys]
     selected += [_c(column, 1).alias(column) for column in VALUE_COLUMNS]
-    return Frame(keys, kept.select(selected))
+    return Frame(keys, kept.select(selected), data.has_default)
 
 
 def _aggregate(name: str, frame: Frame, group_by: tuple[str, ...] | None) -> Frame:

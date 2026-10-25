@@ -353,3 +353,39 @@ def test_rename_and_time_shift_keep_a_default() -> None:
         ("2026-03-31", True),
         ("2026-06-30", False),
     ]
+
+
+def test_clauses_that_select_records_keep_a_default() -> None:
+    # Filtering one operand restricts its records, not the keys the other
+    # operands bring: there it falls back to its default.
+    data = parts(
+        a_rows=[("y", "0010", 1), ("x", "0010", 2)],
+        b_rows=[("x", "0010", 5), ("z", "0010", 3)],
+    )
+    where = '{tA, c0010, default: 10} [where qKEY = "y"] <= {tB, c0010}'
+    assert keyed(evaluate_rule(where, data)) == [("x", False), ("z", False)]
+    sub = '{tB, c0010} >= {tA, c0010, default: 0} [sub qKEY = "q"]'
+    assert keyed(evaluate_rule(sub, data)) == [("x", True), ("z", True)]
+    kept = "filter({tA, c0010, default: 10}, {tA, c0010, default: 10} > 1)"
+    assert keyed(evaluate_rule(f"{{tB, c0010}} >= {kept}", data)) == [
+        ("x", True),
+        ("z", False),
+    ]
+    context = '{c0010, default: 10} [where qKEY != "y"]'
+    rule = f"with {context}: {{tA}} <= {{tB}}"
+    assert keyed(evaluate_rule(rule, data)) == [("x", True), ("z", False)]
+    # A record set made only of a default has no record of its own.
+    assert status('{tA, c0010, default: 0} [sub qKEY = "q"] = 0', data) == (
+        "not_applicable"
+    )
+    # A reported key-less operand brings a record, as a fact would.
+    mixed = provider({("0010", "0010"): 4})
+    rule = '{tT, r0010, c0010} > {tO, r0010, c0010, default: 5} [sub qKEY = "q"]'
+    assert evaluate_rule(rule, mixed).counts == {"passed": 0, "failed": 1, "null": 0}
+
+
+def test_get_has_no_default() -> None:
+    # A fallback has no key components to take a value from.
+    data = parts(a_rows=[("y", "0010", 1)], b_rows=[("x", "0010", 5)])
+    rule = "{tA, c0010, default: 0} [get qKEY] = {tB, c0010, default: 0} [get qKEY]"
+    assert keyed(evaluate_rule(rule, data)) == []

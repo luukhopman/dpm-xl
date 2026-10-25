@@ -22,9 +22,11 @@ All notable changes to this project are documented here. The project follows
   an open table now fails for a key filed only in `A`; it was not evaluated.
   Operands without a default still decide the keys and join on the keys
   they share. An `if` condition with a default also covers keys only a
-  branch has, and `rename`, a `time_shift` of a date key and `if` results
-  keep the default. The columnar evaluator leaves these cases to the
-  reference evaluator.
+  branch has. `where`, `sub`, `filter`, a `with` context's `where`,
+  `rename`, a `time_shift` of a date key and `if` results keep the default,
+  so a filtered operand falls back to it for keys the other operands bring;
+  `get`, aggregates and analytic functions do not. The columnar evaluator
+  leaves these cases to the reference evaluator.
 
 ## 1.1.0 - 2026-10-25
 

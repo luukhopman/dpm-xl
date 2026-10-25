@@ -98,6 +98,8 @@ An operand is a set of records: one value, or one value per key such as
 - A value passed on unchanged, such as an `if` branch, the value `nvl` or
   `filter` keeps, or a record that `where`, `sub` or `rename` keeps, keeps
   its interval tolerance.
+- Results of `get`, aggregates, analytic functions and sets have no
+  `default`, and join on shared keys only.
 
 ### Errors {#errors}
 
@@ -896,8 +898,10 @@ values the provider reports, such as text, dates and items.
 Keeps the records whose keys satisfy a condition. The condition is
 evaluated for each record, with the record's key components as names, and
 must yield one Boolean; records where it is false or null are dropped. It
-tests keys, not values: to test values use [`filter`](#filter). A key-less
-operand is the error `where needs a keyed operand`. Parses to
+tests keys, not values: to test values use [`filter`](#filter). The result
+keeps the operand's `default`, which stands in for the keys other operands
+bring ([Defaults fill in missing records](../concepts/records-and-keys.md#defaults-fill-in-missing-records)).
+A key-less operand is the error `where needs a keyed operand`. Parses to
 [`Where`][dpmxl.ast.Where].
 
 | Expression | Result |
@@ -914,9 +918,9 @@ operand is the error `where needs a keyed operand`. Parses to
 ### `get` {#get}
 
 Replaces each record's value by the value of one of its key components,
-keeping the keys; records whose value is null are dropped. A name that is
-not a key reads the report parameter of that name for every record. Parses
-to [`Get`][dpmxl.ast.Get].
+keeping the keys; records whose value is null are dropped, and the result
+has no `default`. A name that is not a key reads the report parameter of
+that name for every record. Parses to [`Get`][dpmxl.ast.Get].
 
 | Expression | Result |
 | --- | --- |
@@ -929,7 +933,8 @@ to [`Get`][dpmxl.ast.Get].
 Keeps the records whose key component equals a value, compared as with
 `=`, and removes that key. The value is an additive expression (a literal,
 a parameter, an item or arithmetic; parenthesize anything else) with one
-value. Parses to [`Sub`][dpmxl.ast.Sub].
+value. The result keeps the operand's `default`, as for [`where`](#where).
+Parses to [`Sub`][dpmxl.ast.Sub].
 
 | Expression | Result |
 | --- | --- |
@@ -937,6 +942,7 @@ value. Parses to [`Sub`][dpmxl.ast.Sub].
 | `{tO, c0010}[sub qKEY = "a"][sub qDAT = #2026-03-31#]` | `10` |
 | `{tT, c0010}[sub r = "0010"]` | `100` |
 | `{tO, c0010}[sub qKEY = "z"]` | `no records` |
+| `{tO, c0010, default: 0}[sub qDAT = #2026-09-30#] + {tP, c0010}` | `qKEY=b: 2; qKEY=d: 4` |
 | `{tO, c0010}[sub foo = 1]` | `error: unknown key component 'foo'` |
 
 ### `rename` {#rename}
@@ -1260,7 +1266,8 @@ members of exactly one of the two.
 record is `true`; a false, null or non-Boolean condition drops the record.
 The two operands [join](#records), so the condition is usually a comparison
 on the same selection. Unlike [`where`](#where) it tests values, not keys.
-The result has no `default`.
+The result keeps `data`'s `default`, which stands in for the keys other
+operands bring.
 
 | Expression | Result |
 | --- | --- |

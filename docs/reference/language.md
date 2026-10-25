@@ -98,8 +98,11 @@ An operand is a set of records: one value, or one value per key such as
 - A value passed on unchanged, such as an `if` branch, the value `nvl` or
   `filter` keeps, or a record that `where`, `sub` or `rename` keeps, keeps
   its interval tolerance.
-- Results of `get`, aggregates, analytic functions and sets have no
-  `default`, and join on shared keys only.
+- `where`, `sub`, `filter`, `rename`, a `with` context's `where` and a
+  `time_shift` of a date key keep their operand's `default`; the results of
+  `get`, aggregates and analytic functions have none and join on shared
+  keys only
+  ([Defaults fill in missing records](../concepts/records-and-keys.md#defaults-fill-in-missing-records)).
 
 ### Errors {#errors}
 
@@ -386,10 +389,12 @@ its own. A nested `with` replaces the components it names. `with` may start
 a statement, an assignment's value or another `with` body; elsewhere, such
 as in parentheses, it is a syntax error.
 
-The optional `where` applies to every selection of the body as a
-[`where` clause](#where), so each must have the keys the condition names. A
-`where` or `sub` written on a selection replaces the context condition's
-`and` terms on the same key
+The optional `where` applies, as a [`where` clause](#where), to each
+selection of the body that has the keys it names. Its `and` terms that name
+a key the selection lacks (neither one of its keys nor a temporary or
+report parameter) leave that selection alone, and a key-less selection
+takes none of it. A `where` or `sub` written on a selection replaces the
+context condition's terms on the same key
 ([Clauses change keys and records](../concepts/records-and-keys.md#clauses-change-keys-and-records)).
 Parses to [`With`][dpmxl.ast.With].
 
@@ -402,7 +407,9 @@ Parses to [`With`][dpmxl.ast.With].
 | `with {tT}: with {c0010}: {r0010}` | `100` |
 | `with {tO, c0010}[where qKEY = "a"]: {tO}` | `qKEY=a, qDAT=2026-03-31: 10` |
 | `with {tO, c0010}[where qKEY = "a"]: {c0010}[sub qKEY = "b"]` | `qDAT=2026-06-30: 20` |
-| `with {tO}[where qKEY = "a"]: {c0010} + {tT, c0010}` | `error: unknown key component or parameter 'qKEY'` |
+| `with {tO}[where qKEY = "a"]: {c0010} + {tT, r0010, c0010}` | `qKEY=a, qDAT=2026-03-31: 110` |
+| `with {tO}[where qDAT > #2026-05-01#]: {c0010} + {tP, c0010}` | `qKEY=b, qDAT=2026-06-30: 22` |
+| `with {tO}[where qKEY = "a" and r = "0010"]: {c0010}` | `qKEY=a, qDAT=2026-03-31: 10` |
 | `(with {tT}: {r0010, c0010})` | `syntax error: unexpected keyword 'with'` |
 
 ## Selections {#selections}
@@ -949,14 +956,19 @@ Parses to [`Sub`][dpmxl.ast.Sub].
 
 Renames key components, so that operands with different key names join.
 The old names resolve as [key names](#key-names); the new ones are taken as
-written. Records, values and the `default` are unchanged. Parses to
-[`Rename`][dpmxl.ast.Rename].
+written. Records, values and the `default` are unchanged. A new name that
+is already a key component (also ignoring case and the `q` prefix), or two
+pairs with the same new name, is the error `rename: key component …
+already exists`; pairs apply in order, so keys cannot be swapped in one
+clause. Parses to [`Rename`][dpmxl.ast.Rename].
 
 | Expression | Result |
 | --- | --- |
 | `{tO, c0010}[rename qKEY to K, qDAT to D]` | `K=a, D=2026-03-31: 10; K=b, D=2026-06-30: 20; K=c, D=2026-09-30: 30` |
 | `{tP, c0010}[rename qKEY to K] + {tO, c0010}[sub qDAT = #2026-06-30#][rename qKEY to K]` | `K=b: 22` |
 | `{tO, c0010}[rename foo to K]` | `error: unknown key component 'foo'` |
+| `{tO, c0010}[rename qKEY to DAT]` | `error: rename: key component qDAT already exists` |
+| `{tO, c0010}[rename qKEY to X, qDAT to X]` | `error: rename: key component X already exists` |
 
 ## Functions {#functions}
 
@@ -1315,7 +1327,8 @@ An aggregate reduces an operand's records to one value, or to one value per
 combination of the `group by` keys ([Key names](#key-names)), skipping null
 values. Over no records an aggregate is null, except `count`, which is 0;
 so is a group whose values are all null. The result has the `group by`
-keys, or none ([Aggregates](../concepts/analytics.md#aggregates)).
+keys, or none, and no `default`: a key without records is no group
+([Aggregates](../concepts/analytics.md#aggregates)).
 
 - **Errors:** `group by 'qX' is not a key of the operand (r, c)`; `sum
   needs numbers, found …`; `max with group by takes 1 operand, not 2`.
@@ -1409,7 +1422,8 @@ partition. Without a window the window is the whole partition, or with
 `order by` every record up to the current one and its peers. `data points`
 windows count records; `range` windows with an offset need a single number
 or date order key, and `3 M preceding` is three calendar months earlier.
-The window keywords are reserved only inside `over (…)`
+The result has no `default`. The window keywords are reserved only inside
+`over (…)`
 ([Partitions, order and windows](../concepts/analytics.md#partitions-order-and-windows)).
 
 - **Errors:** the syntax errors `rank needs an order by clause`, `abs takes
@@ -1487,8 +1501,6 @@ which are reported as syntax errors.
 - No comments, and no escape sequences in [text](#strings).
 - `with` only starts a statement, an assignment's value or another `with`
   body ([`with`](#with)).
-- Every selection in the body of `with … [where …]` must have the keys the
-  condition names.
 - `exp`, `ln`, `sqrt`, `power` and `log` compute in binary floating point
   and drop the tolerance ([`exp`](#exp)).
 - A coordinate a table lacks selects nothing rather than raising an error;

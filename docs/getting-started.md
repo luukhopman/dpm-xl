@@ -202,5 +202,6 @@ $ dpm-xl check examples/rules.json
   [`Explanation`][dpmxl.explain.Explanation] holds.
 - [Records and keys](concepts/records-and-keys.md): how selections become
   records and how operators join them.
-- [Language reference](reference/language.md): every construct with an
-  example.
+- [Language reference](reference/language.md): every construct with its
+  syntax, types, errors and tested examples; the
+  [quick reference](reference/quick-reference.md) has it on one page.

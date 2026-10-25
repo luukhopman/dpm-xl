@@ -3,6 +3,15 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org).
 
+## Unreleased
+
+### Added
+
+- The language reference documents every construct with its syntax, types,
+  null and interval behaviour, errors and examples whose results the tests
+  compute, and a new quick reference has the language and its grammar on
+  one page. The tests check that the reference covers `dpmxl.grammar`.
+
 ## 1.2.0 - 2026-10-25
 
 ### Added

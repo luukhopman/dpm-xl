@@ -45,6 +45,7 @@ nav = [
   ] },
   { "Reference" = [
     "reference/index.md",
+    { "Quick reference" = "reference/quick-reference.md" },
     { "Language" = "reference/language.md" },
     { "CLI" = "reference/cli.md" },
     { "Data formats" = "reference/data-formats.md" },

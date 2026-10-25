@@ -52,8 +52,14 @@ write.
   page it belongs to.
 - **Docs examples run.** Every `python` and `console` block in `docs/` is
   executed by `tests/test_docs.py`, and a `text` block right after a
-  `python` block must match its output exactly; see that file for the
+  `python` block must match its output exactly. Every `dpm-xl` block must
+  parse, and every row of an `| Expression | Result |` table is evaluated
+  against `examples/language_report.py`; see that file for the
   conventions.
+- **Language reference.** A new keyword, function or other name in
+  `dpmxl.grammar` needs an entry and an index row in
+  `docs/reference/language.md`, and an example that uses it; the tests
+  fail otherwise.
 - **Grammar changes.** After changing `dpmxl.grammar`, regenerate
   `editors/dpm-xl.tmLanguage.json`:
 

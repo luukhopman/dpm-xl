@@ -125,10 +125,14 @@ v1 failed
 | `parse` on a script with `;`, `:=` or `<-` | `DpmXlSyntaxError` | `parse_program` |
 | Writing `a<-1` to compare with -1 | Parsed as a persistent assignment | `a < -1` |
 | `{vX}` for a filing indicator | Reads parameter `X` | `{v_X}` tests the filing indicator |
+| Keywords run together, such as `ornot` | One unknown name: a syntax error | Separate words: `or not` |
 | A new `SelectionCache` per rule | Every selection is read again | One cache per report |
 
 ## Where to look next
 
-- [Language](reference/language.md): every construct with an example.
+- [Quick reference](reference/quick-reference.md): the language and its
+  grammar on one page.
+- [Language](reference/language.md): every construct with its syntax,
+  types, null behaviour, errors and tested examples.
 - [Concepts](concepts/index.md): records and keys, null logic, intervals.
 - [Python API](reference/api/index.md): every public name.

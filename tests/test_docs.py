@@ -20,6 +20,11 @@ examples and their results: each row's expression is evaluated against the
 report in ``examples/language_report.py`` and must give the result shown,
 as that file's ``evaluate`` formats it.
 
+The language reference must cover the grammar: its index lists exactly the
+names in :mod:`dpmxl.grammar`, each linked to an entry on the page, and its
+examples use every keyword, function, operator, parameter type, period,
+reference prefix and axis letter.
+
 Pages that import ``polars``, ``dpmxbrl`` or ``dpmsynth`` are skipped when
 those are not installed (``uv sync`` installs them with the ``docs`` group).
 
@@ -45,6 +50,20 @@ import pytest
 
 from dpmxl import DpmXlSyntaxError, parse_program
 from dpmxl.cli import main
+from dpmxl.grammar import (
+    AXIS_LETTERS,
+    FUNCTIONS,
+    KEYWORDS,
+    LITERAL_WORDS,
+    OPERATORS,
+    PARAMETER_TYPES,
+    PUNCTUATION,
+    REFERENCE_PREFIXES,
+    SELECTION_KEYWORDS,
+    TIME_PERIODS,
+    WINDOW_KEYWORDS,
+)
+from dpmxl.parser import tokenize
 
 ROOT = Path(__file__).parent.parent
 PAGES = [
@@ -245,6 +264,120 @@ def test_result_tables(path: Path) -> None:
         if evaluate(expression) != expected
     ]
     assert not wrong, "\n".join(wrong)
+
+
+# Language reference coverage --------------------------------------------------
+
+LANGUAGE = ROOT / "docs" / "reference" / "language.md"
+QUICK_REFERENCE = ROOT / "docs" / "reference" / "quick-reference.md"
+HEADING = re.compile(r"^#{1,6} (?P<text>.+?)(?: \{#(?P<id>[\w-]+)\})?$", re.MULTILINE)
+ANCHOR = re.compile(r"\]\((?P<page>language\.md)?#(?P<anchor>[\w-]+)\)")
+INDEX_ROW = re.compile(
+    r"^\| (?P<name>`[^`]+`) \| (?P<kind>[a-z ]+) \| \[[^\]]+\]\(#(?P<anchor>[\w-]+)\) \|$",
+    re.MULTILINE,
+)
+INDEX_KINDS = {
+    "keyword": KEYWORDS,
+    "window keyword": WINDOW_KEYWORDS,
+    "selection option": SELECTION_KEYWORDS,
+    "literal": LITERAL_WORDS,
+    "parameter type": PARAMETER_TYPES,
+    "period": TIME_PERIODS,
+    "function": FUNCTIONS,
+    "operator": OPERATORS,
+    "punctuation": PUNCTUATION | {"{", "}"},
+    "reference prefix": frozenset(REFERENCE_PREFIXES),
+    "axis": AXIS_LETTERS,
+}
+
+
+def _slug(text: str) -> str:
+    # Python-Markdown's toc slugify, on the heading's text without markup.
+    text = re.sub(r"[^\w\s-]", "", text.replace("`", "")).strip().lower()
+    return re.sub(r"[-\s]+", "-", text)
+
+
+def _anchors(path: Path) -> set[str]:
+    return {
+        match["id"] or _slug(match["text"])
+        for match in HEADING.finditer(path.read_text(encoding="utf-8"))
+    }
+
+
+def test_language_index_lists_the_grammar() -> None:
+    found: dict[str, set[str]] = {kind: set() for kind in INDEX_KINDS}
+    for match in INDEX_ROW.finditer(LANGUAGE.read_text(encoding="utf-8")):
+        assert match["kind"] in found, f"unknown kind {match['kind']!r}"
+        found[match["kind"]].add(match["name"].strip("`"))
+    for kind, names in INDEX_KINDS.items():
+        assert found[kind] == set(names), (
+            f"{kind}: missing {sorted(set(names) - found[kind])}, "
+            f"not in dpmxl.grammar {sorted(found[kind] - set(names))}"
+        )
+
+
+@pytest.mark.parametrize("path", [LANGUAGE, QUICK_REFERENCE], ids=lambda p: p.name)
+def test_language_links_resolve(path: Path) -> None:
+    anchors = {path.name: _anchors(path), LANGUAGE.name: _anchors(LANGUAGE)}
+    text = path.read_text(encoding="utf-8")
+    broken = sorted(
+        {
+            match.group()
+            for match in ANCHOR.finditer(text)
+            if match["anchor"] not in anchors[match["page"] or path.name]
+        }
+    )
+    assert not broken
+
+
+def _example_tokens() -> set[tuple[str, str]]:
+    expressions = [expression for _, expression, _ in result_rows(LANGUAGE)]
+    for block in blocks(LANGUAGE):
+        if block.lang == "dpm-xl" and block.marker is None:
+            expressions += filter(str.strip, block.code.splitlines())
+    found: set[tuple[str, str]] = set()
+    for expression in expressions:
+        try:
+            parse_program(expression)
+        except DpmXlSyntaxError:
+            continue  # an example of a syntax error uses no name
+        for token in tokenize(expression):
+            text = " ".join(token.text.split())
+            if token.kind in {"axis", *REFERENCE_PREFIXES.values()}:
+                text = token.text[0]
+            elif token.kind != "period":
+                text = text.casefold()
+            found.add((token.kind, text))
+    return found
+
+
+def test_language_examples_use_every_name() -> None:
+    found = _example_tokens()
+    expected = {
+        "keyword": KEYWORDS | WINDOW_KEYWORDS | SELECTION_KEYWORDS,
+        "boolean or null": LITERAL_WORDS,
+        "type": PARAMETER_TYPES,
+        "period": TIME_PERIODS,
+        "function": FUNCTIONS,
+        "operator": OPERATORS,
+        "reference prefix": frozenset(REFERENCE_PREFIXES),
+        "axis": AXIS_LETTERS,
+    }
+    kinds = {
+        "boolean or null": {"boolean", "null"},
+        "reference prefix": set(REFERENCE_PREFIXES.values()),
+    }
+    missing = {
+        kind: sorted(
+            name
+            for name in names
+            if not any(
+                (token_kind, name) in found for token_kind in kinds.get(kind, {kind})
+            )
+        )
+        for kind, names in expected.items()
+    }
+    assert not any(missing.values()), missing
 
 
 MODULES = [

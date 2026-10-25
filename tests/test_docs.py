@@ -14,6 +14,12 @@ Every Markdown page under ``docs/`` (and the README) is checked:
 ``<!-- docs: skip -->`` on the line before a block leaves it out, and
 ``<!-- docs: invalid -->`` before a ``dpm-xl`` block expects a syntax error
 on every line.
+
+A table whose header starts with ``| Expression | Result |`` holds DPM-XL
+examples and their results: each row's expression is evaluated against the
+report in ``examples/language_report.py`` and must give the result shown,
+as that file's ``evaluate`` formats it.
+
 Pages that import ``polars``, ``dpmxbrl`` or ``dpmsynth`` are skipped when
 those are not installed (``uv sync`` installs them with the ``docs`` group).
 
@@ -24,11 +30,14 @@ from __future__ import annotations
 
 import contextlib
 import doctest
+import functools
 import importlib
 import io
 import os
 import re
+import runpy
 import shlex
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -174,6 +183,68 @@ def test_page_examples(path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
                         parse_program(line)
                 else:
                     parse_program(line)
+
+
+# Result tables -------------------------------------------------------------
+
+RESULT_HEADER = re.compile(r"^\|\s*Expression\s*\|\s*Result\s*\|")
+CODE_CELL = re.compile(r"^(?P<ticks>`+) ?(?P<code>.*?) ?(?P=ticks)$")
+
+
+def _cells(line: str) -> list[str]:
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def _code(cell: str, where: str) -> str:
+    match = CODE_CELL.match(cell)
+    if match is None:
+        pytest.fail(f"{where}: {cell!r} is not inline code")
+    return match["code"]
+
+
+def result_rows(path: Path) -> list[tuple[int, str, str]]:
+    """Return ``(line, expression, result)`` for every result table row.
+
+    Returns:
+        list[tuple[int, str, str]]: The rows in page order.
+    """
+    lines = path.read_text(encoding="utf-8").splitlines()
+    rows: list[tuple[int, str, str]] = []
+    index = 0
+    while index < len(lines):
+        if not RESULT_HEADER.match(lines[index]):
+            index += 1
+            continue
+        index += 2  # the header and its delimiter row
+        while index < len(lines) and lines[index].startswith("|"):
+            where = f"{path.relative_to(ROOT)}:{index + 1}"
+            cells = _cells(lines[index])
+            rows.append((index + 1, _code(cells[0], where), _code(cells[1], where)))
+            index += 1
+    return rows
+
+
+@functools.cache
+def _evaluate() -> Callable[[str], str]:
+    module = runpy.run_path(str(ROOT / "examples" / "language_report.py"))
+    return module["evaluate"]
+
+
+RESULT_PAGES = [path for path in PAGES if result_rows(path)]
+
+
+@pytest.mark.parametrize(
+    "path", RESULT_PAGES, ids=lambda path: str(path.relative_to(ROOT))
+)
+def test_result_tables(path: Path) -> None:
+    evaluate = _evaluate()
+    wrong = [
+        f"{path.relative_to(ROOT)}:{line}: {expression}\n"
+        f"  shown:  {expected}\n  actual: {evaluate(expression)}"
+        for line, expression, expected in result_rows(path)
+        if evaluate(expression) != expected
+    ]
+    assert not wrong, "\n".join(wrong)
 
 
 MODULES = [

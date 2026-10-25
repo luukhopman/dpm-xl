@@ -155,9 +155,20 @@ failed [({'qEBB': 'B'}, False), ({'qEBB': 'C'}, True)]
 | `[rename a to b]` | Renames a key, so it joins with another operand's `b`; an error if the record set already has `b`. |
 | `group by k, …` | In an aggregate: one record per value of the listed keys. |
 
-A `where` or `sub` on a selection inside a `with` body overrides the terms of
-the context's `where` (split at `and`) that name the same key; the other
-terms still apply.
+A `with` context's `where` applies to each selection in its body that has
+the keys it names. Its terms (split at `and`) that name a key the selection
+lacks, neither a key nor a report parameter, leave that selection alone, and
+a key-less selection takes none of it. A `where` or `sub` on a selection
+inside the body overrides the terms that name the same key; the other terms
+still apply.
+
+```python
+show('with {tO, c0010} [where qEBB = "A"]: {tO} > {tT, r0020, c0010}')
+```
+
+```text
+passed [({'qEBB': 'A'}, True)]
+```
 
 ## Key names
 

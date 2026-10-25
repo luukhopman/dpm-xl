@@ -79,6 +79,9 @@ EXPRESSIONS = [
     "with {tE, default: 0, interval: true}: {r0010, c0010} = sum({r0020, c0010} group by GCC)",
     "if not isnull({tE, r0010, c0010}) then {tE, r0020, c0010} > 0 endif",
     "{tT, r0010, c0010} = time_shift({tT, r0010, c0010}, A, 1, refPeriod)",
+    # A with-level where leaves selections without its key alone.
+    "with {c0010} [where qKEY != [qK:a]]: {tO, r0010} >= {tONE, r0010}",
+    "with {c0010} [where qKEY != [qK:a]]: sum({tO, r0010}) >= sum({tT, r*})",
     "{tO, r*, c0010} [rename qKEY to r] > 0",
 ]
 

@@ -714,7 +714,12 @@ class ColumnarEvaluator:
             case Selection(spec=spec):
                 frame = self._selection(spec.merged_into(context))
                 for condition in self._conditions:
-                    kept = _context_condition(condition, self._overrides, frame.keys)
+                    kept = _context_condition(
+                        condition,
+                        self._overrides,
+                        frame.keys,
+                        lambda name: self.provider.parameter(name) is not None,
+                    )
                     if kept is not None:
                         frame = self._where(frame, kept)
                 return frame

@@ -29,6 +29,9 @@ All notable changes to this project are documented here. The project follows
   leaves these cases to the reference evaluator.
 - `[rename a to b]` on a record set that already has a key `b` is an error;
   it produced two keys of the same name.
+- A `with` context's `where` applies only to the selections that have the
+  keys it names. A body selection without them, key-less ones included,
+  was an error ("unknown key component" or "where needs a keyed operand").
 
 ## 1.1.0 - 2026-10-25
 

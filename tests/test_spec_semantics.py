@@ -404,3 +404,33 @@ def test_rename_to_an_existing_key_is_an_error() -> None:
         result = evaluate_rule(rule, data)
         assert result.status == "error", rule
         assert "already" in (result.message or ""), rule
+
+
+def test_context_where_applies_to_selections_with_its_keys() -> None:
+    # A with-level where filters the selections that have the keys it
+    # names; the others, key-less ones included, are not concerned.
+    tables = [
+        TableLayout("A", columns=("0010",), open_keys=("qKEY",)),
+        TableLayout("C", rows=("0010", "0020"), columns=("0010",)),
+    ]
+    data = MemoryProvider(
+        tables,
+        {
+            ("A", None, "0010", None, (("qKEY", "x"),)): Number.of(2, 0),
+            ("A", None, "0010", None, (("qKEY", "y"),)): Number.of(50, 0),
+            ("C", "0010", "0010", None, ()): Number.of(3, 0),
+            ("C", "0020", "0010", None, ()): Number.of(4, 0),
+        },
+    )
+    context = 'with {c0010} [where qKEY = "x"]: '
+    for body, expected in [
+        ("{tA} <= {tC, r0010}", "passed"),
+        ("sum({tA}) <= sum({tC, r*})", "passed"),
+        ("{tA} > {tC, r0010}", "failed"),
+    ]:
+        result = evaluate_rule(context + body, data)
+        assert result.status == expected, (body, result.message)
+    # A name that is neither a key nor a parameter is still an error where
+    # the selection has none of the condition's keys but names it itself.
+    result = evaluate_rule('{tC, r*, c0010} [where qKEY = "x"] > 0', data)
+    assert result.status == "error"

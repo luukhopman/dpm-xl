@@ -371,7 +371,9 @@ class Evaluator:
                 else:
                     selected = self._indirect(merged)
                 for condition in self._context_conditions:
-                    kept = _context_condition(condition, self._overrides, selected.keys)
+                    kept = _context_condition(
+                        condition, self._overrides, selected.keys, self._known
+                    )
                     if kept is not None:
                         selected = self._where(selected, kept, context)
                 return selected
@@ -509,6 +511,14 @@ class Evaluator:
             if current is not node and self.trace_enabled and bindings is None:
                 self._trace[id(current)] = result
         return result
+
+    def _known(self, name: str) -> bool:
+        """Tell whether a name resolves without a key.
+
+        Returns:
+            bool: True for a temporary or a report parameter.
+        """
+        return name in self._temporaries or self.provider.parameter(name) is not None
 
     def _clause_operand(
         self,
@@ -1413,26 +1423,41 @@ _ARTICLES = {
 
 
 def _context_condition(
-    condition: Node, overrides: tuple[str, ...], keys: tuple[str, ...]
+    condition: Node,
+    overrides: tuple[str, ...],
+    keys: tuple[str, ...],
+    known: Callable[[str], bool] = lambda _name: False,
 ) -> Node | None:
     """Return the part of a ``with`` where that applies to a selection.
 
-    A where or sub clause written on the selection overrides the context's
-    where on the same key (DPM-XL 3.2): the context condition's ``and``
-    terms that name an overridden key are left out.
+    The context's where concerns the selections that have the keys it names:
+    a key-less selection takes none of it, and the condition's ``and`` terms
+    naming a key the selection lacks (a name that is neither one of its keys
+    nor ``known``) are left out. A where or sub clause written on the
+    selection overrides the context's where on the same key (DPM-XL 3.2):
+    the terms that name an overridden key are left out too.
 
     Args:
         condition: The ``with`` context's where condition.
         overrides: Key names of the clauses written on the selection.
         keys: The selection's keys, which the names resolve against.
+        known: Whether a name other than a key resolves, such as a report
+            parameter.
 
     Returns:
         Node | None: The condition to apply, or ``None`` for none.
     """
-    if not overrides:
-        return condition
+    if not keys:
+        return None
     overridden = {resolve_key(name, keys) for name in overrides} - {None}
-    if not overridden:
+
+    def applies(term: Node) -> bool:
+        resolved = [(name, resolve_key(name, keys)) for name in _key_names(term)]
+        return not any(key in overridden for _name, key in resolved) and all(
+            key is not None or known(name) for name, key in resolved
+        )
+
+    if applies(condition):
         return condition
     terms: list[Node] = []
     pending = [condition]
@@ -1440,9 +1465,7 @@ def _context_condition(
         current = pending.pop()
         if isinstance(current, Binary) and current.op == "and":
             pending += [current.right, current.left]
-        elif not {resolve_key(name, keys) for name in _key_names(current)} & (
-            overridden
-        ):
+        elif applies(current):
             terms.append(current)
     if not terms:
         return None

@@ -3,7 +3,15 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org).
 
-## Unreleased
+## 1.2.0 - 2026-10-25
+
+### Added
+
+- `Recordset.default`: the record of a key a record set lacks, from a
+  selection's `default`. `Recordset.map` carries it and `Recordset.lookup`
+  returns it for a missing key.
+- `Frame.has_default`: whether a columnar frame comes from a selection with
+  a `default`.
 
 ### Fixed
 
@@ -12,9 +20,11 @@ All notable changes to this project are documented here. The project follows
   of dropping that record from the join. `with {default: null}: if not
   isnull({tA, c0010}) then not isnull({tB, c0010}) endif` over two parts of
   an open table now fails for a key filed only in `A`; it was not evaluated.
-  Operands without a default still join on the keys they share.
-  `Recordset.default` holds the default, and the columnar evaluator leaves
-  such joins to the reference evaluator.
+  Operands without a default still decide the keys and join on the keys
+  they share. An `if` condition with a default also covers keys only a
+  branch has, and `rename`, a `time_shift` of a date key and `if` results
+  keep the default. The columnar evaluator leaves these cases to the
+  reference evaluator.
 
 ## 1.1.0 - 2026-10-25
 

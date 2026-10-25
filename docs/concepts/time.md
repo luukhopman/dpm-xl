@@ -51,4 +51,6 @@ in `key` (a date key component, else the report parameter of that name). It
 treats that month as complete, so it is meant for period-end dates.
 
 [Compare with earlier reports](../guides/time-shift.md) shows both functions
-with runnable examples.
+with runnable examples, and the language reference gives the syntax and
+errors of [`time_shift`](../reference/language.md#time_shift), [`annualise`](../reference/language.md#annualise) and
+the [date functions](../reference/language.md#date-functions).

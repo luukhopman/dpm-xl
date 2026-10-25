@@ -84,7 +84,9 @@ False
 Interval arithmetic applies to selections with `interval: true`:
 `{tC_01.00, r0010, interval: true}`, usually set once in a `with` context.
 With `interval: false`, or without the option, facts are compared exactly
-as reported. EBA rules state the option explicitly.
+as reported. EBA rules state the option explicitly. Each operator and
+function in the [language reference](../reference/language.md#interval)
+says what it does with a tolerance.
 
 ## The gap in explanations
 

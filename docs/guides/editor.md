@@ -247,6 +247,8 @@ frozensets: `KEYWORDS`, `WINDOW_KEYWORDS`, `SELECTION_KEYWORDS`,
 `OPERATORS`, `PUNCTUATION`, `FUNCTIONS`, `AGGREGATE_FUNCTIONS`,
 `ANALYTIC_FUNCTIONS`, `PARAMETER_TYPES`, `LITERAL_WORDS`, `TIME_PERIODS`,
 `AXIS_LETTERS` (`r`, `c`, `s`), `REFERENCE_PREFIXES` and `TOKEN_KINDS`.
+The [language reference index](../reference/language.md#index) links each
+word and symbol to its documentation, for hover help.
 
 ```python
 from dpmxl import grammar

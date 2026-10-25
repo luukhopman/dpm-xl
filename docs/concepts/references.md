@@ -86,3 +86,6 @@ In static analysis, [`references`][dpmxl.references.references] reports
 group and operation reads with `kind` and `code`, and
 [`tables(node, provider)`][dpmxl.references.tables] counts a group read as
 reading every table of the group ([Analyse rules statically](../guides/analyse.md)).
+
+The language reference gives the syntax of every
+[reference](../reference/language.md#references) and [parameter type](../reference/language.md#typed-parameter).

@@ -93,3 +93,7 @@ cannot be a rule's result. A set `default` on a cell selection is an error.
 The columnar evaluator handles `in` with a set literal; it hands every other
 set operand (parameters, selections, set operators) to the reference
 evaluator.
+
+The language reference gives the syntax and examples of
+[set literals](../reference/language.md#set-literals), [`in`](../reference/language.md#in) and the
+[set functions](../reference/language.md#set-functions).

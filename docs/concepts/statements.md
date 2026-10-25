@@ -76,4 +76,5 @@ Outside clauses `<-` is the assignment, so compare with a negated operand as
 `a < -b`. Inside `[…]` clauses, as in the grammar, `<-` reads `< -`.
 
 The columnar evaluator hands every script with assignments to the reference
-evaluator.
+evaluator. The language reference gives the syntax of
+[programs and statements](../reference/language.md#statements).

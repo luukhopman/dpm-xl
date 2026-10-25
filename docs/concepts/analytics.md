@@ -121,3 +121,6 @@ Analytic calls parse to [`Analytic`][dpmxl.ast.Analytic] nodes with a
 [`Window`][dpmxl.ast.Window], not to `Call`s, and `rank` is not in
 `evaluator.AGGREGATES`. The columnar evaluator hands analytic functions to the
 reference evaluator.
+
+The language reference gives the syntax, errors and examples of each
+[aggregate](../reference/language.md#aggregates) and [analytic function](../reference/language.md#analytic-functions).

@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "dpm-xl"
-version = "1.2.1"
+version = "1.2.2"
 description = "Parser and evaluator for the EBA DPM-XL validation-rule language"
 readme = "README.md"
 license = "MIT"

@@ -723,8 +723,8 @@ numbers`. Parses to [`Unary`][dpmxl.ast.Unary].
 concatenation ::= additive ( "&" additive )*
 ```
 
-Joins two texts; null if either is null. Another type is the error `&
-needs text, found …`. Binds looser than arithmetic and tighter than
+Joins two texts; null if either is null. An item joins as its text, as
+under [`len`](#len); another type is the error `& needs text, found …`. Binds looser than arithmetic and tighter than
 comparisons. Parses to [`Binary`][dpmxl.ast.Binary].
 
 | Expression | Result |
@@ -732,6 +732,7 @@ comparisons. Parses to [`Binary`][dpmxl.ast.Binary].
 | `"LEI" & "-" & "A"` | `"LEI-A"` |
 | `{tX, c0010} & "/2026"` | `"LEI-A/2026"` |
 | `"a" & null` | `null` |
+| `{tX, c0020} & "/2026"` | `"eba_CU:EUR/2026"` |
 | `"a" & 1` | `error: & needs text, found number` |
 
 ### Comparison `= != <> < <= > >=` {#comparison}
@@ -1103,23 +1104,25 @@ records; a `default` on `x` covers the records `x` lacks.
 
 `len(x)`, also spelled `length(x)`: the number of characters of a text.
 Other values count the characters of their text form; a number counts as
-written, without an exponent, and an item as its qualified name
-`eba_category:code` (`[CU:EUR]` and `[eba_CU:EUR]` both count 10), or its
-code alone when it has no category.
+written, without an exponent, a Boolean as `true` or `false`, and an
+item as its qualified name `eba_category:code` (`[CU:EUR]` and
+`[eba_CU:EUR]` both count 10), or its code alone when it has no category.
 
 | Expression | Result |
 | --- | --- |
 | `len("abc")` | `3` |
 | `length({tX, c0010})` | `5` |
 | `len({tX, c0020})` | `10` |
+| `len({tX, c0040})` | `4` |
 | `len(12.50)` | `5` |
 | `len(null)` | `null` |
 
 #### `substr` {#substr}
 
 `substr(text)`, `substr(text, start)` and `substr(text, start, length)`:
-part of a text. `start` counts from 1 (default 1) and `length`, by default
-the rest, is at least 0; both are whole numbers. Past the end the result is
+part of a text, or of an item's text as under [`len`](#len). `start`
+counts from 1 (default 1) and `length`, by default the rest, is at least 0;
+both are whole numbers. Past the end the result is
 `""`. Errors: `substr needs text, found …`, `substr start must be at least
 1`, `substr length must not be negative`, `substr needs whole numbers`.
 
@@ -1128,6 +1131,7 @@ the rest, is at least 0; both are whole numbers. Past the end the result is
 | `substr("abcdef", 2, 3)` | `"bcd"` |
 | `substr("abcdef", 3)` | `"cdef"` |
 | `substr("abcdef", 10)` | `""` |
+| `substr({tX, c0020}, 8)` | `"EUR"` |
 | `substr("abcdef", 0)` | `error: substr start must be at least 1` |
 | `substr(123, 1)` | `error: substr needs text, found number` |
 

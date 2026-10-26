@@ -1598,6 +1598,10 @@ def _binary(op: str) -> Callable[[list[Value]], Value]:
                 return right
             if left is None or right is None:
                 return None
+            if isinstance(left, Item):
+                left = _text_form(left)
+            if isinstance(right, Item):
+                right = _text_form(right)
             if not isinstance(left, str) or not isinstance(right, str):
                 found = right if isinstance(left, str) else left
                 return _failure(f"& needs text, found {type_name(found)}")
@@ -1984,9 +1988,12 @@ def _nvl(values: list[Value]) -> Value:
 
 def _text_form(value: Value) -> str:
     # The text a report holds: a number as written, an item as its qualified
-    # name, which keeps the eba_ prefix that Item drops.
+    # name, which keeps the eba_ prefix that Item drops, a Boolean in XML
+    # Schema spelling.
     if isinstance(value, Number):
         return format(value.value, "f")
+    if isinstance(value, bool):
+        return "true" if value else "false"
     if isinstance(value, Item) and value.category is not None:
         return f"eba_{value.category}:{value.code}"
     return str(value)
@@ -2044,6 +2051,8 @@ def _integer(value: Value, name: str) -> int:
 
 def _substr(*values: Value) -> Value:
     text = values[0]
+    if isinstance(text, Item):
+        text = _text_form(text)
     if not isinstance(text, str):
         raise EvaluationError(f"substr needs text, found {type_name(text)}")
     start = _integer(values[1], "substr") if len(values) > 1 else 1

@@ -3,6 +3,19 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org).
 
+## Unreleased
+
+### Fixed
+
+- `len` and `match` read a Boolean as `true` or `false`, as a report
+  holds it, instead of Python's `True` and `False`. The columnar evaluator
+  leaves them to the reference evaluator, which it used to disagree with.
+- `substr` and `&` read an item as its qualified name, as `len` does,
+  instead of failing with `needs text, found item`.
+- The columnar evaluator leaves equality and `in` tests between items and
+  text starting with `eba_` to the reference evaluator. It compared
+  `"eba_CU:EUR"` with `[CU:EUR]` as text and found them unequal.
+
 ## 1.2.2 - 2026-10-26
 
 ### Fixed

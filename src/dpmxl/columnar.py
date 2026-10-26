@@ -1409,15 +1409,17 @@ def _item_ambiguity(left: pl.Expr, right: pl.Expr) -> pl.Expr:
     (``[qx1]`` matches ``[eba_qEC:qx1]``), text compares exactly (``"12:30"``
     is not ``"30"``). The ``txt`` column holds both, so it cannot tell which
     applies when one side has a category, the other has none and the codes
-    match. Everywhere else both readings agree with plain equality.
+    match, or when only one side has the ``eba_`` prefix that an item reading
+    drops. Everywhere else both readings agree with plain equality.
 
     Returns:
         pl.Expr: True where the readings differ.
     """
     category = left.str.contains(":", literal=True)
-    return (category != right.str.contains(":", literal=True)) & (
-        left.str.split(":").list.last() == right.str.split(":").list.last()
-    )
+    return (
+        (category != right.str.contains(":", literal=True))
+        & (left.str.split(":").list.last() == right.str.split(":").list.last())
+    ) | (_prefixed(left) != _prefixed(right))
 
 
 def _literal_ambiguity(column: pl.Expr, text: str) -> pl.Expr:
@@ -1426,9 +1428,23 @@ def _literal_ambiguity(column: pl.Expr, text: str) -> pl.Expr:
     Returns:
         pl.Expr: True where the readings differ.
     """
+    prefixed = _prefixed(column) != text[:4].casefold().startswith("eba_")
     if ":" in text:
-        return column == pl.lit(text.rsplit(":", 1)[1])
-    return column.str.ends_with(f":{text}")
+        return prefixed | (column == pl.lit(text.rsplit(":", 1)[1]))
+    return prefixed | column.str.ends_with(f":{text}")
+
+
+def _prefixed(column: pl.Expr) -> pl.Expr:
+    """Text with the ``eba_`` prefix, which an item reading drops.
+
+    Items are held without it (see
+    [`canonical_item`][dpmxl.columnar.canonical_item]), so such text equals
+    an item only when read as one.
+
+    Returns:
+        pl.Expr: True where the text starts with ``eba_`` in any case.
+    """
+    return column.str.to_lowercase().str.starts_with("eba_")
 
 
 def _require_text_or_items(df: pl.DataFrame, checks: Sequence[pl.Expr]) -> None:
@@ -1625,15 +1641,18 @@ def _match(frame: Frame, pattern: Frame) -> Frame:
 
 
 def _require_plain_text(frame: Frame, name: str) -> None:
-    """Leave text that may be an item to the reference evaluator.
+    """Leave text that may be an item, and Booleans, to the reference evaluator.
 
     The ``txt`` column holds an item as ``category:code``, but ``len`` and
     ``match`` read an item as its qualified name ``eba_category:code``, and
-    text with a colon cannot be told apart from an item.
+    text with a colon cannot be told apart from an item. Booleans read as
+    ``true`` and ``false``.
 
     Raises:
-        ColumnarUnsupported: When some value contains a colon.
+        ColumnarUnsupported: When some value contains a colon or is a Boolean.
     """
+    if FLAG in frame.kinds:
+        raise ColumnarUnsupported(f"{name} of booleans")
     if (
         TXT in frame.kinds
         and frame.df.select(pl.col(TXT).str.contains(":", literal=True).any()).item()

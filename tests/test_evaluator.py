@@ -234,17 +234,23 @@ def test_long_sums_evaluate_and_explain() -> None:
         ("len([NC:C10]) = 10", "passed"),
         # An item without a category reads as its code.
         ("len({tB, r0020, c0010}) = 4", "passed"),
+        ('substr({tB, r0010, c0010}, 8) = "C"', "passed"),
+        ('{tB, r0010, c0010} & "10" = "eba_NC:C10"', "passed"),
+        # Booleans read in XML Schema spelling.
+        ('match({tB, r0030, c0010}, "true")', "passed"),
+        ("len({tB, r0030, c0010}) = 4", "passed"),
     ],
 )
-def test_len_and_match_read_items_as_qualified_names(
+def test_text_functions_read_items_and_booleans_as_reported(
     expression: str, expected: str
 ) -> None:
-    table = TableLayout("B", rows=("0010", "0020"), columns=("0010",))
+    table = TableLayout("B", rows=("0010", "0020", "0030"), columns=("0010",))
     provider = MemoryProvider(
         [table],
         {
             ("B", "0010", "0010", None, ()): Item.parse("eba_NC:C"),
             ("B", "0020", "0010", None, ()): Item(None, "ei86"),
+            ("B", "0030", "0010", None, ()): True,
         },
     )
     assert evaluate_rule(expression, provider).status == expected

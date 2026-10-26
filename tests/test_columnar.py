@@ -299,7 +299,7 @@ def test_polars_failures_go_to_the_reference_engine() -> None:
 def ambiguous_values() -> MemoryProvider:
     row, keys = ("0010",), ("qK",)
     tables = [
-        TableLayout("X", rows=row, columns=("0010", "0020"), open_keys=keys),
+        TableLayout("X", rows=row, columns=("0010", "0020", "0030"), open_keys=keys),
         TableLayout("N", rows=row, columns=("0010",), open_keys=keys),
         TableLayout("Y", rows=row, columns=("0010",)),
     ]
@@ -308,6 +308,9 @@ def ambiguous_values() -> MemoryProvider:
         ("X", "0010", "0010", None, (("qK", "b"),)): "x:abc",
         ("X", "0010", "0020", None, (("qK", "a"),)): Item("T", "b"),
         ("X", "0010", "0020", None, (("qK", "b"),)): Item("T", "c"),
+        ("X", "0010", "0030", None, (("qK", "a"),)): "eba_T:b",
+        ("X", "0010", "0030", None, (("qK", "b"),)): "eba_T:b",
+        ("X", "0010", "0020", None, (("qK", "eba_T:k"),)): Item("T", "b"),
         ("N", "0010", "0010", None, (("qK", Number.of(10, 0)),)): Number.of(1, 0),
         ("N", "0010", "0010", None, (("qK", Number.of(9, 0)),)): Number.of(2, 0),
         ("Y", "0010", "0010", None, ()): Number.of("0.0000000000004", 13),
@@ -335,6 +338,11 @@ def ambiguous_values() -> MemoryProvider:
         ("len({tX, r0010, c0020}) = 7", "passed"),
         ('match({tX, r0010, c0020}, "eba_T:[bc]")', "passed"),
         ("len({tX, r0010, c0010}) = 5", "passed"),
+        # Text with the eba_ prefix equals an item only when read as one.
+        ("{tX, r0010, c0030} = [eba_T:b]", "passed"),
+        ("{tX, r0010, c0030} in {[T:b], [T:c]}", "passed"),
+        ('{tX, r0010, c0030} = "T:b"', "failed"),
+        ("{tX, r0010, c0020} [where qK = [eba_T:k]] = [T:b]", "passed"),
     ],
 )
 def test_text_numeric_keys_and_wide_numbers_go_to_the_reference_engine(
@@ -406,6 +414,17 @@ def test_items_without_a_category_go_to_the_reference(
     assert evaluate_rule(expression, provider).status == expected
     with pytest.raises(ColumnarUnsupported):
         evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+
+
+def test_len_and_match_of_booleans_go_to_the_reference_engine() -> None:
+    provider = mixed_values()
+    for expression in (
+        'match({tX, r0010, c0040}, "true|false")',
+        "len({tX, r0010, c0040}) >= 4",
+    ):
+        assert evaluate_rule(expression, provider).status == "passed"
+        with pytest.raises(ColumnarUnsupported):
+            evaluate_rule_columnar(expression, PointsFrameProvider(provider))
 
 
 def test_len_and_match_of_text_without_a_colon_stay_columnar() -> None:

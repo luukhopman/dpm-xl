@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org).
 
-## Unreleased
+## 1.2.3 - 2026-10-26
 
 ### Fixed
 

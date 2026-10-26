@@ -1103,12 +1103,15 @@ records; a `default` on `x` covers the records `x` lacks.
 
 `len(x)`, also spelled `length(x)`: the number of characters of a text.
 Other values count the characters of their text form; a number counts as
-written, without an exponent.
+written, without an exponent, and an item as its qualified name
+`eba_category:code` (`[CU:EUR]` and `[eba_CU:EUR]` both count 10), or its
+code alone when it has no category.
 
 | Expression | Result |
 | --- | --- |
 | `len("abc")` | `3` |
 | `length({tX, c0010})` | `5` |
+| `len({tX, c0020})` | `10` |
 | `len(12.50)` | `5` |
 | `len(null)` | `null` |
 
@@ -1133,12 +1136,14 @@ the rest, is at least 0; both are whole numbers. Past the end the result is
 `match(x, pattern)`: `true` when the whole text of `x` matches the regular
 expression `pattern`, in Python
 [`re`](https://docs.python.org/3/library/re.html) syntax, as if anchored at
-both ends. Numbers match their text. Errors: `match needs a text pattern`,
+both ends. Numbers and items match their text form, as under
+[`len`](#len). Errors: `match needs a text pattern`,
 `invalid match pattern: …`.
 
 | Expression | Result |
 | --- | --- |
 | `match({tX, c0010}, "LEI-[A-Z]")` | `true` |
+| `match({tX, c0020}, "eba_CU:[A-Z]{3}")` | `true` |
 | `match("xLEI-A", "LEI-[A-Z]")` | `false` |
 | `match(2026, "[0-9]{4}")` | `true` |
 | `match("a", "(")` | `error: invalid match pattern: missing ), unterminated subpattern at position 0` |

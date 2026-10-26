@@ -3,6 +3,15 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org).
 
+## Unreleased
+
+### Fixed
+
+- `len` and `match` read an item as its qualified name, `eba_NC:C`, as a
+  report holds it. They used to drop the prefix, so `len` of `[eba_NC:C]`
+  was 4 instead of 8. The columnar evaluator leaves text with a colon to
+  the reference evaluator.
+
 ## 1.2.1 - 2026-10-25
 
 ### Fixed

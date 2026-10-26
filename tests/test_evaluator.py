@@ -225,6 +225,31 @@ def test_long_sums_evaluate_and_explain() -> None:
     assert evaluate_rule(rule, provider).status == "failed"
 
 
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        # A reported item reads as its qualified name, eba_NC:C.
+        ("len({tB, r0010, c0010}) = 8", "passed"),
+        ('match({tB, r0010, c0010}, "eba_NC:[A-U]")', "passed"),
+        ("len([NC:C10]) = 10", "passed"),
+        # An item without a category reads as its code.
+        ("len({tB, r0020, c0010}) = 4", "passed"),
+    ],
+)
+def test_len_and_match_read_items_as_qualified_names(
+    expression: str, expected: str
+) -> None:
+    table = TableLayout("B", rows=("0010", "0020"), columns=("0010",))
+    provider = MemoryProvider(
+        [table],
+        {
+            ("B", "0010", "0010", None, ()): Item.parse("eba_NC:C"),
+            ("B", "0020", "0010", None, ()): Item(None, "ei86"),
+        },
+    )
+    assert evaluate_rule(expression, provider).status == expected
+
+
 def test_match_len_dates_and_parameters() -> None:
     tables = [TableLayout("B_01.01", rows=("0010",), columns=("0010", "0020"))]
     values: dict[CellKey, Value] = {

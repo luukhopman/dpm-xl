@@ -1613,6 +1613,7 @@ def _match(frame: Frame, pattern: Frame) -> Frame:
         raise _RecordError(f"invalid match pattern: {error}") from error
     if NUM in frame.kinds:
         raise ColumnarUnsupported("match on numbers")
+    _require_plain_text(frame, "match")
     try:
         anchored = f"^(?:{text})$"
         result = pl.col(TXT).str.contains(anchored)
@@ -1623,9 +1624,27 @@ def _match(frame: Frame, pattern: Frame) -> Frame:
     return out
 
 
+def _require_plain_text(frame: Frame, name: str) -> None:
+    """Leave text that may be an item to the reference evaluator.
+
+    The ``txt`` column holds an item as ``category:code``, but ``len`` and
+    ``match`` read an item as its qualified name ``eba_category:code``, and
+    text with a colon cannot be told apart from an item.
+
+    Raises:
+        ColumnarUnsupported: When some value contains a colon.
+    """
+    if (
+        TXT in frame.kinds
+        and frame.df.select(pl.col(TXT).str.contains(":", literal=True).any()).item()
+    ):
+        raise ColumnarUnsupported(f"{name} of text that may be an item")
+
+
 def _length(frame: Frame) -> Frame:
     if NUM in frame.kinds:
         raise ColumnarUnsupported("len of numbers")
+    _require_plain_text(frame, "len")
     return _with_values(
         frame,
         num=pl.col(TXT).str.len_chars().cast(DEC),

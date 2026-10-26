@@ -331,6 +331,10 @@ def ambiguous_values() -> MemoryProvider:
         # Values Decimal(38, 12) does not hold exactly.
         ("{tY, r0010, c0010} > 0", "passed"),
         ("{tY, r0010, c0010, interval: false} < 1e30", "passed"),
+        # len and match read items as eba_category:code, text as written.
+        ("len({tX, r0010, c0020}) = 7", "passed"),
+        ('match({tX, r0010, c0020}, "eba_T:[bc]")', "passed"),
+        ("len({tX, r0010, c0010}) = 5", "passed"),
     ],
 )
 def test_text_numeric_keys_and_wide_numbers_go_to_the_reference_engine(
@@ -402,6 +406,17 @@ def test_items_without_a_category_go_to_the_reference(
     assert evaluate_rule(expression, provider).status == expected
     with pytest.raises(ColumnarUnsupported):
         evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+
+
+def test_len_and_match_of_text_without_a_colon_stay_columnar() -> None:
+    provider = mixed_values()
+    for expression, expected in [
+        ("len({tX, r0010, c0020}) = 4", "failed"),
+        ('match({tX, r0010, c0020}, "[a-z]+")', "passed"),
+    ]:
+        assert evaluate_rule(expression, provider).status == expected
+        columnar = evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+        assert columnar.status == expected
 
 
 def test_frame_from_points_checks_numbers_in_bulk() -> None:

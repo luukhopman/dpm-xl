@@ -1982,15 +1982,24 @@ def _nvl(values: list[Value]) -> Value:
     return values[0] if values[0] is not None else values[1]
 
 
+def _text_form(value: Value) -> str:
+    # The text a report holds: a number as written, an item as its qualified
+    # name, which keeps the eba_ prefix that Item drops.
+    if isinstance(value, Number):
+        return format(value.value, "f")
+    if isinstance(value, Item) and value.category is not None:
+        return f"eba_{value.category}:{value.code}"
+    return str(value)
+
+
 def _length(value: Value) -> Value:
-    text = str(value) if not isinstance(value, Number) else format(value.value, "f")
-    return Number(Decimal(len(text)))
+    return Number(Decimal(len(_text_form(value))))
 
 
 def _match(value: Value, pattern: Value) -> Value:
     if not isinstance(pattern, str):
         raise EvaluationError("match needs a text pattern")
-    text = str(value) if not isinstance(value, Number) else format(value.value, "f")
+    text = _text_form(value)
     try:
         return re.fullmatch(pattern, text) is not None
     except re.error as error:

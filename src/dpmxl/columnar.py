@@ -131,6 +131,7 @@ from .evaluator import (
     _check_call,
     _check_rename,
     _context_condition,
+    _is_fact,
     _parse_cached,
 )
 from .provider import (
@@ -856,7 +857,7 @@ class ColumnarEvaluator:
     def _where(self, frame: Frame, condition: Node) -> Frame:
         if not frame.keys:
             if frame.df.height:
-                raise EvaluationError("where needs a keyed operand")
+                raise ColumnarUnsupported("where on a key-less operand")
             return frame
         checks: list[pl.Expr] = []
         predicate = _key_predicate(condition, frame.keys, self.provider, checks)
@@ -1855,6 +1856,8 @@ def _key_predicate(
 
 def _key_column(name: str, keys: Sequence[str]) -> pl.Expr:
     key = resolve_key(name, keys)
+    if _is_fact(name, keys):
+        raise ColumnarUnsupported("where on the fact f")
     if key is None:
         raise EvaluationError(f"unknown key component or parameter {name!r}")
     return _key_text_column(key)

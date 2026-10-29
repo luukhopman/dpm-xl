@@ -149,7 +149,7 @@ failed [({'qEBB': 'B'}, False), ({'qEBB': 'C'}, True)]
 
 | Clause | Effect |
 | --- | --- |
-| `[where condition]` | Keeps the records whose keys satisfy the condition. |
+| `[where condition]` | Keeps the records whose keys and value `f` satisfy the condition. |
 | `[get key]` | Replaces each value by the value of a key component; records whose fact is null are omitted. |
 | `[sub key = value]` | Fixes a key to a value and removes it from the key. |
 | `[rename a to b]` | Renames a key, so it joins with another operand's `b`; an error if the record set already has `b`. |
@@ -157,8 +157,8 @@ failed [({'qEBB': 'B'}, False), ({'qEBB': 'C'}, True)]
 
 A `with` context's `where` applies to each selection in its body that has
 the keys it names. Its terms (split at `and`) that name a key the selection
-lacks, neither a key nor a report parameter, leave that selection alone, and
-a key-less selection takes none of it. A `where` or `sub` on a selection
+lacks, neither a key, the value `f` nor a report parameter, leave that
+selection alone; a term on `f` alone applies to every selection. A `where` or `sub` on a selection
 inside the body overrides the context's `where` entirely, even on other
 keys.
 

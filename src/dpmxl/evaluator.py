@@ -907,23 +907,31 @@ class Evaluator:
     def _where(
         self, data: Recordset, condition: Node, context: SelectionSpec
     ) -> Recordset:
-        if data.records and not data.keys:
-            raise EvaluationError("where needs a keyed operand")
         # The default still stands in for the keys other operands have.
         result = Recordset(data.keys, default=data.default)
         # The verdict depends only on the keys the condition names, and many
-        # records share them (qEBB has a few values over thousands of rows).
-        named = {resolve_key(name, data.keys) for name in _key_names(condition)}
+        # records share them (qEBB has a few values over thousands of rows),
+        # and on the fact f (DPM-XL 11.1.5) when the condition names it.
+        names = _key_names(condition)
+        named = {resolve_key(name, data.keys) for name in names}
         positions = [index for index, name in enumerate(data.keys) if name in named]
+        fact = any(_is_fact(name, data.keys) for name in names)
         verdicts: dict[tuple[Hashable, ...], bool] = {}
         for key, record in data.records.items():
+            if fact and type(record.value) is _Failed:
+                result.records[key] = record
+                continue
             part = tuple([key[position] for position in positions])
+            if fact:
+                part += (record.value,)
             kept = verdicts.get(part)
             if kept is None:
                 bindings = {
                     name: _value_of_key(value)
                     for name, value in zip(data.keys, key, strict=True)
                 }
+                if fact:
+                    bindings[FACT] = record.value
                 verdict = self.evaluate(condition, context, bindings).single()
                 kept = verdicts[part] = (
                     verdict is not None and _checked(verdict.value) is True
@@ -1409,9 +1417,9 @@ def _context_condition(
     """Return the part of a ``with`` where that applies to a selection.
 
     The context's where concerns the selections that have the keys it names:
-    a key-less selection takes none of it, and the condition's ``and`` terms
-    naming a key the selection lacks (a name that is neither one of its keys
-    nor ``known``) are left out.
+    the condition's ``and`` terms naming a key the selection lacks (a name
+    that is neither one of its keys, the fact ``f`` nor ``known``) are left
+    out. A term on the fact alone applies to every selection (DPM-XL 3.2.5).
 
     Args:
         condition: The ``with`` context's where condition.
@@ -1422,12 +1430,10 @@ def _context_condition(
     Returns:
         Node | None: The condition to apply, or ``None`` for none.
     """
-    if not keys:
-        return None
 
     def applies(term: Node) -> bool:
         return all(
-            resolve_key(name, keys) is not None or known(name)
+            resolve_key(name, keys) is not None or _is_fact(name, keys) or known(name)
             for name in _key_names(term)
         )
 
@@ -1460,6 +1466,19 @@ def _check_rename(new: str, others: Sequence[str]) -> None:
     )
     if clash is not None:
         raise EvaluationError(f"rename: key component {clash} already exists")
+
+
+FACT = "f"
+"""The name of a record's value in a ``where`` condition (DPM-XL 2.2.3)."""
+
+
+def _is_fact(name: str, keys: Sequence[str]) -> bool:
+    """Tell whether a name in a clause is the fact ``f`` rather than a key.
+
+    Returns:
+        bool: True for ``f`` (any case) unless the operand has a key ``f``.
+    """
+    return name.casefold() == FACT and FACT not in keys
 
 
 def _key_names(node: Node) -> tuple[str, ...]:

@@ -480,6 +480,9 @@ NEW_CONSTRUCTS = [
     "rank({tT, c0010, r*} over (order by r)) > 0",
     "sum({tT, c0010, r*} over (partition by r)) > 0",
     "sum({tT, c0010, r*} over (order by r)) = 201",
+    "{tT, r*, c0010} [where f > 50] > 50",
+    "with {tT, c0010} [where f > 50]: {r*} > 50",
+    "{tONE, r0010, c0010} [where f = 5] = 5",
 ]
 
 

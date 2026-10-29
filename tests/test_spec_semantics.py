@@ -275,6 +275,38 @@ def test_clauses_on_a_selection_override_the_context_where() -> None:
         assert len(result.outcomes) == count, body
 
 
+@pytest.mark.parametrize(
+    ("rule", "keys"),
+    [
+        ("{tO, r0010, c0010} [where f != 0] > 0", ["b", "c"]),
+        ("{tO, r0010, c0010} [where not isnull(f) and KEY != [qK:c]] > 0", ["a", "b"]),
+        ("{tO, r0010, c0010} [where F > 1] > 0", ["c"]),
+        # 3.2.5: a with-level where on the fact applies to any selection.
+        ("with {r0010, c0010} [where f > 1]: {tO} > {tONE}", ["c"]),
+        ("with {r0010, c0010} [where f > 1]: {tO} [where KEY = [qK:b]] > 0", ["b"]),
+    ],
+)
+def test_where_tests_the_fact(rule: str, keys: list[str]) -> None:
+    # 11.1.5: the condition may use the Fact Component, f.
+    data = provider(
+        {},
+        open_rows=[(Item("qK", "a"), 0), (Item("qK", "b"), 1), (Item("qK", "c"), 2)],
+    )
+    result = evaluate_rule(rule, data)
+    assert result.status != "error", result.message
+    assert sorted(str(o.key["qKEY"]) for o in result.outcomes) == [
+        f"qK:{key}" for key in keys
+    ]
+
+
+def test_with_where_on_the_fact_applies_to_key_less_selections() -> None:
+    data = provider({}, open_rows=[(Item("qK", "a"), 7)])
+    assert status("with {r0010, c0010} [where f > 9]: {tONE} > 0", data) == (
+        "not_applicable"
+    )
+    assert status("{tONE, r0010, c0010} [where f = 5] = 5", data) == "passed"
+
+
 def test_if_without_else_leaves_out_records_of_any_type() -> None:
     tables = [
         TableLayout("A", rows=("0010",), columns=("0010",)),

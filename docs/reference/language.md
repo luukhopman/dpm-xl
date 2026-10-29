@@ -391,9 +391,9 @@ as in parentheses, it is a syntax error.
 
 The optional `where` applies, as a [`where` clause](#where), to each
 selection of the body that has the keys it names. Its `and` terms that name
-a key the selection lacks (neither one of its keys nor a temporary or
-report parameter) leave that selection alone, and a key-less selection
-takes none of it. A `where` or `sub` written on a selection replaces the
+a key the selection lacks (neither one of its keys, the value `f`, nor a
+temporary or report parameter) leave that selection alone, so a term on `f`
+alone applies to every selection. A `where` or `sub` written on a selection replaces the
 context's `where` entirely, whichever keys either names
 ([Clauses change keys and records](../concepts/records-and-keys.md#clauses-change-keys-and-records)).
 Parses to [`With`][dpmxl.ast.With].
@@ -411,6 +411,7 @@ Parses to [`With`][dpmxl.ast.With].
 | `with {tO}[where qKEY = "a"]: {c0010} + {tT, r0010, c0010}` | `qKEY=a, qDAT=2026-03-31: 110` |
 | `with {tO}[where qDAT > #2026-05-01#]: {c0010} + {tP, c0010}` | `qKEY=b, qDAT=2026-06-30: 22` |
 | `with {tO}[where qKEY = "a" and r = "0010"]: {c0010}` | `qKEY=a, qDAT=2026-03-31: 10` |
+| `with {c0010}[where f > 15]: {tO} + {tT, r0010}` | `qKEY=b, qDAT=2026-06-30: 120; qKEY=c, qDAT=2026-09-30: 130` |
 | `(with {tT}: {r0010, c0010})` | `syntax error: unexpected keyword 'with'` |
 
 ## Selections {#selections}
@@ -902,22 +903,21 @@ Clauses chain left to right. Inside a clause `<-` reads `< -`, so
 
 Names in clauses, `group by` and `over` resolve against the operand's keys:
 exactly, else ignoring case and the DPM 2.0 `q` prefix, so `KEY`, `key` and
-`qkey` all find `qKEY`. A name that matches no key, or several, is read as
-a temporary or report parameter in `where` and `get`, and is an error in
+`qkey` all find `qKEY`. In `where`, `f` is the record's value. A name that
+matches no key, or several, is read as a temporary or report parameter in
+`where` and `get`, and is an error in
 `sub`, `rename`, `group by` and `over`. The keys `r`, `c` and `s` hold
 coordinate codes as text (`r = "0010"`, not `r = 10`); open keys hold the
 values the provider reports, such as text, dates and items.
 
 ### `where` {#where}
 
-Keeps the records whose keys satisfy a condition. The condition is
-evaluated for each record, with the record's key components as names, and
-must yield one Boolean; records where it is false or null are dropped. It
-tests keys, not values: to test values use [`filter`](#filter). The result
-keeps the operand's `default`, which stands in for the keys other operands
-bring ([Defaults fill in missing records](../concepts/records-and-keys.md#defaults-fill-in-missing-records)).
-A key-less operand is the error `where needs a keyed operand`. Parses to
-[`Where`][dpmxl.ast.Where].
+Keeps the records that satisfy a condition. The condition is evaluated for
+each record, with the record's key components as names and its value as
+`f`, and must yield one Boolean; records where it is false or null are
+dropped. The result keeps the operand's `default`, which stands in for the
+keys other operands bring ([Defaults fill in missing records](../concepts/records-and-keys.md#defaults-fill-in-missing-records)).
+Parses to [`Where`][dpmxl.ast.Where].
 
 | Expression | Result |
 | --- | --- |
@@ -927,7 +927,9 @@ A key-less operand is the error `where needs a keyed operand`. Parses to
 | `{tO, c0010}[where KEY <> "a" and qDAT < #2026-09-01#]` | `qKEY=b, qDAT=2026-06-30: 20` |
 | `{tO, c0010}[where qDAT<-1]` | `error: cannot compare date with number using '<'` |
 | `{tT, c0010}[where r = 10]` | `error: cannot compare string with number using '='` |
-| `{tT, r0010, c0010}[where true]` | `error: where needs a keyed operand` |
+| `{tT, c0020}[where f != 0]` | `r=0010: 5; r=0020: -5` |
+| `{tT, c0020}[where not isnull(f)]` | `r=0010: 5; r=0020: -5` |
+| `{tT, r0010, c0010}[where f > 500]` | `null` |
 | `{tO, c0010}[where {tO, c0010} > 10]` | `error: expected a single value, found records keyed by qKEY, qDAT` |
 
 ### `get` {#get}

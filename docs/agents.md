@@ -49,6 +49,8 @@ from dpmxl import (
 | `parse(expression)` / `parse_program(source)` | Expression tree / `Program` | `DpmXlSyntaxError` (`message`, `position`, `end`, `pointer()`) |
 | `references(tree)`, `tables(tree, provider=None)` | Selections with context applied; table codes | |
 | `dpmxl.columnar.evaluate_rule_columnar(expression, frame_provider, *, precondition=None, cache=None)` | `ColumnarResult` with `status`, `passed`, `failed`, `null`, `failing_keys`, `failing_frame` | `ColumnarUnsupported`: evaluate with `evaluate_rule` instead |
+| `dpmxl.module.load_module(path)` | `Module` with `tables`, `rules` (`Rule`: `code`, `expression`, `precondition`, `severity`, `active`), `layouts()` | `ModuleError` naming the JSON path |
+| `dpmxl.xbrl.ReportProvider(module, report)` / `check_report(module, report)` | A provider over a dpm-xbrl `Report` / `ReportCheck` with `filing`, `rules`, `failed(fail_on)` | `dpmxbrl.ReportError` for an unreadable report; needs the `xbrl` extra |
 
 Statuses: `passed`, `failed`, `not_applicable`, `error`, `unsupported`.
 

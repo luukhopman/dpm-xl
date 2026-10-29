@@ -81,9 +81,12 @@ failed {'passed': 1, 'failed': 1, 'null': 0}
 Column `0010` adds up; in column `0020`, 1,204 is 7 short of 1,180 + 31, more
 than the rounding of three whole-unit amounts (±1.5) can explain.
 
-## Toolkit
+## Part of the dpm toolkit
 
---8<-- "docs/.snippets/toolkit.md"
+The [toolkit page](toolkit.md) shows how dpm-xl, [dpm-xbrl] and
+[dpm-synth] fit together.
+
+--8<-- "docs/.snippets/toolkit-cards.md"
 
 ## Where next
 

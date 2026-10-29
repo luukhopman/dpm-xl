@@ -315,6 +315,18 @@ def test_code_annotations_are_explained(path: Path) -> None:
         )
 
 
+def test_every_glossary_term_is_defined_on_the_glossary_page() -> None:
+    docs = ROOT / "docs"
+    terms = re.findall(
+        r"^\*\[(.+?)\]:", (docs / ".snippets" / "glossary.md").read_text("utf-8"), re.M
+    )
+    page = (docs / "reference" / "glossary.md").read_text(encoding="utf-8")
+    defined = {line.strip() for line in page.splitlines()}
+    # A plural shares the definition of its singular.
+    missing = [term for term in terms if not {term, term.removesuffix("s")} & defined]
+    assert not missing, f"glossary terms not on the glossary page: {missing}"
+
+
 def test_markdown_copies_leave_out_presentation_markup() -> None:
     spec = spec_from_file_location("build_docs", ROOT / "scripts" / "build_docs.py")
     assert spec and spec.loader

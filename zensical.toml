@@ -52,6 +52,7 @@ nav = [
     { "CLI" = "reference/cli.md" },
     { "Data formats" = "reference/data-formats.md" },
     { "Module file" = "reference/module-file.md" },
+    { "Glossary" = "reference/glossary.md" },
     { "Python API" = [
       "reference/api/index.md",
       { "dpmxl.evaluator" = "reference/api/evaluator.md" },
@@ -72,6 +73,7 @@ nav = [
   ] },
   { "AI agents" = "agents.md" },
   { "Toolkit" = [
+    { "Overview" = "toolkit.md" },
     { "Toolkit tour" = "https://luukhopman.github.io/dpm-xl/guides/toolkit-tour/" },
     { "dpm-xbrl" = "https://luukhopman.github.io/dpm-xbrl/" },
     { "dpm-synth" = "https://luukhopman.github.io/dpm-synth/" },
@@ -162,7 +164,7 @@ pymdownx.keys = {}
 pymdownx.mark = {}
 pymdownx.snippets.base_path = ["."]
 pymdownx.snippets.check_paths = true
-pymdownx.snippets.auto_append = ["docs/.snippets/links.md"]
+pymdownx.snippets.auto_append = ["docs/.snippets/links.md", "docs/.snippets/glossary.md"]
 pymdownx.superfences.custom_fences = [
   { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
 ]

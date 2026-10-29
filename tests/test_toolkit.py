@@ -3,9 +3,12 @@
 dpm-xl, dpm-xbrl and dpm-synth carry this file unchanged. It checks:
 
 * the toolkit block: ``CANONICAL`` with the row of this package marked must
-  equal both the README's Toolkit section and ``docs/.snippets/toolkit.md``,
-  which the docs home page includes. ``CANONICAL_SHA256`` is the same in the
+  equal the README's Toolkit section. ``CANONICAL_SHA256`` is the same in the
   three repositories, so the text changes in all three or not at all;
+* the shared docs files: the toolkit cards (``docs/.snippets/toolkit-cards.md``,
+  which the docs home page and the toolkit page include), the toolkit page,
+  the glossary and the stylesheet are the same in the three repositories
+  (``SHARED_SHA256``);
 * the README skeleton: the same sections in the same order;
 * the independence statement, directly under the pitch of the README and of
   the docs home page;
@@ -18,6 +21,8 @@ import hashlib
 import re
 import tomllib
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).parent.parent
 PYPROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
@@ -41,6 +46,23 @@ dpm-xbrl, then evaluated and explained with dpm-xl.
 """
 CANONICAL_SHA256 = "c6fcdd7cb33e47c0d910dd0dd109d9c017a570095d07b94c3c902fdddc8d022e"
 
+SHARED_SHA256 = {
+    "docs/.snippets/toolkit-cards.md": (
+        "0b0b4aeff0f85ffe10e7856854d0e82014341f1564be3ae7f68f6075d5c36381"
+    ),
+    "docs/.snippets/glossary.md": (
+        "e9c9cedbb3b254db24555466443817dd4a7d707c177f1eb64591a72d4afa693c"
+    ),
+    "docs/reference/glossary.md": (
+        "7d14359a8f93f77b6b56226d8e3d5075292b8ba8857010f08a266c7c1cf91cb2"
+    ),
+    "docs/toolkit.md": (
+        "2d7d6111185bd69d926e5561b60a24de0c0b245f9c08f0d66d23b6094e50ec2f"
+    ),
+    "docs/stylesheets/toolkit.css": (
+        "c5a095b7fb4af8f885a0a2c16eb6359c11fa778d91ca25ccee08ef82de8e2d99"
+    ),
+}
 SECTIONS = [
     "Installation",
     "Quickstart",
@@ -107,13 +129,19 @@ def test_canonical_text_is_shared() -> None:
     )
 
 
-def test_docs_snippet_is_the_block() -> None:
-    snippet = ROOT / "docs" / ".snippets" / "toolkit.md"
-    assert snippet.read_text(encoding="utf-8") == marked(NAME)
+@pytest.mark.parametrize("path", SHARED_SHA256)
+def test_shared_docs_files_are_unchanged(path: str) -> None:
+    digest = hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
+    assert digest == SHARED_SHA256[path], (
+        f"{path} changed: change it in dpm-xl, dpm-xbrl and dpm-synth alike, "
+        "then update SHARED_SHA256 in all three"
+    )
 
 
-def test_docs_home_includes_the_block() -> None:
-    assert docs_home().count('--8<-- "docs/.snippets/toolkit.md"') == 1
+@pytest.mark.parametrize("page", ["index.md", "toolkit.md"])
+def test_docs_pages_include_the_toolkit_cards(page: str) -> None:
+    text = (ROOT / "docs" / page).read_text(encoding="utf-8")
+    assert text.count('--8<-- "docs/.snippets/toolkit-cards.md"') == 1
 
 
 def test_readme_toolkit_section_is_the_block() -> None:
@@ -137,6 +165,7 @@ def test_docs_footer_and_navigation() -> None:
         entry["Toolkit"] for entry in config["project"]["nav"] if "Toolkit" in entry
     )
     assert toolkit == [
+        {"Overview": "toolkit.md"},
         {"Toolkit tour": TOUR},
         *({name: SITE.format(name)} for name in PACKAGES if name != NAME),
     ]

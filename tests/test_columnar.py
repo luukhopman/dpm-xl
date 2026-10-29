@@ -66,6 +66,9 @@ EXPRESSIONS = [
     "with {tT, c0010}: abs({r0010} - {r0020}) <= max({r0030}, 50)",
     "if {tT, r0010, c0010} > 50 then {tT, r0020, c0010} > 70 endif",
     "if {tT, r0010, c0010} > 500 then {tT, r0020, c0010} > 70 else false endif",
+    # Without else, records whose condition is not true are left out.
+    "with {tT, c*}: if {r0010} > 200 then {r0020} > 2000 endif",
+    "with {tT, c*}: if {r0010} > 200 then {r0020} endif > 2000",
     "with {tT, r0010, default: 0}: if {c*} > 200 then {c*} > 1000 else {c*} < 0 endif",
     "{tT, r*, c0010} > {tONE, r*, c0010}",
     "{tT, r0010-0020, c0010} + {tT, r0020-0030, c0010} > 0",
@@ -520,7 +523,6 @@ DEFAULTED = [
     "else {tB, c0010} = 0 endif",
     "with {default: 0}: (if {tA, c0010} > 0 then {tA, c0010} else 0 endif) "
     "= {tB, c0010}",
-    "with {default: 0}: (if false then {tA, c0010} > 0 endif) and {tB, c0010} > 0",
     "with {default: 0}: nvl({tA, c0010}, {tB, c0010}) >= 0",
     "with {default: 0}: {tA, c0010} [rename qKEY to qK] "
     "<= {tB, c0010} [rename qKEY to qK]",
@@ -556,7 +558,15 @@ def test_defaults_kept_by_clauses_go_to_the_reference_engine(expression: str) ->
     assert evaluate_rule(expression, provider).status in {"passed", "failed"}
 
 
-@pytest.mark.parametrize("expression", [*DEFAULTED, "{tA, c0010} = {tB, c0010}"])
+@pytest.mark.parametrize(
+    "expression",
+    [
+        *DEFAULTED,
+        "{tA, c0010} = {tB, c0010}",
+        # Without else, the if leaves out every record (DPM-XL 8.1.4).
+        "with {default: 0}: (if false then {tA, c0010} > 0 endif) and {tB, c0010} > 0",
+    ],
+)
 def test_defaults_with_partners_stay_columnar(expression: str) -> None:
     provider = parts(("y", "x"), ("x", "y"))
     reference = evaluate_rule(expression, provider)

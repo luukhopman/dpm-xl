@@ -133,7 +133,6 @@ from .evaluator import (
     _context_condition,
     _key_names,
     _parse_cached,
-    is_boolean,
 )
 from .provider import (
     CellQuery,
@@ -755,7 +754,6 @@ class ColumnarEvaluator:
                     verdicts,
                     outcome,
                     self._branch(otherwise, context) if otherwise is not None else None,
-                    boolean_then=is_boolean(then) or FLAG in outcome.kinds,
                 )
             case Call():
                 return self._call(node, context)
@@ -1457,9 +1455,7 @@ def _require_text_or_items(df: pl.DataFrame, checks: Sequence[pl.Expr]) -> None:
         raise ColumnarUnsupported("text that may be an item without its category")
 
 
-def _conditional(
-    condition: Frame, then: Frame, otherwise: Frame | None, *, boolean_then: bool
-) -> Frame:
+def _conditional(condition: Frame, then: Frame, otherwise: Frame | None) -> Frame:
     """Columnar :func:`dpmxl.evaluator.conditional` (DPM-XL 8.1).
 
     Returns:
@@ -1473,7 +1469,6 @@ def _conditional(
     df = condition.df
     if condition.kinds & {NUM, TXT}:
         raise _RecordError("if needs a boolean condition")
-    fallback = {NUM: None, THR: None, TXT: None, FLAG: True if boolean_then else None}
     if not condition.keys:
         if not df.height and condition.has_default:
             raise ColumnarUnsupported("a default for a missing key-less condition")
@@ -1482,9 +1477,8 @@ def _conditional(
             return then
         if otherwise is not None:
             return otherwise
-        if then.keys:
-            return _with_values(then, flag=pl.lit(fallback[FLAG], pl.Boolean))
-        return scalar_frame(fallback[FLAG])
+        # DPM-XL 8.1.4: without else, the records are left out.
+        return Frame(then.keys, then.df.head(0))
     for branch in (then, otherwise):
         if branch is not None and not set(branch.keys) <= set(condition.keys):
             # Rare in EBA rules; the reference evaluator widens the result.
@@ -1539,13 +1533,17 @@ def _conditional(
                 )
             )
     cond = pl.col("_cond")
+    if otherwise is None:
+        # Without else, the records whose condition is not true are left out.
+        result = result.filter(cond.fill_null(False))
     outputs = []
     for column in VALUE_COLUMNS:
         then_value = _c(column, 1)
-        if otherwise is not None:
-            other_value = _c(column, 2)
-        else:
-            other_value = pl.lit(fallback[column], _VALUE_SCHEMA[column])
+        other_value = (
+            _c(column, 2)
+            if otherwise is not None
+            else pl.lit(None, _VALUE_SCHEMA[column])
+        )
         outputs.append(
             pl.when(cond.fill_null(False))
             .then(then_value)

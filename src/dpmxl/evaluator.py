@@ -443,15 +443,6 @@ class Evaluator:
                     self.evaluate(otherwise, context, bindings)
                     if otherwise is not None
                     else None,
-                    # A selection of Boolean facts is Boolean too.
-                    boolean_then=is_boolean(then)
-                    or (
-                        otherwise is None
-                        and any(
-                            isinstance(record.value, bool)
-                            for record in outcome.records.values()
-                        )
-                    ),
                 )
             case Call():
                 return self._call(node, context, bindings)
@@ -1624,49 +1615,10 @@ def _binary(op: str) -> Callable[[list[Value]], Value]:
     raise UnsupportedError(f"unknown operator {op!r}")
 
 
-def is_boolean(node: Node) -> bool:
-    """Whether an expression is statically of the Boolean data type.
-
-    Returns:
-        bool: True for comparisons, logical operators, ``in``, ``isnull``,
-        ``match``, ``{v_TABLE}``, Boolean literals, and conditionals, ``nvl``,
-        ``filter`` and clauses of those. A selection's type depends on the
-        data, which :func:`conditional` callers check instead.
-    """
-    match node:
-        case Binary(op=op):
-            return op in _COMPARISONS or op in _BOOLEAN
-        case Unary(op="not") | In() | TableReported():
-            return True
-        case TypedParameter(type=kind):
-            return kind == "boolean"
-        case Call(name="nvl", args=args):
-            return any(is_boolean(arg) for arg in args)
-        case Call(name="filter", args=(data, *_)):
-            return is_boolean(data)
-        case Call(name=name):
-            return name in {"isnull", "match"}
-        case Literal_(kind="boolean"):
-            return True
-        case If(then=then):
-            return is_boolean(then)
-        case With(body=body) | Assignment(value=body):
-            return is_boolean(body)
-        case PersistentAssignment(value=body):
-            return is_boolean(body)
-        case Program(statements=statements):
-            return is_boolean(statements[-1])
-        case Where(operand=operand) | Sub(operand=operand) | Rename(operand=operand):
-            return is_boolean(operand)
-    return False
-
-
 def conditional(
     condition: Recordset,
     then: Recordset,
     otherwise: Recordset | None,
-    *,
-    boolean_then: bool,
 ) -> Recordset:
     """Evaluate ``if`` with the DPM-XL 8.1 semantics.
 
@@ -1675,8 +1627,8 @@ def conditional(
     of the matching ``then`` or ``else`` record; when a branch has keys the
     condition lacks, the condition record applies to each branch record that
     shares its keys, one result record each. A null condition takes the
-    ``else`` branch. Without ``else``, the result is ``true`` when ``then`` is
-    Boolean and null otherwise.
+    ``else`` branch. Without ``else``, the records whose condition is not
+    true are left out (DPM-XL 8.1.4).
 
     A condition with a [`default`][dpmxl.recordset.Recordset] also covers
     the keys a branch has and it lacks, taking its default there, as in
@@ -1691,7 +1643,6 @@ def conditional(
         EvaluationError: For a non-Boolean key-less condition; a keyed one
             fails only its records.
     """
-    fallback: Value = True if boolean_then else None
 
     def verdict(value: Value) -> Value:
         # A non-Boolean condition fails its record, like other type errors.
@@ -1706,16 +1657,7 @@ def conditional(
             return then
         if otherwise is not None:
             return otherwise
-        if then.keys:
-            return Recordset(
-                then.keys,
-                {
-                    key: Record(fallback, item.points)
-                    for key, item in then.records.items()
-                },
-                None if then.default is None else Record(fallback),
-            )
-        return Recordset.scalar(fallback, record.points if record else ())
+        return Recordset(then.keys)
     # Branch keys the condition lacks widen the result, as in a join: each
     # condition record applies to every branch record that shares its keys.
     extra = tuple(
@@ -1760,17 +1702,17 @@ def conditional(
             *_branch_keys(condition, (then, otherwise)),
         ]
         result.default = _conditional_default(
-            verdict(condition.default.value), then, otherwise, fallback
+            verdict(condition.default.value), then, otherwise
         )
     for key, record in records:
         value = verdict(record.value)
         if type(value) is _Failed:
             # A failed condition fails its records whichever branch they take.
             branch = None
-            fallback_value: Value = value
         else:
             branch = then if value is True else otherwise
-            fallback_value = fallback
+            if branch is None:
+                continue
         binding = dict(zip(condition.keys, key, strict=True))
         widenings: Collection[tuple[Hashable, ...]] = [()]
         if extra:
@@ -1783,7 +1725,7 @@ def conditional(
             ).keys()
         for widening in widenings:
             if branch is None:
-                result.records[key + widening] = Record(fallback_value, record.points)
+                result.records[key + widening] = Record(value, record.points)
                 continue
             full = binding | {
                 name: part
@@ -1833,7 +1775,7 @@ def _branch_keys(
 
 
 def _conditional_default(
-    verdict: Value, then: Recordset, otherwise: Recordset | None, fallback: Value
+    verdict: Value, then: Recordset, otherwise: Recordset | None
 ) -> Record | None:
     """Return the default of an ``if`` whose condition has one.
 
@@ -1845,7 +1787,7 @@ def _conditional_default(
         return Record(verdict)
     branch = then if verdict is True else otherwise
     if branch is None:
-        return Record(fallback)
+        return None
     if branch.keys:
         return branch.default
     return branch.records.get(())

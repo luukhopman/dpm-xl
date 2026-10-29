@@ -77,10 +77,9 @@ failed [False]
 
 ## Conditionals
 
-`if` takes the `else` branch when the condition is null. Without `else`, a
-Boolean `then` (filing indicators `{v_…}` and Boolean facts included) yields
-true where the condition is false or null, so a guarded check passes when its
-guard does not hold.
+`if` takes the `else` branch when the condition is null. Without `else`, the
+records whose condition is false or null are left out, so a guarded check is
+not evaluated where its guard does not hold.
 
 ```python
 show("if {tT, r0030, c0010} > 0 then false endif")
@@ -88,7 +87,7 @@ show("if {tT, r0030, c0010} > 0 then 1 else 2 endif = 2")
 ```
 
 ```text
-passed [True]
+not_applicable []
 passed [True]
 ```
 
@@ -113,7 +112,7 @@ show(
 
 ```text
 error division by zero
-passed [True]
+not_applicable []
 ```
 
 ## Aggregates

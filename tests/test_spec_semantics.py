@@ -38,10 +38,19 @@ def test_if_null_condition_takes_else_branch() -> None:
     assert status(rule) == "failed"
 
 
-def test_if_without_else_and_boolean_then_yields_true() -> None:
-    # 8.1.6: without else, a Boolean thenExpression gives true.
-    assert status("if {tT, r0010, c0010, default: 0} > 0 then false endif") == "passed"
-    assert status("if {tT, r0010, c0010} > 0 then false endif") == "passed"
+def test_if_without_else_leaves_out_records() -> None:
+    # 8.1.4: when the elseExpression is omitted, Records where the
+    # conditionExpression is not true are excluded from the result.
+    rule = "if {tT, r0010, c0010, default: 0} > 0 then false endif"
+    assert status(rule) == "not_applicable"
+    assert status("if {tT, r0010, c0010} > 0 then false endif") == "not_applicable"
+    data = provider({("0010", "0010"): 1, ("0020", "0010"): -1, ("0030", "0010"): 2})
+    rule = "with {tT, c0010}: if {r*} > 0 then {r*} > 1 endif"
+    result = evaluate_rule(rule, data)
+    assert sorted((o.key["r"], o.passed) for o in result.outcomes) == [
+        ("0010", False),
+        ("0030", True),
+    ]
 
 
 def test_if_result_follows_the_condition_records() -> None:
@@ -167,7 +176,7 @@ def test_errors_fail_only_the_records_that_reach_the_result() -> None:
     guarded = "with {tT, c*}: if {r0020} != 0 then {r0010} / {r0020} > 1 endif"
     result = evaluate_rule(guarded, data)
     assert result.status == "passed", result.message
-    assert result.counts == {"passed": 2, "failed": 0, "null": 0}
+    assert result.counts == {"passed": 1, "failed": 0, "null": 0}
     taken = "with {tT, c*}: if {r0010} > 0 then {r0010} / {r0020} > 1 endif"
     assert evaluate_rule(taken, data).message == "division by zero"
     typed = 'with {tT, c*}: if {r0020} != 0 then {r0010} > "a" else true endif'
@@ -265,9 +274,7 @@ def test_clauses_on_a_selection_override_the_context_where_on_their_key() -> Non
         assert len(result.outcomes) == 1, body
 
 
-def test_if_without_else_knows_more_boolean_then_branches() -> None:
-    # 8.1.6: without else, a Boolean thenExpression gives true where the
-    # condition is not true.
+def test_if_without_else_leaves_out_records_of_any_type() -> None:
     tables = [
         TableLayout("A", rows=("0010",), columns=("0010",)),
         TableLayout("B", rows=("0010",), columns=("0010",)),
@@ -279,7 +286,8 @@ def test_if_without_else_knows_more_boolean_then_branches() -> None:
         "if {v_A} then {tB, r0010, c0010} endif",
     ]:
         result = evaluate_rule(rule, flags)
-        assert result.counts == {"passed": 1, "failed": 0, "null": 0}, rule
+        assert result.status == "not_applicable", rule
+        assert result.outcomes == [], rule
 
 
 def test_non_boolean_if_conditions_fail_only_their_records() -> None:
@@ -316,13 +324,13 @@ def test_default_fills_records_an_operand_lacks() -> None:
     )
     result = evaluate_rule(rule, data)
     assert result.status == "failed"
-    # y, only in A, does not meet the condition (its default) and passes.
-    assert keyed(result) == [("x", False), ("y", True)]
+    # y, only in A, does not meet the condition (its default) and is left out.
+    assert keyed(result) == [("x", False)]
     both = parts(a_rows=[("x", "0010", 1)], b_rows=[("x", "0010", 2)])
     assert evaluate_rule(rule, both).status == "passed"
     # A branch lacking the condition's key takes its default too.
     rule = "with {default: null}: if not isnull({tB, c0010}) then not isnull({tA, c0010}) endif"
-    assert keyed(evaluate_rule(rule, data)) == [("x", False), ("y", True)]
+    assert keyed(evaluate_rule(rule, data)) == [("x", False)]
 
 
 def test_operands_with_defaults_join_on_every_key() -> None:
@@ -379,7 +387,8 @@ def test_if_results_keep_a_default() -> None:
     guarded = (
         "with {default: 0}: (if false then {tA, c0010} > 0 endif) and {tB, c0010} > 0"
     )
-    assert keyed(evaluate_rule(guarded, data)) == [("x", True), ("y", False)]
+    # Without else, the if has no records, nor a default.
+    assert keyed(evaluate_rule(guarded, data)) == []
 
 
 def test_rename_and_time_shift_keep_a_default() -> None:

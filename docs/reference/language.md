@@ -858,9 +858,8 @@ operands are always evaluated.
 ```
 
 Chooses a branch by a Boolean condition; a null condition takes the `else`
-branch. Without `else`, a false or null condition yields `true` when the
-`then` branch is Boolean, so that a guarded check passes when its guard
-does not hold, and null otherwise
+branch. Without `else`, the records whose condition is false or null are
+left out, so a guarded check is not evaluated where its guard does not hold
 ([Conditionals](../concepts/null.md#conditionals)). `if … endif` is an
 operand: it nests and combines with operators.
 
@@ -877,8 +876,9 @@ operand: it nests and combines with operators.
 | --- | --- |
 | `if {v_T} then {tT, r0010, c0010} > 0 endif` | `true` |
 | `if {tT, c0010} > 50 then {tT, c0010} else 0 endif` | `r=0010: 100; r=0020: 60; r=0030: 0` |
-| `if {tT, c0010} > 50 then {tT, c0020} > 0 endif` | `r=0010: true; r=0020: false; r=0030: true` |
-| `if {tT, c0010} > 50 then {tT, c0020} endif` | `r=0010: 5; r=0020: -5; r=0030: null` |
+| `if {tT, c0010} > 50 then {tT, c0020} > 0 endif` | `r=0010: true; r=0020: false` |
+| `if {tT, c0010} > 50 then {tT, c0020} endif` | `r=0010: 5; r=0020: -5` |
+| `if false then true endif` | `null` |
 | `if null then 1 else 2 endif` | `2` |
 | `if false then 1 else if false then 2 else 3 endif endif + 1` | `4` |
 | `if 1 then 2 endif` | `error: if needs a boolean condition, found number` |

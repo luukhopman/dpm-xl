@@ -131,7 +131,7 @@ EXAMPLES: list[tuple[str, str, str | None]] = [
     ("#boolExpr or", "true or false", "true"),
     ("#boolExpr xor", "true xor true", "false"),
     ("#ifExpr", "if 1 > 0 then 'yes' else 'no' endif", '"yes"'),
-    ("#ifExpr without else", "if 1 < 0 then true endif", "true"),
+    ("#ifExpr without else", "if 1 < 0 then true endif", "null"),
     ("#itemReferenceExpr", "[eba_qC:x1]", "[qC:x1]"),
     ("#propertyReferenceExpr", "[qEBB]", "[qEBB]"),
     ("#keyNamesExpr", "qKEY", None),

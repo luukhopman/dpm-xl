@@ -140,7 +140,7 @@ show('{tO, c0010, default: 0} [where qEBB = "A"] <= {tP, c0010}')
 passed [({'qEBB': 'B'}, True)]
 failed [({'qEBB': 'A'}, False), ({'qEBB': 'B'}, True), ({'qEBB': 'C'}, False)]
 passed [({'qEBB': 'A'}, True), ({'qEBB': 'B'}, True)]
-failed [({'qEBB': 'B'}, True), ({'qEBB': 'C'}, False), ({'qEBB': 'A'}, True)]
+failed [({'qEBB': 'B'}, True), ({'qEBB': 'C'}, False)]
 failed [({'qEBB': 'A'}, True), ({'qEBB': 'B'}, False), ({'qEBB': 'C'}, False)]
 failed [({'qEBB': 'B'}, False), ({'qEBB': 'C'}, True)]
 ```

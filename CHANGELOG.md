@@ -17,6 +17,8 @@ All notable changes to this project are documented here. The project follows
   for their record instead of null.
 - `date()` of a day, month or year that does not exist, such as
   `date(2026, 2, 30)`, is null instead of an error.
+- `if` without `else` leaves out the records whose condition is not true,
+  as the specification says, instead of making them true or null.
 
 ## 1.2.3 - 2026-10-26
 

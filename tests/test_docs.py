@@ -11,6 +11,11 @@ Every Markdown page under ``docs/`` (and the README) is checked:
 * every line of a ``dpm-xl`` block must parse with
   :func:`dpmxl.parse_program`.
 
+A block may carry code annotations: ``# (1)!`` comments, explained by the
+numbered list right after the block. The list may stand between a ``python``
+block and its output, and the comments are removed from ``console``
+commands before they run.
+
 ``<!-- docs: skip -->`` on the line before a block leaves it out, and
 ``<!-- docs: invalid -->`` before a ``dpm-xl`` block expects a syntax error
 on every line.
@@ -75,6 +80,8 @@ PAGES = [
 OPTIONAL_MODULES = {"polars", "dpmxbrl", "dpmsynth"}
 FENCE = re.compile(r"^(?P<indent> *)```(?P<lang>[\w-]*)[^\n]*$")
 MARKER = re.compile(r"^\s*<!-- docs: (?P<marker>[\w-]+) -->\s*$")
+ANNOTATION = re.compile(r"\s*# \((?P<number>\d+)\)!?\s*$")
+LIST_ITEM = re.compile(r"^\s*(?P<number>\d+)\.\s")
 
 
 @dataclass
@@ -115,7 +122,13 @@ def blocks(path: Path) -> list[Block]:
         follows_python = (
             bool(found)
             and found[-1].lang == "python"
-            and all(not line.strip() for line in between)
+            and (
+                all(not line.strip() for line in between)
+                or (
+                    bool(annotations(found[-1].code))
+                    and annotation_list(between) is not None
+                )
+            )
         )
         found.append(
             Block(
@@ -129,6 +142,39 @@ def blocks(path: Path) -> list[Block]:
         previous_end = index
         index += 1
     return found
+
+
+def annotations(code: str) -> list[int]:
+    """Return the numbers of the code annotations in a block, in order.
+
+    Returns:
+        list[int]: The numbers of the ``# (n)!`` comments.
+    """
+    return [
+        int(match["number"])
+        for line in code.splitlines()
+        if (match := ANNOTATION.search(line))
+    ]
+
+
+def annotation_list(lines: list[str]) -> list[int] | None:
+    """Return the item numbers of the annotation list in these lines.
+
+    Returns:
+        list[int] | None: The numbers of the list items, or None if the
+        lines are not one numbered list (with indented continuation lines),
+        surrounded by blank lines only.
+    """
+    numbers: list[int] = []
+    for line in lines:
+        if not line.strip():
+            continue
+        match = LIST_ITEM.match(line)
+        if match:
+            numbers.append(int(match["number"]))
+        elif not numbers or not line[:1].isspace():
+            return None
+    return numbers or None
 
 
 def _normalize(text: str) -> str:
@@ -162,7 +208,7 @@ def _check_console(block: Block, where: str) -> None:
     commands: list[tuple[str, list[str]]] = []
     for line in block.code.splitlines():
         if line.startswith("$ "):
-            commands.append((line[2:], []))
+            commands.append((ANNOTATION.sub("", line[2:]), []))
         elif commands:
             commands[-1][1].append(line)
         elif line.strip():
@@ -214,6 +260,58 @@ def test_page_examples(path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
                         parse_program(line)
                 else:
                     parse_program(line)
+
+
+def test_annotated_python_block_keeps_its_output(tmp_path: Path) -> None:
+    page = tmp_path / "page.md"
+    page.write_text(
+        "```python\n"
+        "print(1)  # (1)!\n"
+        "```\n\n"
+        "1. Prints one,\n"
+        "   as the output shows.\n\n"
+        "```text\n1\n```\n\n"
+        "```python\nprint(2)\n```\n\n"
+        "1. Not an annotation list: the block has no annotations.\n\n"
+        "```text\n2\n```\n",
+        encoding="utf-8",
+    )
+    found = blocks(page)
+    assert [block.lang for block in found] == ["python", "text", "python", "text"]
+    assert [block.follows_python for block in found] == [False, True, False, False]
+    assert annotations(found[0].code) == [1]
+
+
+def test_annotation_list_needs_a_numbered_list() -> None:
+    assert annotation_list(["", "1. One", "   more", "2. Two", ""]) == [1, 2]
+    assert annotation_list(["Some text", "1. One"]) is None
+    assert annotation_list(["   indented first"]) is None
+    assert annotation_list(["", ""]) is None
+
+
+def test_console_annotations_are_not_run() -> None:
+    block = Block("console", "$ dpm-xl --version  # (1)!\n", 1, None, False)
+    with pytest.raises(AssertionError, match="output of 'dpm-xl --version'"):
+        _check_console(block, "page.md:1")
+
+
+@pytest.mark.parametrize("path", PAGES, ids=lambda path: str(path.relative_to(ROOT)))
+def test_code_annotations_are_explained(path: Path) -> None:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for block in blocks(path):
+        numbers = annotations(block.code)
+        if not numbers:
+            continue
+        end = block.line + block.code.count("\n")
+        after: list[str] = []
+        for line in lines[end + 1 :]:
+            if line.strip() and not LIST_ITEM.match(line) and not line[:1].isspace():
+                break
+            after.append(line)
+        assert annotation_list(after) == numbers, (
+            f"{path.relative_to(ROOT)}:{block.line}: annotations {numbers} need "
+            "a numbered list with one item each right after the block"
+        )
 
 
 # Result tables -------------------------------------------------------------

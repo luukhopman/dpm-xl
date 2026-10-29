@@ -132,14 +132,17 @@ lines that start with `#`, but that belongs to the file format.
 ### Case {#case}
 
 Keywords, function names, `true`, `false`, `null` and parameter types match
-in any case. Everything else is case-sensitive: the reference prefixes
-`t g v o p` and the axis letters `r c s` are lower case, the period codes
-`A S Q M W D` upper case, and names of temporaries match exactly.
-[Key names](#key-names) in clauses ignore case.
+in any case. The reference prefixes `t g v o p` and the axis letters
+`r c s` are lower case, the period codes `A S Q M W D` upper case.
+Identifiers ignore case, as DPM-XL 2.4.1 requires: names of temporaries,
+[key names](#key-names) in clauses, and the table, table group, operation
+and parameter codes that [`MemoryProvider`][dpmxl.provider.MemoryProvider]
+looks up, when they match one code only.
 
 | Expression | Result |
 | --- | --- |
 | `IF TRUE THEN Abs(-1) ENDIF` | `1` |
+| `{tt, r0010, c0010}` | `100` |
 | `{TT, r0010, c0010}` | `syntax error: unknown selection component 'TT'` |
 
 ### Keywords and word boundaries {#word-boundaries}
@@ -354,7 +357,7 @@ key component of the same name hides it. Parses to
 | --- | --- |
 | `d := {tT, c0010} - {tT, c0020}; d` | `r=0010: 95; r=0020: 65; r=0030: null` |
 | `Level := 1; Level` | `1` |
-| `x := 1; X` | `error: unknown key component or parameter 'X'` |
+| `x := 1; X` | `1` |
 
 ### Persistent assignment `<-` {#persistent-assignment}
 

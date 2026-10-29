@@ -30,6 +30,9 @@ All notable changes to this project are documented here. The project follows
   last.
 - `{o_X}` reads temporary `X` of the same script, as in `op1 := …;
   {oOp1, r0010}`, before asking the provider for an operation.
+- Names of temporaries, and the table, table group, operation and parameter
+  codes `MemoryProvider` looks up, ignore case, so `{tt, r0010}` reads
+  table `T`.
 
 ## 1.2.3 - 2026-10-26
 

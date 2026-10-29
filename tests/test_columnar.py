@@ -77,6 +77,9 @@ EXPRESSIONS = [
     "not(isnull({tT, r0010, c0010})) and isnull({tT, r0010, c0020, default: null}) = false",
     "{tO, r0010, c0010} in {0, 10}",
     "true > false",
+    # Table codes ignore case (DPM-XL 2.4.1).
+    "{tt, r0010, c0010} = 100",
+    "with {to, c0010}: {r0010} >= 0",
     "if {v_T} then {v_E} endif",
     "if {tT, r0010, c0010} > 500 then isnull({tE, r0010, c0010}) endif",
     "with {tE, default: 0, interval: true}: {r0010, c0010} = sum({r0020, c0010} group by GCC)",

@@ -466,7 +466,13 @@ class _Checker:
     def table_layout(self, code: str) -> TableLayout | None:
         if code not in self.layouts:
             assert self.layout is not None
-            self.layouts[code] = self.layout(code)
+            found = self.layout(code)
+            if found is None and self.tables:
+                # Table codes ignore case (DPM-XL 2.4.1).
+                folded = [t for t in self.tables if t.casefold() == code.casefold()]
+                if len(folded) == 1:
+                    found = self.layout(folded[0])
+            self.layouts[code] = found
         return self.layouts[code]
 
     def check_selection(
@@ -730,7 +736,7 @@ class _Checker:
             )
 
     def check_name(self, name: str, span: tuple[int, int], scope: _Scope) -> None:
-        if name in scope.temporaries:
+        if name.casefold() in {temporary.casefold() for temporary in scope.temporaries}:
             return
         if self.parameters is not None and name in self.parameters:
             return

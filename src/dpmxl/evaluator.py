@@ -390,7 +390,7 @@ class Evaluator:
                     key = resolve_key(name, bindings)
                     if key is not None:
                         return Recordset.scalar(bindings[key])
-                temporary = self._temporaries.get(name)
+                temporary = self._temporaries.get(name.casefold())
                 if temporary is not None:
                     return temporary
                 value = self.provider.parameter(name)
@@ -472,7 +472,8 @@ class Evaluator:
                 return result
             case Assignment(name=name, value=value):
                 result = self.evaluate(value, context, bindings)
-                self._temporaries[name] = result
+                # Names ignore case (DPM-XL 2.4.1).
+                self._temporaries[name.casefold()] = result
                 return result
             case PersistentAssignment(target=target, value=value):
                 result = self.evaluate(value, context, bindings)
@@ -506,7 +507,10 @@ class Evaluator:
         Returns:
             bool: True for a temporary or a report parameter.
         """
-        return name in self._temporaries or self.provider.parameter(name) is not None
+        return (
+            name.casefold() in self._temporaries
+            or self.provider.parameter(name) is not None
+        )
 
     def _clause_operand(
         self,
@@ -622,15 +626,8 @@ class Evaluator:
         """
         if spec.operation is not None:
             # DPM-XL 3.1.6: an operation of the same script, from a := assignment,
-            # comes first; operation names ignore case (DPM-XL 2.4.1).
-            temporary = next(
-                (
-                    result
-                    for name, result in self._temporaries.items()
-                    if name.casefold() == spec.operation.casefold()
-                ),
-                None,
-            )
+            # comes first.
+            temporary = self._temporaries.get(spec.operation.casefold())
             if temporary is not None:
                 return _restrict(temporary, spec)
             return _restrict(self._operation(spec.operation), spec)

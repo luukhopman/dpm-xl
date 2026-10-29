@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
-from typing import Any, Protocol, TypeAlias, runtime_checkable
+from typing import Any, Protocol, TypeAlias, TypeVar, runtime_checkable
 
 from .ast import AxisName, AxisSelector
 from .values import Value
@@ -504,7 +504,9 @@ class MemoryProvider:
     a tuple of ``(name, value)`` pairs for open tables (empty for closed ones).
     Absent tables in ``reported`` are treated as not reported. Every optional
     [`DataProvider`][dpmxl.provider.DataProvider] method is implemented. Each
-    point's ``ref`` is its value key.
+    point's ``ref`` is its value key. Table, template, table group, operation
+    and parameter codes match exactly, else ignoring case when only one code
+    does (DPM-XL 2.4.1).
 
     A ``MemoryProvider`` is safe to read from several threads at once.
 
@@ -575,7 +577,7 @@ class MemoryProvider:
         Raises:
             LookupError: If the table is unknown.
         """
-        layout = self.tables.get(query.table)
+        layout = _lookup(self.tables, query.table)
         if layout is None:
             raise LookupError(f"unknown table {query.table}")
         positions = [
@@ -610,7 +612,7 @@ class MemoryProvider:
         Returns:
             tuple[str, ...]: Key names; empty for closed or unknown tables.
         """
-        layout = self.tables.get(table)
+        layout = _lookup(self.tables, table)
         return layout.open_keys if layout is not None else ()
 
     def table_reported(self, table: str) -> bool | None:
@@ -619,10 +621,12 @@ class MemoryProvider:
         Returns:
             bool | None: Filing-indicator state.
         """
-        if table in self.reported:
+        folded = table.casefold()
+        if any(code.casefold() == folded for code in self.reported):
             return True
         return any(
-            layout.template == table and layout.code in self.reported
+            (layout.template or "").casefold() == folded
+            and layout.code in self.reported
             for layout in self.tables.values()
         )
 
@@ -632,7 +636,7 @@ class MemoryProvider:
         Returns:
             Value: The parameter or ``None``.
         """
-        return self.parameters.get(name)
+        return _lookup(self.parameters, name)
 
     def table_group(self, code: str) -> Sequence[str] | None:
         """Return the table codes of a table group.
@@ -640,7 +644,7 @@ class MemoryProvider:
         Returns:
             Sequence[str] | None: The tables, or ``None`` for an unknown group.
         """
-        return self.table_groups.get(code)
+        return _lookup(self.table_groups, code)
 
     def earlier_report(self, period: str, count: int) -> DataProvider | None:
         """Return the report ``count`` periods earlier.
@@ -656,7 +660,24 @@ class MemoryProvider:
         Returns:
             str | None: The expression, or ``None`` for an unknown operation.
         """
-        return self.operations.get(code)
+        return _lookup(self.operations, code)
+
+
+_T = TypeVar("_T")
+
+
+def _lookup(mapping: Mapping[str, _T], code: str) -> _T | None:
+    """Look up a code exactly, else ignoring case (DPM-XL 2.4.1).
+
+    Returns:
+        The value, or ``None`` when no code, or several, match.
+    """
+    found = mapping.get(code)
+    if found is not None:
+        return found
+    folded = code.casefold()
+    matches = [value for key, value in mapping.items() if key.casefold() == folded]
+    return matches[0] if len(matches) == 1 else None
 
 
 __all__ = [

@@ -290,7 +290,7 @@ def test_a_selection_needs_a_table() -> None:
 
 
 def test_unknown_tables_suggest_a_close_code() -> None:
-    assert found("{tC_01.0, r0010} = {t_c_27.00, c0010} + {tXX_99.99, r0010}") == [
+    assert found("{tC_01.0, r0010} = {tXX_99.99, r0010}") == [
         (
             "error",
             "unknown-table",
@@ -298,17 +298,12 @@ def test_unknown_tables_suggest_a_close_code() -> None:
             "unknown table C_01.0; did you mean C_01.00?",
             "tC_01.00",
         ),
-        (
-            "error",
-            "unknown-table",
-            "t_c_27.00",
-            "unknown table c_27.00; did you mean C_27.00?",
-            "t_C_27.00",
-        ),
         ("error", "unknown-table", "tXX_99.99", "unknown table XX_99.99", None),
     ]
     # Without the table codes there is nothing to suggest.
     assert found("{tC_01.0, r0010} > 0", tables=None)[0][4] is None
+    # Table codes ignore case (DPM-XL 2.4.1).
+    assert found("isnull({t_c_27.00, c0010})") == []
 
 
 def test_unknown_coordinates_are_underlined() -> None:

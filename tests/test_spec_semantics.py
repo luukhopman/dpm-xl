@@ -361,6 +361,38 @@ def test_operations_include_temporaries_of_the_script() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "rule",
+    [
+        "{tt, r0010, c0010} = 4",
+        "x := {tT, r0010, c0010}; X = 4",
+        "Op1 := {tT, r*, c0010}; {o_OP1, r0010} = 4",
+        "{v_one}",
+    ],
+)
+def test_identifiers_ignore_case(rule: str) -> None:
+    # 2.4.1: identifiers (table codes, property codes, operation names) are
+    # case insensitive.
+    data = provider({("0010", "0010"): 4})
+    assert status(rule, data) == "passed"
+
+
+def test_identifiers_differing_only_in_case_must_be_written_exactly() -> None:
+    tables = [
+        TableLayout("A", rows=("0010",), columns=("0010",)),
+        TableLayout("a", rows=("0010",), columns=("0010",)),
+    ]
+    data = MemoryProvider(
+        tables,
+        {
+            ("A", "0010", "0010", None, ()): Number.of(1, 0),
+            ("a", "0010", "0010", None, ()): Number.of(2, 0),
+        },
+    )
+    assert status("{ta, r0010, c0010} = 2", data) == "passed"
+    assert status("{tA, r0010, c0010} = 1", data) == "passed"
+
+
 def test_if_without_else_leaves_out_records_of_any_type() -> None:
     tables = [
         TableLayout("A", rows=("0010",), columns=("0010",)),

@@ -12,5 +12,7 @@ description: Reference material - the language, the CLI, the data formats and th
 - [CLI](cli.md): `dpm-xl check` and `dpm-xl eval`, every option, exit status
   and the JSON output schema.
 - [Data formats](data-formats.md): rule files and data files.
+- [Module file](module-file.md): one module's tables, cells and rules,
+  shared with dpm-synth.
 - [Python API](api/index.md): every public module, generated from the
   docstrings.

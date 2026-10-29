@@ -1,0 +1,39 @@
+{
+  "format": "dpm-module/1",
+  "release": "4.2",
+  "module": "DEMO",
+  "reference_date": "2026-12-31",
+  "currency": "EUR",
+  "decimals": {"m": 0},
+  "filing_indicators": ["C_01.00", "C_27.00"],
+  "tables": [
+    {
+      "code": "C_01.00",
+      "cells": [
+        {"id": "C_01.00/r0010/c0010", "row": "0010", "column": "0010", "datapoint": "dp1", "data_type": "m"},
+        {"id": "C_01.00/r0020/c0010", "row": "0020", "column": "0010", "datapoint": "dp2", "data_type": "m"},
+        {"id": "C_01.00/r0030/c0010", "row": "0030", "column": "0010", "datapoint": "dp3", "data_type": "m"},
+        {"id": "C_01.00/r0010/c0020", "row": "0010", "column": "0020", "datapoint": "dp4", "data_type": "m"},
+        {"id": "C_01.00/r0020/c0020", "row": "0020", "column": "0020", "datapoint": "dp5", "data_type": "m"},
+        {"id": "C_01.00/r0030/c0020", "row": "0030", "column": "0020", "datapoint": "dp6", "data_type": "m"}
+      ]
+    },
+    {
+      "code": "C_27.00",
+      "open_keys": [{"code": "qCPI", "data_type": "s"}],
+      "cells": [
+        {"id": "C_27.00/c0010", "row": "*", "column": "0010", "datapoint": "dp7", "data_type": "m"}
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "code": "v0001",
+      "expression": "with {tC_01.00, c*, default: 0, interval: true}: {r0010} = {r0020} + {r0030}",
+      "precondition": "{v_C_01.00}"
+    },
+    {"code": "v0002", "expression": "{tC_27.00, c0010} > 0", "severity": "warning"},
+    {"code": "v0003", "expression": "with {tC_01.00, c0010}: {r0020} >= {r0030}"},
+    {"code": "v0005", "expression": "{tC_01.00, r0010, c0010} > 1000", "active": false}
+  ]
+}

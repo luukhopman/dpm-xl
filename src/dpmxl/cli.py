@@ -16,6 +16,7 @@ from typing import Any
 from .diagnostics import LayoutLookup, diagnose
 from .evaluator import RuleResult, SelectionCache, evaluate_rule
 from .explain import explain
+from .module import Module, load_module
 from .parser import parse_program
 from .provider import DataProvider, _table_layout, load_memory_provider
 from .references import references
@@ -151,10 +152,20 @@ def _looks_like_path(source: str) -> bool:
 
 
 def _rules(source: str) -> list[Rule]:
-    """Read rules from an expression or a rule file.
+    """Read rules from an expression, a rule file or a module file.
 
     Returns:
         list[Rule]: The rules in file order.
+    """
+    return _source(source)[0]
+
+
+def _source(source: str) -> tuple[list[Rule], Module | None]:
+    """Read the rules of a rule source, and the module of a module file.
+
+    Returns:
+        tuple: The rules in file order, and the module of a module file
+        (a JSON object with a ``format``), else ``None``.
 
     Raises:
         FileNotFoundError: If the source names a file that does not exist.
@@ -163,8 +174,16 @@ def _rules(source: str) -> list[Rule]:
     if not path.is_file():
         if _looks_like_path(source):
             raise FileNotFoundError("no such rule file")
-        return [Rule("expression", source)]
-    return load_rules(path)
+        return [Rule("expression", source)], None
+    if path.suffix.casefold() == ".json":
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            document = None
+        if isinstance(document, dict) and "format" in document:
+            module = load_module(document)
+            return list(module.rules), module
+    return load_rules(path), None
 
 
 def _problem(path: object, error: Exception) -> str:
@@ -202,7 +221,7 @@ def _check(
     strict: bool = False,
 ) -> int:
     try:
-        rules = _rules(source)
+        rules, module = _source(source)
     except (OSError, ValueError) as error:
         print(_problem(source, error), file=sys.stderr)
         return EXIT_INPUT
@@ -213,6 +232,9 @@ def _check(
     except (OSError, ValueError) as error:
         print(_problem(layouts, error), file=sys.stderr)
         return EXIT_INPUT
+    if module is not None and layouts is None:
+        by_code = {layout.code: layout for layout in module.layouts()}
+        lookup, tables = by_code.get, tuple(by_code)
     total = 0
     unparsed = 0
     errors: list[dict[str, Any]] = []

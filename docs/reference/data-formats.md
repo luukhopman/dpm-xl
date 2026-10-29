@@ -50,6 +50,9 @@ error: tests/data/bad-severity.json: [0].severity: expected "error" or "warning"
 ]
 ```
 
+A [module file](module-file.md), a JSON object with a `format`, is a rule
+source too: its `rules` have the same fields.
+
 Any other file is a text rule file: one expression per line, `#` starts a
 comment line, blank lines are ignored
 ([`examples/rules.txt`](https://github.com/luukhopman/dpm-xl/blob/main/examples/rules.txt)).

@@ -20,6 +20,8 @@ dpm-xl [COMMAND] --help
 
 - the path of a `.json` file holding a list of rules
   ([format](data-formats.md#rule-files));
+- the path of a [module file](module-file.md), whose rules `check` checks
+  against the module's tables (unless `--layouts` is given);
 - the path of any other existing file: one expression per line, `#` starts a
   comment line, blank lines are ignored;
 - otherwise, the argument itself as one expression. An argument that reads

@@ -14,6 +14,7 @@ importable from the `dpmxl` package itself.
 | [`dpmxl.explain`](explain.md) | Fills a failing record's formula with operand values. |
 | [`dpmxl.provider`](provider.md) | The `DataProvider` protocol and the in-memory `MemoryProvider`. |
 | [`dpmxl.rules`](rules.md) | Rule files: `Rule` with severity, `active` and modules, and `load_rules`. |
+| [`dpmxl.module`](module.md) | Module files: `load_module`, `Module` and its tables, cells and rules. |
 | [`dpmxl.columnar`](columnar.md) | The same semantics on polars frames (`columnar` extra); the frame schema. |
 | [`dpmxl.parser`](parser.md) | Tokenizer and recursive-descent parser. Nodes keep source spans. |
 | [`dpmxl.ast`](ast.md) | Expression tree, selections, axis selectors and item literals. |

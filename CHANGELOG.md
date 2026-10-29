@@ -14,6 +14,10 @@ All notable changes to this project are documented here. The project follows
 - `dpm-xl eval --format junit` writes a JUnit XML report, one test case
   per rule, and `--fail-on error|warning` sets which failing rules fail the
   run; by default a failing `warning` rule does not.
+- Module files (`dpm-module/1`, which also reads dpm-synth's
+  `dpm-synth-template/1`) describe a module's tables, cells and rules;
+  `dpmxl.module.load_module` reads one, and `dpm-xl check` and `eval` take
+  one as their rule source.
 - The contextual components `entityID`, `baseCurrency` and the
   `decimals…` names read the report parameters of those names, with their
   type; a missing one is null.

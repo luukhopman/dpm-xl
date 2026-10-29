@@ -716,3 +716,71 @@ def test_context_where_applies_to_selections_with_its_keys() -> None:
     # the selection has none of the condition's keys but names it itself.
     result = evaluate_rule('{tC, r*, c0010} [where qKEY = "x"] > 0', data)
     assert result.status == "error"
+
+
+# §3.1.1: the "_" after a prefix is cosmetic, so {v_X} and {vX} are variable X.
+
+
+def variables(**options) -> MemoryProvider:
+    return MemoryProvider(
+        [TableLayout("T", rows=("0010",)), TableLayout("A_B", template="TPL")],
+        {("T", "0010", None, None, ()): Number.of(1, 0)},
+        parameters={"ReportingLevel": "con", "C_09.00": "shadowed"},
+        **options,
+    )
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        # A template code by shape reads the filing indicator, also when it is
+        # neither reported nor known, and also when a parameter has its name.
+        ("{v_C_01.00}", "true"),
+        ("{vC_01.00}", "true"),
+        ("{v_c_01.00}", "true"),
+        ("{v_C_02.00}", "false"),
+        ("{vC_09.00}", "false"),
+        # A table or template code the provider knows.
+        ("{v_T}", "true"),
+        ("{vT}", "true"),
+        ("{vTPL}", "false"),
+        # Anything else is a report parameter, null when missing.
+        ("{vReportingLevel}", '"con"'),
+        ("{v_ReportingLevel}", '"con"'),
+        ("{v_Missing}", "null"),
+        ("{vMissing}", "null"),
+    ],
+)
+def test_variables_are_filing_indicators_or_parameters(
+    expression: str, expected: str
+) -> None:
+    evaluator = Evaluator(variables(reported=["T", "C_01.00"]))
+    record = evaluator.run(parse(expression)).result.single()
+    assert record is not None
+    assert format_value(record.value) == expected
+
+
+def test_a_variable_without_is_template_is_a_parameter() -> None:
+    class Plain:
+        def select(self, query):
+            return []
+
+        def table_reported(self, table):
+            return table == "T"
+
+        def parameter(self, name):
+            return {"Level": "solo"}.get(name)
+
+    assert evaluate_rule("{v_C_01.00} = false", Plain()).status == "passed"
+    assert evaluate_rule('{v_Level} = "solo"', Plain()).status == "passed"
+    # Without is_template a code that is not shaped like a template is a
+    # parameter, here a missing one.
+    result = evaluate_rule("{vT}", Plain())
+    assert result.counts["null"] == 1
+    assert result.evaluation is not None
+    assert result.evaluation.notes == ["variable 'T' is not available"]
+
+
+def test_a_persistent_assignment_to_a_variable_drops_the_underscore() -> None:
+    result = evaluate_rule("{v_Total} <- 5", variables())
+    assert list(result.assignments) == ["{vTotal}"]

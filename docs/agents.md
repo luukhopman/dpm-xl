@@ -124,7 +124,7 @@ v1 failed
 | Not catching `ColumnarUnsupported` | Rules with scripts, `time_shift`, sets and more crash | Catch it and call `evaluate_rule` |
 | `parse` on a script with `;`, `:=` or `<-` | `DpmXlSyntaxError` | `parse_program` |
 | Writing `a<-1` to compare with -1 | Parsed as a persistent assignment | `a < -1` |
-| `{vX}` for a filing indicator | Reads parameter `X` | `{v_X}` tests the filing indicator |
+| A filing indicator of a table not shaped like `C_01.00`, such as `{v_T}`, in a custom provider | Reads parameter `T` | Implement `is_template(code)` on the provider |
 | Keywords run together, such as `ornot` | One unknown name: a syntax error | Separate words: `or not` |
 | A new `SelectionCache` per rule | Every selection is read again | One cache per report |
 

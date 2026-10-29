@@ -327,22 +327,15 @@ class Selection(Node):
 
 
 @dataclass(frozen=True, slots=True)
-class TableReported(Node):
-    """``{v_TABLE}``: true when the report declares the template.
+class Variable(Node):
+    """``{vX}``, also written ``{v_X}``: variable ``X`` of the report.
+
+    The ``_`` is cosmetic (DPM-XL v0.11 §3.1.1). A table or template code
+    names that template's filing indicator, anything else a report
+    parameter; [`read_variable`][dpmxl.provider.read_variable] decides.
 
     Attributes:
-        table: The template or table code.
-    """
-
-    table: str
-
-
-@dataclass(frozen=True, slots=True)
-class Parameter(Node):
-    """``{vName}``: a report-level parameter such as ``ReportingLevel``.
-
-    Attributes:
-        name: Parameter name without the ``v`` prefix.
+        name: The variable name without the ``v`` or ``v_`` prefix.
     """
 
     name: str
@@ -616,7 +609,7 @@ class PersistentAssignment(Node):
     """``{target} <- value``: a computed result for a cell or variable.
 
     ``target`` is a [`Selection`][dpmxl.ast.Selection] (``{tT, r0010, c0010}``) or a
-    [`Parameter`][dpmxl.ast.Parameter] (``{vX}``, also written ``{v_X}``).
+    [`Variable`][dpmxl.ast.Variable] (``{vX}``, also written ``{v_X}``).
 
     Attributes:
         target: The assigned cell or variable.
@@ -767,7 +760,6 @@ __all__ = [
     "Literal_",
     "Name",
     "Node",
-    "Parameter",
     "PersistentAssignment",
     "Program",
     "Rename",
@@ -776,9 +768,9 @@ __all__ = [
     "SetLiteral",
     "Span",
     "Sub",
-    "TableReported",
     "TypedParameter",
     "Unary",
+    "Variable",
     "Where",
     "Window",
     "WindowBound",

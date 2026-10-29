@@ -43,7 +43,9 @@ def data() -> MemoryProvider:
     for index, key in enumerate((Item("qK", "a"), Item("qK", "b"), Item("qK", "c"))):
         values["O", "0010", "0010", None, (("qKEY", key),)] = Number.of(10 * index, 0)
         values["O", "0020", "0010", None, (("qKEY", key),)] = Number.of(15, 0)
-    return MemoryProvider(tables, values, parameters={"refPeriod": None})
+    return MemoryProvider(
+        tables, values, parameters={"refPeriod": None, "Level": "con"}
+    )
 
 
 EXPRESSIONS = [
@@ -86,6 +88,10 @@ EXPRESSIONS = [
     "{tt, r0010, c0010} = 100",
     "with {to, c0010}: {r0010} >= 0",
     "if {v_T} then {v_E} endif",
+    # {v_X} is {vX}: a template's filing indicator, else a report parameter.
+    "{vT} and {v_T} and not {vC_01.00}",
+    '{v_Level} = "con" and {vLevel} = "con"',
+    "isnull({vMissing})",
     "if {tT, r0010, c0010} > 500 then isnull({tE, r0010, c0010}) endif",
     "with {tE, default: 0, interval: true}: {r0010, c0010} = sum({r0020, c0010} group by GCC)",
     "if not isnull({tE, r0010, c0010}) then {tE, r0020, c0010} > 0 endif",

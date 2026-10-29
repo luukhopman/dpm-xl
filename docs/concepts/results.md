@@ -60,7 +60,8 @@ precondition yields at least one true record; otherwise the result is
 `not_applicable` without evaluating the rule. A precondition is evaluated on
 all records, also when `only_keys` restricts the rule.
 
-`{v_TABLE}` asks the provider's `table_reported(table)`. `MemoryProvider`
+`{v_TABLE}` asks the provider's `table_reported(table)` when `TABLE` is a
+template code ([Variables](references.md#variables)). `MemoryProvider`
 answers from its `reported` codes (by default every table with a value) and
 from each layout's `template`.
 

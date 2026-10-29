@@ -539,6 +539,11 @@ def test_earlier_assignments_are_names() -> None:
             "sum needs numbers, but {tC_01.00, r*, c0020} is a string",
         ),
         (
+            "{vC_01.00} + 1 > 0",
+            "{vC_01.00}",
+            "'+' needs numbers, but {vC_01.00} is a boolean",
+        ),
+        (
             "len(sum({tC_01.00, r*, c0010}) & 'x') > 0",
             "sum({tC_01.00, r*, c0010})",
             "'&' needs strings, but sum({tC_01.00, r*, c0010}) is a number",
@@ -560,6 +565,8 @@ def test_operands_of_the_wrong_type(expression: str, text: str, message: str) ->
         "{tC_01.00, r0010, c0020} = #2026-01-01# or {tC_01.00, r0010, c0020} = true",
         "{tC_27.00, c0010} = 'qCO:x1'",
         "nvl({tC_01.00, r0010, c0010}, 0) + 1 > 0",
+        # A variable that is not a template is a parameter of any type.
+        "{vReportingLevel} + 1 > 0",
     ],
 )
 def test_undecided_types_are_not_reported(expression: str) -> None:

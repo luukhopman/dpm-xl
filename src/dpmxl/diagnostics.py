@@ -34,9 +34,9 @@ from .ast import (
     SelectionSpec,
     SetLiteral,
     Sub,
-    TableReported,
     TypedParameter,
     Unary,
+    Variable,
     Where,
     With,
     children,
@@ -49,7 +49,7 @@ from .grammar import (
     SIGNATURES,
 )
 from .parser import DpmXlSyntaxError, Token, _parse_recovering, _pointer, tokenize
-from .provider import TableLayout, axis_matcher
+from .provider import TableLayout, axis_matcher, is_template_code
 from .recordset import STANDARD_KEYS, _is_fact, resolve_key
 
 Severity = Literal["error", "warning"]
@@ -833,8 +833,10 @@ class _Checker:
                 return _TYPE_OF_LITERAL.get(kind)
             case Selection(spec=spec):
                 return self.selection_type(spec.merged_into(scope.context))
-            case TableReported() | In():
+            case In():
                 return "boolean"
+            case Variable(name=name):
+                return "boolean" if is_template_code(name) else None
             case TypedParameter(kind=kind):
                 if kind not in _SCALAR_TYPES:
                     return None

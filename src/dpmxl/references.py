@@ -9,10 +9,11 @@ from .ast import (
     Node,
     Selection,
     SelectionSpec,
-    TableReported,
+    Variable,
     With,
     children,
 )
+from .provider import is_template_code
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,8 +118,18 @@ def tables(node: Node, provider: object | None = None) -> tuple[str, ...]:
     return tuple(dict.fromkeys(found))
 
 
-def reported_templates(node: Node) -> tuple[str, ...]:
-    """Return templates tested with ``{v_...}`` filing-indicator checks.
+def reported_templates(node: Node, provider: object | None = None) -> tuple[str, ...]:
+    """Return templates whose filing indicator a ``{vX}`` variable reads.
+
+    A variable reads a filing indicator when its name has the shape of a
+    template code ([`is_template_code`][dpmxl.provider.is_template_code]), or
+    when the optional provider's ``is_template(code)`` method says so; see
+    [`read_variable`][dpmxl.provider.read_variable].
+
+    Args:
+        node: The parsed expression.
+        provider: Optional provider whose ``is_template`` method knows the
+            release's table and template codes.
 
     Returns:
         tuple[str, ...]: Template codes in first-seen order.
@@ -128,12 +139,16 @@ def reported_templates(node: Node) -> tuple[str, ...]:
         >>> reported_templates(parse("{v_C_01.00} and not {v_C_02.00}"))
         ('C_01.00', 'C_02.00')
     """
+    method = getattr(provider, "is_template", None)
     pending = [node]
     found: list[str] = []
     while pending:
         current = pending.pop(0)
-        if isinstance(current, TableReported):
-            found.append(current.table)
+        if isinstance(current, Variable) and (
+            is_template_code(current.name)
+            or (callable(method) and method(current.name))
+        ):
+            found.append(current.name)
         pending.extend(children(current))
     return tuple(dict.fromkeys(found))
 

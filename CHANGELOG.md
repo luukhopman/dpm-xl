@@ -13,6 +13,14 @@ All notable changes to this project are documented here. The project follows
 - The language reference lists every place where dpm-xl differs from the
   DPM-XL specification v0.11, with the section concerned.
 
+### Changed
+
+- **Breaking:** `{v_X}` and `{vX}` are the same variable, as DPM-XL v0.11
+  says: a template's filing indicator when `X` is shaped like a template
+  code or the provider's new `is_template` knows it, else report parameter
+  `X`. Both parse to `Variable`, which replaces `TableReported` and
+  `Parameter`.
+
 ### Fixed
 
 - `count` of a set is its number of members, as in `count({1, 2, 2}) = 2`;

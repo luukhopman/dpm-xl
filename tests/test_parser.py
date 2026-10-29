@@ -5,6 +5,8 @@ import pytest
 
 from dpmxl import (
     DpmXlSyntaxError,
+    MemoryProvider,
+    TableLayout,
     parse,
     parse_selection,
     references,
@@ -22,8 +24,8 @@ from dpmxl.ast import (
     Selection,
     SetLiteral,
     Sub,
-    TableReported,
     Unary,
+    Variable,
     Where,
     With,
 )
@@ -103,7 +105,12 @@ def test_if_else_not_and_preconditions() -> None:
     precondition = parse("{v_F_18.00} and ( {v_F_04.09} or {v_F_04.10} )")
     assert reported_templates(precondition) == ("F_18.00", "F_04.09", "F_04.10")
     assert isinstance(parse("not ( isnull ({c0040}) )"), Unary)
-    assert isinstance(parse("{v_C_01.00}"), TableReported)
+    assert parse("{v_C_01.00}") == parse("{vC_01.00}") == Variable("C_01.00")
+    # Variables are templates by shape, or when the provider knows them.
+    both = parse("{vC_01.00} and {v_T} and {vReportingLevel}")
+    assert reported_templates(both) == ("C_01.00",)
+    known = MemoryProvider([TableLayout("T")], {})
+    assert reported_templates(both, known) == ("C_01.00", "T")
 
 
 def test_literals() -> None:

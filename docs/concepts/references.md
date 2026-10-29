@@ -10,18 +10,58 @@ results. Each kind of reference goes to a provider method
 
 | Reference | Reads | Provider method |
 | --- | --- | --- |
-| `{v_C_01.00}` | Whether table or template `C_01.00` was reported (its filing indicator) | `table_reported(table)` |
-| `{vName}` | Report parameter `Name`, as given | `parameter(name)` |
+| `{v_C_01.00}`, `{vC_01.00}` | Whether table or template `C_01.00` was reported (its filing indicator) | `table_reported(table)` |
+| `{vName}`, `{v_Name}` | Report parameter `Name`, as given | `parameter(name)` |
 | `{p_Name, type[, default: v]}` | Report parameter `Name`, checked against a type | `parameter(name)` |
 | `{o_Code[, r…, c…, default: v, interval: b]}` | The result of operation `Code` | `operation(code)` (optional) |
 | `{g_Group, r…, c…, …}` | The same cells of every table in a group | `table_group(code)` (optional) |
 
 ## Prefixes
 
-A `_` after the `t`, `g`, `o` and `p` prefixes is cosmetic, as the DPM-XL
-grammar says: `{t_T1}` is `{tT1}`. After `v` it is not: `{v_X}` tests a
-filing indicator, `{vX}` reads a parameter. A backtick escapes a code that
-is not a plain name: `` {t`C 01.00`} ``.
+A `_` after a prefix is cosmetic, as the DPM-XL specification says
+(§3.1.1): `{t_T1}` is `{tT1}` and `{v_X}` is `{vX}`. A backtick escapes a
+code that is not a plain name: `` {t`C 01.00`} ``.
+
+## Variables
+
+`{vX}` and `{v_X}` both read variable `X` of the report
+([`read_variable`][dpmxl.provider.read_variable]):
+
+- when `X` has the shape of an EBA template code, such as `C_01.00` or
+  `F_01.01.dp`, or the provider's optional `is_template(code)` knows it, the
+  variable is that template's filing indicator, `table_reported(X)`;
+- otherwise it is report parameter `X`, `parameter(X)`;
+- either is null when the provider does not know it.
+
+In the EBA rules every `{v_…}` names a template and `{vReportingLevel}` is
+the only parameter, so both spellings keep their usual meaning.
+
+```python
+from dpmxl import MemoryProvider, TableLayout, evaluate_rule, parse
+
+provider = MemoryProvider(
+    [TableLayout("T", rows=("0010",))],
+    {},
+    reported=["C_01.00"],
+    parameters={"ReportingLevel": "con"},
+)
+for expression in (
+    "{v_C_01.00}",
+    "{vC_02.00}",
+    '{vReportingLevel} = "con"',
+    '{v_ReportingLevel} = "con"',
+    "{vT}",
+):
+    print(expression, evaluate_rule(expression, provider).status)
+```
+
+```text
+{v_C_01.00} passed
+{vC_02.00} failed
+{vReportingLevel} = "con" passed
+{v_ReportingLevel} = "con" passed
+{vT} failed
+```
 
 ## Typed parameters
 

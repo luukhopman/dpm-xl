@@ -31,7 +31,6 @@ from .ast import (
     Literal_,
     Name,
     Node,
-    Parameter,
     PersistentAssignment,
     Program,
     Rename,
@@ -39,9 +38,9 @@ from .ast import (
     SelectionSpec,
     SetLiteral,
     Sub,
-    TableReported,
     TypedParameter,
     Unary,
+    Variable,
     Where,
     Window,
     WindowBound,
@@ -942,16 +941,14 @@ class _Parser:
             if following.kind == "operator" and following.text == "<-":
                 self.advance()
                 target = self.parse_brace(token)
-                if isinstance(target, TableReported):
-                    target = Parameter(target.table, span=target.span)
-                elif not isinstance(target, Selection | Parameter):
+                if not isinstance(target, Selection | Variable):
                     self.fail(
                         self.error("assignment target must be a selection", token)
                     )
                 self.advance()
                 value = self.parse_root()
                 return PersistentAssignment(
-                    cast(Selection | Parameter, target),
+                    cast(Selection | Variable, target),
                     value,
                     span=(token.start, value.span[1]),
                 )
@@ -1416,11 +1413,11 @@ class _Parser:
             span = (opening.start, closing.end)
             body = first.text
             if re.fullmatch(r"v_[A-Za-z0-9_.\-]+", body):
-                return TableReported(body[2:], span=span)
+                return Variable(body[2:], span=span)
             if re.fullmatch(r"v[A-Za-z](?:[A-Za-z0-9_.]*[A-Za-z0-9])?", body):
-                return Parameter(body[1:], span=span)
+                return Variable(body[1:], span=span)
             if body[1:2] == "`":
-                return Parameter(_reference_name(body), span=span)
+                return Variable(_reference_name(body), span=span)
             self.fail(self.error(f"unknown selection component {body!r}", first))
             return _Invalid(span=span)
         if first.kind == "parameter":
@@ -1760,8 +1757,7 @@ def _reference_name(text: str) -> str:
     """Return a selection reference's code without its prefix.
 
     The ``_`` after the prefix is cosmetic (``t_T1`` is ``tT1``), and an
-    escaped code drops its backticks. ``{v_X}`` never gets here: it is a
-    filing-indicator test, unlike ``{vX}``.
+    escaped code drops its backticks.
 
     Returns:
         str: The code, such as ``C_01.00`` for ``tC_01.00``.

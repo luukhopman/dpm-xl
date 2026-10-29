@@ -115,14 +115,13 @@ from .ast import (
     Literal_,
     Name,
     Node,
-    Parameter,
     Rename,
     Selection,
     SelectionSpec,
     SetLiteral,
     Sub,
-    TableReported,
     Unary,
+    Variable,
     Where,
     With,
 )
@@ -140,6 +139,7 @@ from .provider import (
     axis_matcher,
     declared_open_keys,
     normalize_code,
+    read_variable,
 )
 from .recordset import (
     STANDARD_KEYS,
@@ -216,7 +216,9 @@ class FrameProvider(Protocol):
     def table_reported(self, table: str) -> bool | None:
         """Answer ``{v_TABLE}``: whether the report's filing indicators include it.
 
-        Returns ``None`` when the provider cannot tell.
+        Returns ``None`` when the provider cannot tell. As for a
+        [`DataProvider`][dpmxl.provider.DataProvider], an optional
+        ``is_template(code)`` method marks other codes as templates.
         """
         ...
 
@@ -507,6 +509,16 @@ class PointsFrameProvider:
             declared_open_keys(self.provider, query.table),
         )
 
+    def is_template(self, code: str) -> bool:
+        """Delegate to the wrapped provider's optional ``is_template``.
+
+        Returns:
+            bool: Whether ``code`` is a table or template code; ``False``
+            when the wrapped provider does not say.
+        """
+        method = getattr(self.provider, "is_template", None)
+        return bool(method(code)) if callable(method) else False
+
     def table_reported(self, table: str) -> bool | None:
         """Delegate to the wrapped provider.
 
@@ -729,10 +741,8 @@ class ColumnarEvaluator:
                     if kept is not None:
                         frame = self._where(frame, kept)
                 return frame
-            case TableReported(table=table):
-                return scalar_frame(self.provider.table_reported(table))
-            case Parameter(name=name):
-                return scalar_frame(self.provider.parameter(name))
+            case Variable(name=name):
+                return scalar_frame(read_variable(self.provider, name))
             case Name():
                 raise ColumnarUnsupported("bare names outside where clauses")
             case Unary(op=op, operand=operand):
@@ -1805,8 +1815,8 @@ def _literal_key(node: Node, provider: FrameProvider) -> str | None:
             return None
         case Literal_(kind="string" | "date", value=value):
             return _key_text(value)
-        case Parameter(name=name):
-            value = provider.parameter(name)
+        case Variable(name=name):
+            value = read_variable(provider, name)
             if isinstance(value, str | Item | date) or value is None:
                 return _key_text(value)
     # Key columns are text: "10" may have been a number or text, and a number

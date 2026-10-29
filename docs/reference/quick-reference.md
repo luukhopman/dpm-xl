@@ -34,8 +34,8 @@ total := sum({tC_27.00, c0010}); total <= {tC_01.00, r0010, c0010}
 | `r0010`, `r0010-0050`, `(r0010, r0030-0050)`, `r*` | [Rows](language.md#axes): one, a range, a list, all; likewise `c` and `s` |
 | `default: 0` | [Value for missing facts](language.md#default) and for keys another operand has |
 | `interval: true` | [Interval arithmetic](language.md#interval) on reported precision |
-| `{v_C_01.00}` | [Filing indicator](language.md#filing-indicator): was the table reported |
-| `{vrefPeriod}`, `refPeriod` | [Report parameter](language.md#report-parameter), as given |
+| `{v_C_01.00}`, `{vC_01.00}` | [Variable](language.md#variable) naming a template: its filing indicator |
+| `{vrefPeriod}`, `refPeriod` | [Variable](language.md#variable) naming anything else: that report parameter, as given |
 | `{p_Limit, number, default: 5}` | [Typed parameter](language.md#typed-parameter); types `number integer string date boolean item` and `set-…` of each |
 | `{o_v1234, r0010}` | [Operation](language.md#operation) result |
 | `{g_G01, r0010, c0010}` | [Table group](language.md#table-group), keyed by table `t` |

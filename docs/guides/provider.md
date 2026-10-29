@@ -34,6 +34,7 @@ class DataProvider(Protocol):
 | Optional method | Answers | Without it, or when it returns `None` |
 | --- | --- | --- |
 | `open_keys(table) -> Sequence[str]` | The key names of an open table | An open table with no reported rows yields a selection without keys. |
+| `is_template(code) -> bool` | Whether `{vCode}` names a table or template | Only codes shaped like `C_01.00` are templates; other variables are parameters. |
 | `table_group(code) -> Sequence[str] \| None` | `{g_Group, …}` table groups | The rule is `unsupported`. |
 | `operation(code) -> str \| None` | `{o_Code, …}` operation references | The rule is `unsupported`. |
 | `earlier_report(period, count) -> DataProvider \| None` | `time_shift` on another period's report | The rule is `unsupported`. |

@@ -101,7 +101,9 @@ print(tables(tree, MemoryProvider([], {}, table_groups={"G1": ["C_03.00", "C_04.
 ```
 
 [`reported_templates`][dpmxl.references.reported_templates] lists the
-templates a rule tests with `{v_…}`, typically in its precondition:
+templates whose filing indicator a rule's `{v…}` variables read, typically
+in its precondition; pass a provider to count codes its `is_template`
+knows:
 
 ```python
 from dpmxl import reported_templates

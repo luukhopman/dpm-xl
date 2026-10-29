@@ -362,7 +362,7 @@ key component of the same name hides it. Parses to
 ### Persistent assignment `<-` {#persistent-assignment}
 
 ```text
-target ::= selection | "{" "v" name "}" | "{" "v_" code "}"
+target ::= selection | "{" "v" "_"? code "}"
 ```
 
 `target <- value` evaluates the value and returns it in
@@ -523,7 +523,7 @@ selection it is an evaluation error.
 ## References {#references}
 
 ```text
-reference ::= "{" "v_" code "}" | "{" "v" name "}"
+reference ::= "{" "v" "_"? code "}"
             | "{" "p" "_"? code "," type ( "," "default" ":" default )? "}"
 ```
 
@@ -531,30 +531,29 @@ Braces also read report-level data and other rules' results; each kind of
 reference goes to a provider method
 ([Parameters, operations and table groups](../concepts/references.md)).
 
-### Filing indicator `{v_…}` {#filing-indicator}
+### Variable `{v…}` {#variable}
 
-`{v_Code}` is `true` when table or template `Code` was reported, else
-`false` (the provider's `table_reported`). The `_` matters: without it the
-braces read a [report parameter](#report-parameter). Usually a
-[precondition](../concepts/results.md#preconditions). Parses to
-[`TableReported`][dpmxl.ast.TableReported].
+`{vX}`, also written `{v_X}` (the `_` is cosmetic, §3.1.1), is variable
+`X` of the report. When `X` is a table or template code, by its shape
+(such as `C_01.00`) or because the provider knows it, the variable is that
+template's filing indicator: `true` when it was reported, else `false` (the
+provider's `table_reported`), usually in a
+[precondition](../concepts/results.md#preconditions). Otherwise it is
+report parameter `X` as the provider gives it, of any type, and null when
+it is missing. Backticks escape other names: ``{v`a b`}``. Parses to
+[`Variable`][dpmxl.ast.Variable]; [`read_variable`][dpmxl.provider.read_variable]
+decides.
+
+<a id="filing-indicator"></a><a id="report-parameter"></a>
 
 | Expression | Result |
 | --- | --- |
 | `{v_T}` | `true` |
-| `{v_Z}` | `false` |
-| `{v_T} and not {v_Z}` | `true` |
-
-### Report parameter `{v…}` {#report-parameter}
-
-`{vName}` is report parameter `Name` as the provider gives it, of any type;
-null when it is missing. `Name` starts with a letter; backticks escape
-other names: ``{v`a b`}``. Parses to [`Parameter`][dpmxl.ast.Parameter].
-
-| Expression | Result |
-| --- | --- |
+| `{vT}` | `true` |
+| `{v_C_01.00}` | `false` |
+| `{v_T} and not {v_C_01.00}` | `true` |
 | `{vrefPeriod}` | `2026-12-31` |
-| `{vLevel}` | `"solo"` |
+| `{v_Level}` | `"solo"` |
 | `{vMissing}` | `null` |
 
 #### Bare names {#bare-names}
@@ -862,7 +861,7 @@ operands are always evaluated.
 | Expression | Result |
 | --- | --- |
 | `{tT, c0010} > 50 and {tT, c0020} > 0` | `r=0010: true; r=0020: false; r=0030: false` |
-| `{v_T} or {v_Z}` | `true` |
+| `{v_T} or {v_C_01.00}` | `true` |
 | `true xor false` | `true` |
 | `null and false` | `false` |
 | `null or false` | `null` |
@@ -1526,9 +1525,10 @@ EBA rules keep their meaning:
   selection that repeats an axis, `default` or `interval` are syntax errors.
 - Outside clauses `<-` is the persistent assignment, so compare with a
   negated operand as `a < -b`.
-- `{v_Code}` tests a filing indicator and `{vName}` reads a report
-  parameter: the `_` after `v` is not cosmetic, unlike after `t`, `g`, `o`
-  and `p` (§3.1.1).
+- A variable `{vX}` is a template's filing indicator when `X` is a table
+  or template code, by its shape or because the provider knows it, and
+  otherwise a report parameter; the specification leaves the variables of a
+  report to the information model (§3.1.1).
 - A [`default`](#default) stands for the records an operand lacks
   where another operand has them, as an XBRL fallback value does; the
   specification joins inner and generates implicit nulls only for keys the
@@ -1722,7 +1722,7 @@ The test suite checks that this index and the grammar module agree.
 | `;` | punctuation | [Programs and statements](#statements) |
 | `t` | reference prefix | [Table](#table) |
 | `g` | reference prefix | [Table group](#table-group) |
-| `v` | reference prefix | [Filing indicator, report parameter](#filing-indicator) |
+| `v` | reference prefix | [Variable](#variable) |
 | `o` | reference prefix | [Operation](#operation) |
 | `p` | reference prefix | [Typed parameter](#typed-parameter) |
 | `r` | axis | [Rows, columns and sheets](#axes) |

@@ -85,7 +85,6 @@ from .ast import (
     Literal_,
     Name,
     Node,
-    Parameter,
     PersistentAssignment,
     Program,
     Rename,
@@ -93,9 +92,9 @@ from .ast import (
     SelectionSpec,
     SetLiteral,
     Sub,
-    TableReported,
     TypedParameter,
     Unary,
+    Variable,
     Where,
     WindowBound,
     With,
@@ -110,7 +109,9 @@ from .provider import (
     EarlierReport,
     axis_matcher,
     declared_open_keys,
+    is_template_code,
     normalize_code,
+    read_variable,
 )
 from .recordset import (
     _FACT,
@@ -378,14 +379,12 @@ class Evaluator:
                     if kept is not None:
                         selected = self._where(selected, kept, context)
                 return selected
-            case TableReported(table=table):
-                return Recordset.scalar(self.provider.table_reported(table))
             case TypedParameter():
                 return Recordset.scalar(self._typed_parameter(node))
-            case Parameter(name=name):
-                value = self.provider.parameter(name)
-                if value is None:
-                    self._notes.append(f"report parameter {name!r} is not available")
+            case Variable(name=name):
+                value = read_variable(self.provider, name)
+                if value is None and not is_template_code(name):
+                    self._notes.append(f"variable {name!r} is not available")
                 return Recordset.scalar(value)
             case Name(name=name):
                 if bindings is not None:
@@ -1342,7 +1341,7 @@ def _range_bound(
 def _target_text(target: Node) -> str:
     if isinstance(target, Selection):
         return target.spec.text()
-    if isinstance(target, Parameter):
+    if isinstance(target, Variable):
         return f"{{v{target.name}}}"
     raise EvaluationError("assignment target must be a selection")
 

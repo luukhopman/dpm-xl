@@ -28,12 +28,12 @@ from dpmxl.ast import (
     In,
     Literal_,
     Name,
-    Parameter,
     PersistentAssignment,
     Program,
     Selection,
     SetLiteral,
     Unary,
+    Variable,
     Where,
     Window,
     WindowBound,
@@ -363,7 +363,7 @@ def test_parse_program_reads_statements_and_assignments() -> None:
     assert isinstance(second, PersistentAssignment)
     assert isinstance(second.target, Selection)
     assert isinstance(third, PersistentAssignment)
-    assert third.target == Parameter("X")
+    assert third.target == Variable("X")
     assert isinstance(fourth, With)
     assert source[slice(*second.span)] == "{tT, r0010, c0020} <- total * 2"
     assert [type(node).__name__ for node in walk(program)].count("Selection") == 3
@@ -891,7 +891,7 @@ def test_aggregates_without_an_operand_are_errors(
 
 
 def test_variable_names_may_contain_dots() -> None:
-    assert parse("{vTotal.A}") == Parameter("Total.A")
+    assert parse("{vTotal.A}") == Variable("Total.A")
     assert value("{vTotal.A}", report(**{"Total.A": "x"})) == "x"
 
 

@@ -16,6 +16,7 @@ used by the tests and by tools that build reports programmatically.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
@@ -131,10 +132,16 @@ class DataProvider(Protocol):
       [`DataPoint.keys`][dpmxl.provider.DataPoint];
 
     and raises ``LookupError`` for a table the release does not define (the
-    rule's status is then ``error``). ``table_reported`` answers ``{v_TABLE}``
-    and ``parameter`` answers ``{vName}`` and ``{p_Name, type}``.
+    rule's status is then ``error``). ``table_reported`` answers a variable
+    ``{vX}`` (also ``{v_X}``) that names a template, and ``parameter`` any
+    other variable and ``{p_Name, type}``; see
+    [`read_variable`][dpmxl.provider.read_variable].
 
     A provider may also define these optional methods:
+
+    * ``is_template(code: str) -> bool``: whether ``code`` is a table or
+      template code of the release, so ``{vX}`` reads its filing indicator
+      even when ``X`` does not look like an EBA template code.
 
     * ``open_keys(table: str) -> Sequence[str]``: the open key names of a
       table. Without it, an open table with no reported rows yields a
@@ -168,8 +175,9 @@ class DataProvider(Protocol):
         """Return whether the report's filing indicators include ``table``.
 
         ``table`` is the code written in ``{v_...}``, usually a template code
-        such as ``C_01.00``. Returns ``None`` when the provider cannot tell,
-        which makes ``{v_...}`` null.
+        such as ``C_01.00``; see
+        [`read_variable`][dpmxl.provider.read_variable]. Returns ``None`` when
+        the provider cannot tell, which makes ``{v_...}`` null.
         """
         ...
 
@@ -182,6 +190,78 @@ class DataProvider(Protocol):
         those types, and a list or set becomes a set.
         """
         ...
+
+
+_TEMPLATE_CODE = re.compile(r"[A-Za-z]{1,3}_\d{2,3}\.\d{2}(?:\.[A-Za-z0-9]+)*")
+
+
+def is_template_code(code: str) -> bool:
+    """Return whether a code has the shape of an EBA template code.
+
+    The shape is one to three letters, ``_``, two or three digits, ``.``,
+    two digits, and any further ``.``-separated parts, as in ``C_00.01``,
+    ``F_01.01.dp`` or ``C_113.00.a``.
+
+    Returns:
+        bool: Whether ``code`` looks like a template code.
+
+    Examples:
+        >>> is_template_code("C_01.00"), is_template_code("F_18.00.dp")
+        (True, True)
+        >>> is_template_code("ReportingLevel"), is_template_code("T")
+        (False, False)
+    """
+    return _TEMPLATE_CODE.fullmatch(code) is not None
+
+
+class VariableSource(Protocol):
+    """What [`read_variable`][dpmxl.provider.read_variable] asks of a provider.
+
+    Every [`DataProvider`][dpmxl.provider.DataProvider] is one, and so is a
+    columnar [`FrameProvider`][dpmxl.columnar.FrameProvider].
+    """
+
+    def table_reported(self, table: str) -> bool | None:
+        """Return a template's filing indicator, or ``None``."""
+        ...
+
+    def parameter(self, name: str) -> Value:
+        """Return a report parameter, or ``None``."""
+        ...
+
+
+def read_variable(provider: VariableSource, name: str) -> Value:
+    """Read variable ``{vX}`` (also written ``{v_X}``) from a provider.
+
+    The ``_`` after ``v`` is cosmetic (DPM-XL v0.11 §3.1.1). When ``name`` is
+    a template code, by its shape
+    ([`is_template_code`][dpmxl.provider.is_template_code]) or because the
+    provider's optional ``is_template`` method says so, the variable is the
+    template's filing indicator, ``table_reported(name)``. Otherwise it is
+    the report parameter ``parameter(name)``. Either is null when the
+    provider does not know it.
+
+    Returns:
+        Value: The filing indicator or the parameter's value.
+
+    Examples:
+        >>> provider = MemoryProvider(
+        ...     [TableLayout("T", rows=("0010",))],
+        ...     {},
+        ...     reported=["C_01.00"],
+        ...     parameters={"ReportingLevel": "con"},
+        ... )
+        >>> read_variable(provider, "C_01.00"), read_variable(provider, "C_02.00")
+        (True, False)
+        >>> read_variable(provider, "T"), read_variable(provider, "ReportingLevel")
+        (False, 'con')
+        >>> print(read_variable(provider, "Missing"))
+        None
+    """
+    method = getattr(provider, "is_template", None)
+    if is_template_code(name) or (callable(method) and method(name)):
+        return provider.table_reported(name)
+    return provider.parameter(name)
 
 
 @dataclass(frozen=True, slots=True)
@@ -630,6 +710,18 @@ class MemoryProvider:
             for layout in self.tables.values()
         )
 
+    def is_template(self, code: str) -> bool:
+        """Return whether a code is a known table, template or reported code.
+
+        Returns:
+            bool: Whether ``{vCode}`` reads a filing indicator.
+        """
+        folded = code.casefold()
+        return any(
+            folded in (layout.code.casefold(), (layout.template or "").casefold())
+            for layout in self.tables.values()
+        ) or any(reported.casefold() == folded for reported in self.reported)
+
     def parameter(self, name: str) -> Value:
         """Return a report parameter.
 
@@ -690,7 +782,10 @@ __all__ = [
     "EarlierReport",
     "MemoryProvider",
     "TableLayout",
+    "VariableSource",
     "axis_matcher",
     "axis_matches",
+    "is_template_code",
     "normalize_code",
+    "read_variable",
 ]

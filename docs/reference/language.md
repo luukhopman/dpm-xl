@@ -1513,10 +1513,10 @@ with `order by`; a window is ignored.
 
 ## Where dpm-xl differs {#where-dpm-xl-differs}
 
-The [DPM-XL specification v0.11](https://dpm-alliance.github.io/dpm-xl-docs/)
-(2026-09-18; operators part, cited as §, and information model part, cited
-as IM §) is the reference. Some readings differ from it on purpose, so that
-EBA rules keep their meaning:
+The [DPM-XL specification][dpm-xl-spec], version 0.11, is the reference
+([standards and conformance](standards.md#dpm-xl)); its operators part is
+cited as §, its information model part as IM §. Some readings differ from
+it on purpose, so that EBA rules keep their meaning:
 
 - `not` binds looser than comparisons and `in`: `not a = b` is
   `not (a = b)` (§1.1 puts `not` above `*`). `in` shares the level of the

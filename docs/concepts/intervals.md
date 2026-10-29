@@ -7,9 +7,10 @@ description: How reported precision (XBRL decimals) turns numbers into intervals
 A fact reported as 1,204 with XBRL `decimals="0"` is a rounded amount: the
 true value lies anywhere from 1,203.5 to 1,204.5. A rule that adds such
 amounts must allow for the rounding, or it fails reports that are correct.
-EBA validation rules therefore use interval arithmetic (EBA Filing Rules
-2.18), with the formulas of DPM-XL §4 and §7, which follow the Eurofiling
-interval arithmetic functions (`iaf:*`, version 1.1.1).
+EBA validation rules therefore use interval arithmetic (rule 2.18 of the
+EBA Filing Rules; see [standards and conformance](../reference/standards.md#eba-filing-rules)),
+with the formulas of DPM-XL §4 and §7, which build on the Eurofiling
+interval arithmetic functions (`iaf:*`).
 
 ## Numbers with a tolerance
 

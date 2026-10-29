@@ -46,6 +46,7 @@ nav = [
   ] },
   { "Reference" = [
     "reference/index.md",
+    { "Standards and conformance" = "reference/standards.md" },
     { "Quick reference" = "reference/quick-reference.md" },
     { "Language" = "reference/language.md" },
     { "CLI" = "reference/cli.md" },

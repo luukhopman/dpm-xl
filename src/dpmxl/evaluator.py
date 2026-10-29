@@ -1619,10 +1619,12 @@ def _binary(op: str) -> Callable[[list[Value]], Value]:
                 return left - right
             if op == "*":
                 return left * right
-            if right.value == 0:
-                # DPM-XL 4.3.4.6: a zero denominator is a run-time error.
-                return _failure("division by zero")
-            return left / right
+            try:
+                return left / right
+            except ZeroDivisionError as error:
+                # DPM-XL 4.3.4.5 and 4.3.4.6: a zero denominator, or an
+                # interval containing zero, is a run-time error.
+                return _failure(str(error))
 
         return arithmetic
     if op == "&":

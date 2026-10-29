@@ -177,6 +177,25 @@ def test_date_of_no_calendar_day_is_null(rule: str) -> None:
     assert status(rule) == "passed"
 
 
+def test_division_by_an_interval_containing_zero_is_an_error() -> None:
+    # 4.3.4.5: the denominator interval must not contain zero.
+    data = provider({("0010", "0010"): 4, ("0020", "0010"): 0, ("0030", "0010"): 1})
+    data.values["T", "0020", "0010", None, ()] = Number.of("0.4", 0)
+    rule = "with {tT, c0010, interval: true}: {r0010} / {r0020} > 1"
+    result = evaluate_rule(rule, data)
+    assert result.status == "error"
+    assert result.message == "division by an interval that contains zero"
+    # An interval comparison guards it, as for a zero divisor.
+    guarded = (
+        "with {tT, c0010, interval: true}: "
+        "if {r0020} != 0 then {r0010} / {r0020} > 1 endif"
+    )
+    assert status(guarded, data) == "not_applicable"
+    assert status("with {tT, c0010, interval: true}: {r0010} / {r0030} > 1", data) == (
+        "passed"
+    )
+
+
 def test_errors_fail_only_the_records_that_reach_the_result() -> None:
     # Column 0010 divides by zero, column 0020 does not.
     data = provider(

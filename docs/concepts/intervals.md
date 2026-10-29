@@ -37,7 +37,7 @@ Number(value=Decimal('5'), tolerance=Decimal('0'))
 | --- | --- |
 | `a + b`, `a - b` | `δa + δb` |
 | `a * b` | `|a·δb| + |b·δa| + δa·δb` |
-| `a / b` | The largest deviation of the four endpoint quotients from `a / b` (skipping a zero divisor) |
+| `a / b` | The largest deviation of the four endpoint quotients from `a / b`; an error when `b`'s interval contains zero |
 | `-a`, `abs(a)` | `δa` |
 | `min`, `max` | The chosen value's tolerance |
 

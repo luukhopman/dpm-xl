@@ -1308,7 +1308,11 @@ def _divide(frames: Sequence[Frame]) -> Frame:
             continue
         # Quotients are rounded to the frame's 12 decimals, their thresholds
         # up, so that rounding never narrows an interval.
-        quotient = Number(a, ta or ZERO) / Number(b, tb or ZERO)
+        try:
+            quotient = Number(a, ta or ZERO) / Number(b, tb or ZERO)
+        except ZeroDivisionError as error:
+            # A divisor interval containing zero fails only this record.
+            raise ColumnarUnsupported(str(error)) from error
         if quotient.value.copy_abs() >= _LIMIT or quotient.tolerance >= _LIMIT:
             raise ColumnarUnsupported("quotient beyond Decimal(38, 12)")
         nums.append(quotient.value.quantize(_SCALE, context=_WIDE))

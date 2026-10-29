@@ -183,17 +183,19 @@ class Number:
         """Divide as Eurofiling's ``iaf:numeric-divide`` does.
 
         The threshold is the largest deviation of the four endpoint quotients
-        ``(A ± dA) / (B ± dB)`` from ``A / B``. An endpoint divisor of zero is
-        skipped rather than making the result unbounded.
+        ``(A ± dA) / (B ± dB)`` from ``A / B``.
 
         Returns:
             Number: The quotient.
 
         Raises:
-            ZeroDivisionError: If ``other`` is zero.
+            ZeroDivisionError: If ``other`` is zero or, as DPM-XL 4.3.4.5
+                forbids, an interval that contains zero.
         """
         if other.value == 0:
             raise ZeroDivisionError("division by zero")
+        if other.low <= 0 <= other.high:
+            raise ZeroDivisionError("division by an interval that contains zero")
         value = _divide(self.value, other.value)
         if not self.tolerance and not other.tolerance:
             return Number(value)
@@ -201,9 +203,8 @@ class Number:
             _subtract(value, _divide(numerator, denominator)).copy_abs()
             for numerator in (self.high, self.low)
             for denominator in (other.high, other.low)
-            if denominator != 0
         ]
-        return Number(value, max(deviations, default=ZERO))
+        return Number(value, max(deviations))
 
     def __neg__(self) -> Number:
         """Negate the value.

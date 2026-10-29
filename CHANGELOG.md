@@ -39,6 +39,9 @@ All notable changes to this project are documented here. The project follows
 - Names of temporaries, and the table, table group, operation and parameter
   codes `MemoryProvider` looks up, ignore case, so `{tt, r0010}` reads
   table `T`.
+- Division by an interval that contains zero, such as `0.4 ± 0.5`, is an
+  error for its record, as the specification says; the zero endpoint used
+  to be skipped.
 - `diagnose` checks the `partition by` and `order by` keys of analytic
   functions; it used to skip them.
 

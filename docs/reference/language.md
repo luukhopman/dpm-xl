@@ -702,7 +702,8 @@ Addition, subtraction, multiplication and division of numbers.
   ([Arithmetic](../concepts/intervals.md#arithmetic)).
 - **Keys:** the operands [join](#records).
 - **Errors:** `+ needs numbers, found …`; `division by zero` when the
-  divisor's value is zero.
+  divisor's value is zero, `division by an interval that contains zero`
+  when its tolerance reaches zero.
 - **Node:** [`Binary`][dpmxl.ast.Binary].
 
 | Expression | Result |
@@ -713,6 +714,7 @@ Addition, subtraction, multiplication and division of numbers.
 | `1 / 3` | `0.3333333333333333333333333333` |
 | `1 + null` | `null` |
 | `1 / 0` | `error: division by zero` |
+| `1 / ({tT, r0010, c0020, interval: true} - 4.8)` | `error: division by an interval that contains zero` |
 | `{tT, c0010} / {tT, c0020}` | `r=0010: 20; r=0020: -12; r=0030: null` |
 | `1 + "a"` | `error: + needs numbers, found string` |
 | `{tT, r0010} + {tT, c0010}` | `error: operands have incompatible keys (r) and (c)` |

@@ -408,8 +408,9 @@ def test_interval_arithmetic_follows_eurofiling() -> None:
     assert round(quotient.tolerance, 20) == round(
         abs(Decimal(25) - Decimal("100.5") / Decimal("3.5")), 20
     )
-    # A divisor interval spanning zero skips the zero endpoint.
-    assert (Number.of(1, 0) / Number.of("0.5", 0)).tolerance == Decimal("1.5")
+    # DPM-XL 4.3.4.5: the denominator interval must not contain zero.
+    with pytest.raises(ZeroDivisionError, match="interval that contains zero"):
+        Number.of(1, 0) / Number.of("0.5", 0)
 
 
 def test_arithmetic_ignores_the_callers_decimal_context() -> None:

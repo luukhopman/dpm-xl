@@ -206,6 +206,8 @@ def test_elementwise_max_and_min_of_text_go_to_the_reference_engine(
         ),
         ('with {tT, c*}: if {r0030} > 50 then {r0010} > "a" else true endif', "passed"),
         ("with {tT, c*, default: 0}: {r0010} / ({r0030} - 17) > 1", "error"),
+        # 17 ± 0.5 - 16.6 contains zero (DPM-XL 4.3.4.5).
+        ("with {tT, c*, interval: true}: {r0010} / ({r0030} - 16.6) > 1", "error"),
     ],
 )
 def test_record_errors_go_to_the_reference_engine(

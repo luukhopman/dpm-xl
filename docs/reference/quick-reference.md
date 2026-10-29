@@ -74,7 +74,7 @@ Loosest first; see [Precedence and associativity](language.md#precedence).
 
 | Syntax | Meaning |
 | --- | --- |
-| `x[where qEBB = "A"]` | [Keep records](language.md#where) whose keys satisfy a condition |
+| `x[where qEBB = "A"]` | [Keep records](language.md#where) whose keys, or value `f`, satisfy a condition |
 | `x[get qEBB]` | [Replace values](language.md#get) by a key's values |
 | `x[sub qEBB = "A"]` | [Fix a key](language.md#sub) and drop it |
 | `x[rename qEBB to qX, …]` | [Rename keys](language.md#rename) |
@@ -86,8 +86,8 @@ Key names ignore case and the `q` prefix ([Key names](language.md#key-names)).
 | Function | Operands | Result |
 | --- | --- | --- |
 | [`abs(x)`](language.md#abs) | number | number |
-| [`exp(x)`, `ln(x)`, `sqrt(x)`](language.md#exp) | number | number, null if undefined |
-| [`power(x, y)`](language.md#power), [`log(x, base)`](language.md#log) | numbers | number, null if undefined |
+| [`exp(x)`, `ln(x)`, `sqrt(x)`](language.md#exp) | number | number; an error outside the domain of `ln` and `sqrt` |
+| [`power(x, y)`](language.md#power), [`log(x, base)`](language.md#log) | numbers | number, null if undefined; an error outside the domain of `log` |
 | [`max(a, b, …)`, `min(a, b, …)`](language.md#max) | numbers, or dates, text, items | the largest, smallest per record |
 | [`isnull(x)`](language.md#isnull) | any | boolean |
 | [`nvl(x, r)`](language.md#nvl) | any | `x`, or `r` where `x` is null |
@@ -95,7 +95,7 @@ Key names ignore case and the `q` prefix ([Key names](language.md#key-names)).
 | [`substr(s, start, length)`](language.md#substr) | text, whole numbers | text |
 | [`match(s, pattern)`](language.md#match) | text, regular expression | boolean |
 | [`year`, `semester`, `quarter`, `month`, `week`, `day`](language.md#date-parts) | date | number |
-| [`date(y, m, d)`](language.md#date) | whole numbers | date |
+| [`date(y, m, d)`](language.md#date) | whole numbers | date, null if no such day |
 | [`time_shift(x, period, n, key)`](language.md#time_shift) | any, `A` `S` `Q` `M` `W` or `D`, whole number, optional name | `x` as `n` periods earlier |
 | [`annualise(x, fiscalYearEnd, key)`](language.md#annualise) | number, month, name | number |
 | [`set_of(x)`](language.md#set_of) | any | set |

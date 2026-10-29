@@ -673,3 +673,16 @@ def test_clauses_may_name_the_fact() -> None:
     # DPM-XL 11.1.5: a where condition may use the Fact Component, f.
     assert found("{tC_28.00, c0010} [where f != 0] > 0", parameters=()) == []
     assert found("with {tC_28.00} [where F != 0]: {c0010} > 0", parameters=()) == []
+
+
+def test_analytic_functions_check_their_keys() -> None:
+    assert found("rank({tC_28.00, c0010} over (order by qX desc)) > 0") == [
+        (
+            "error",
+            "unknown-key",
+            "qX",
+            "qX is not a key of table C_28.00 (keys qINC)",
+            None,
+        )
+    ]
+    assert found("rank({tC_28.00, c0010} over (partition by INC order by f)) > 0") == []

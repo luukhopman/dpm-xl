@@ -457,7 +457,7 @@ class _Checker:
                 self.check_keys(node, operand, (name,), scope)
             case Rename(operand=operand, pairs=pairs):
                 self.check_keys(node, operand, [old for old, _ in pairs], scope)
-            case Analytic(operand=operand, partition=partition, order_by=order):
+            case Analytic(operand=operand, partition_by=partition, order_by=order):
                 names = [*partition, *(key for key, _ in order)]
                 self.check_keys(node, operand, names, scope)
 

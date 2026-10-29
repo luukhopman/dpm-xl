@@ -33,6 +33,8 @@ All notable changes to this project are documented here. The project follows
 - Names of temporaries, and the table, table group, operation and parameter
   codes `MemoryProvider` looks up, ignore case, so `{tt, r0010}` reads
   table `T`.
+- `diagnose` checks the `partition by` and `order by` keys of analytic
+  functions; it used to skip them.
 
 ## 1.2.3 - 2026-10-26
 

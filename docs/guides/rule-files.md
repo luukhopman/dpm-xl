@@ -18,7 +18,8 @@ A rule source is one of:
   and blank lines are ignored
   ([`examples/rules.txt`](https://github.com/luukhopman/dpm-xl/blob/main/examples/rules.txt));
 - a `.json` file holding a list of objects with `code`, `expression` and an
-  optional `precondition`
+  optional `precondition`, `severity` (`error` or `warning`), `active` and
+  `modules`
   ([`examples/rules.json`](https://github.com/luukhopman/dpm-xl/blob/main/examples/rules.json)).
 
 ```json
@@ -28,9 +29,12 @@ A rule source is one of:
     "expression": "with {tC_01.00, c*, default: 0, interval: true}: {r0010} = {r0020} + {r0030}",
     "precondition": "{v_C_01.00}"
   },
-  {"code": "v0002", "expression": "{tC_27.00, c0010} > 0"}
+  {"code": "v0002", "expression": "{tC_27.00, c0010} > 0", "severity": "warning"},
+  {"code": "v0005", "expression": "{tC_01.00, r0010, c0010} > 1000", "active": false}
 ]
 ```
+
+An inactive rule, such as one the EBA has deactivated, is skipped.
 
 [Data formats](../reference/data-formats.md#rule-files) has the details.
 
@@ -46,34 +50,38 @@ from pathlib import Path
 
 from dpmxl import SelectionCache, evaluate_rule, explain
 from dpmxl.cli import load_memory_provider
+from dpmxl.rules import load_rules
 
 provider = load_memory_provider(json.loads(Path("examples/data.json").read_text()))
-rules = json.loads(Path("examples/rules.json").read_text())
+rules = load_rules("examples/rules.json")
 
 cache = SelectionCache()
 for rule in rules:
+    if not rule.active:
+        print(f"{rule.code}: skipped")
+        continue
     result = evaluate_rule(
-        rule["expression"],
-        provider,
-        precondition=rule.get("precondition"),
-        cache=cache,
+        rule.expression, provider, precondition=rule.precondition, cache=cache
     )
-    print(f"{rule['code']}: {result.status}")
+    print(f"{rule.code} [{rule.severity}]: {result.status}")
     for outcome in result.failures:
-        explanation = explain(result.evaluation, rule["expression"], outcome.key)
+        explanation = explain(result.evaluation, rule.expression, outcome.key)
         print("  ", explanation.summary)
 ```
 
 ```text
-v0001: failed
+v0001 [error]: failed
    1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision
-v0002: failed
+v0002 [warning]: failed
    -5 should exceed 0: difference 5
-v0003: passed
-v0004: not_applicable
+v0003 [error]: passed
+v0004 [error]: not_applicable
+v0005: skipped
 ```
 
-`load_memory_provider` builds the in-memory report the CLI reads from a
+[`load_rules`][dpmxl.rules.load_rules] reads a rule file into
+[`Rule`][dpmxl.rules.Rule] objects. `load_memory_provider` builds the
+in-memory report the CLI reads from a
 [data file](../reference/data-formats.md#data-files); in your application the
 provider is your own ([Connect your data](provider.md)).
 
@@ -128,6 +136,9 @@ $ dpm-xl eval "{tC_27.00, c0010} > 0" examples/data.json --json
     {
       "rule": "expression",
       "expression": "{tC_27.00, c0010} > 0",
+      "severity": "error",
+      "active": true,
+      "modules": [],
       "status": "failed",
       "message": null,
       "counts": {

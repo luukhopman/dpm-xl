@@ -132,7 +132,7 @@ print(dict(by_table))
 ```
 
 ```text
-{'C_01.00': ['v0001', 'v0003'], 'C_27.00': ['v0002'], 'C_99.00': ['v0004']}
+{'C_01.00': ['v0001', 'v0003', 'v0005'], 'C_27.00': ['v0002'], 'C_99.00': ['v0004']}
 ```
 
 `dpm-xl check --references` prints the same selections for a rule file on the

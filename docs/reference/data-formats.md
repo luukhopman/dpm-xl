@@ -22,10 +22,21 @@ A `.json` rule file is a list of objects, one per rule
 | `code` | string | The rule's label in the output. Defaults to the rule's 1-based position. |
 | `expression` | string | The rule. A rule without one is skipped. |
 | `precondition` | string, optional | An expression that must yield a true record for the rule to apply. |
+| `severity` | string, optional | `error` (the default) or `warning`. Shown in the output. |
+| `active` | Boolean, optional | `false` skips the rule, as for a rule the EBA has deactivated; it is reported as `skipped`. Default `true`. |
+| `modules` | list of strings, optional | The module codes the rule applies to, such as `["COREP_OF"]`; none for every module. |
+| `source` | string, optional | Who defines the rule, such as `eba`. Informative. |
 
 `expression` and `precondition` may also be objects with an `expression`
-field, as some rule exports nest them. A file that does not hold a list, or
-a list entry that is not an object, is an error (exit status 3).
+field, as some rule exports nest them. Other fields are ignored.
+[`load_rules`][dpmxl.rules.load_rules] reads a rule file in Python. A file
+that does not hold a list, or a field of the wrong type, is an error (exit
+status 3) that names the field by its JSON path:
+
+```console
+$ dpm-xl check tests/data/bad-severity.json
+error: tests/data/bad-severity.json: [0].severity: expected "error" or "warning", got "fatal"
+```
 
 ```json
 [

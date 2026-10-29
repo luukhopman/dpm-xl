@@ -4,7 +4,8 @@
     "expression": "with {tC_01.00, c*, default: 0, interval: true}: {r0010} = {r0020} + {r0030}",
     "precondition": "{v_C_01.00}"
   },
-  {"code": "v0002", "expression": "{tC_27.00, c0010} > 0"},
+  {"code": "v0002", "expression": "{tC_27.00, c0010} > 0", "severity": "warning"},
   {"code": "v0003", "expression": "with {tC_01.00, c0010}: {r0020} >= {r0030}"},
-  {"code": "v0004", "expression": "{tC_99.00, r0010} > 0", "precondition": "{v_C_99.00}"}
+  {"code": "v0004", "expression": "{tC_99.00, r0010} > 0", "precondition": "{v_C_99.00}"},
+  {"code": "v0005", "expression": "{tC_01.00, r0010, c0010} > 1000", "active": false}
 ]

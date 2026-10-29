@@ -80,6 +80,7 @@ $ dpm-xl check "with {tC_01.00}: {r0010} >= 0" --references --json
   "schema_version": 1,
   "parsed": 1,
   "total": 1,
+  "skipped": [],
   "errors": [],
   "diagnostics": [],
   "selections": [
@@ -96,6 +97,7 @@ $ dpm-xl check "with {tC_01.00}: {r0010} >= 0" --references --json
 | `schema_version` | integer | `1`. Changes only with a new major release. |
 | `parsed` | integer | Expressions and preconditions that parsed. |
 | `total` | integer | Expressions and preconditions checked. |
+| `skipped` | list | The codes of the inactive rules, which are not checked. |
 | `errors` | list | One object per syntax error: `source` (the label), `message` (plain words), `position` and `end` (zero-based character offsets of the problem in that expression). |
 | `diagnostics` | list | One object per problem, syntax errors included: `source` (the label) and the fields of a [`Diagnostic`][dpmxl.diagnostics.Diagnostic]: `severity`, `code`, `message`, `start`, `end`, `subject` and `suggestion`. |
 | `selections` | list | Only with `--references`: `source` and `selection` (normalized DPM-XL text) per selection. |
@@ -115,7 +117,7 @@ $ dpm-xl eval examples/rules.json examples/data.json
 v0001: failed
   records: 1 passed, 1 failed, 0 not evaluated
   - c=0020: 1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision
-v0002: failed
+v0002: failed (warning)
   records: 1 passed, 1 failed, 0 not evaluated
   - qCPI=LEI-B: -5 should exceed 0: difference 5
 v0003: passed
@@ -123,7 +125,8 @@ v0003: passed
 v0004: not_applicable
   message: precondition not met
   records: 0 passed, 0 failed, 0 not evaluated
-4 rules: 2 failed, 1 passed, 1 not_applicable
+v0005: skipped (inactive)
+5 rules: 2 failed, 1 passed, 1 not_applicable, 1 skipped
 ```
 
 For one expression the output starts with `status:`, and a failing record
@@ -148,6 +151,9 @@ $ dpm-xl eval "{tC_27.00, c0010} > 0" examples/data.json --json
     {
       "rule": "expression",
       "expression": "{tC_27.00, c0010} > 0",
+      "severity": "error",
+      "active": true,
+      "modules": [],
       "status": "failed",
       "message": null,
       "counts": {
@@ -177,8 +183,11 @@ $ dpm-xl eval "{tC_27.00, c0010} > 0" examples/data.json --json
 | `results` | list | One object per rule, in source order. |
 | `results[].rule` | string | The rule's label: its `code`, `line <n>` or `expression`. |
 | `results[].expression` | string | The expression evaluated. |
-| `results[].status` | string | `passed`, `failed`, `not_applicable`, `error` or `unsupported`. |
-| `results[].message` | string or null | Why the status is `error`, `unsupported` or `not_applicable`. |
+| `results[].severity` | string | `error` or `warning`, from the rule file; `error` otherwise. |
+| `results[].active` | Boolean | Whether the rule is active. |
+| `results[].modules` | list | The module codes the rule applies to; empty for every module. |
+| `results[].status` | string | `passed`, `failed`, `not_applicable`, `error` or `unsupported`; `skipped` for an inactive rule. |
+| `results[].message` | string or null | Why the status is `error`, `unsupported`, `not_applicable` or `skipped`. |
 | `results[].counts` | object | `passed`, `failed` and `null` (not evaluated) record counts. |
 | `results[].failures` | list | Per failing record: `key` (key name to value, as text), `summary` (the explanation sentence) and `cells` (each cell used, as DPM-XL text). |
 

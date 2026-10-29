@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The project follows
 
 ### Added
 
+- Rules in a JSON rule file take `severity` (`error` or `warning`),
+  `active` and `modules`; `dpm-xl eval` and `dpm-xl check` skip inactive
+  rules, and the output shows severity. `dpmxl.rules.load_rules` reads a
+  rule file in Python.
 - The contextual components `entityID`, `baseCurrency` and the
   `decimals…` names read the report parameters of those names, with their
   type; a missing one is null.
@@ -20,6 +24,8 @@ All notable changes to this project are documented here. The project follows
   code or the provider's new `is_template` knows it, else report parameter
   `X`. Both parse to `Variable`, which replaces `TableReported` and
   `Parameter`.
+- A malformed JSON rule file names the field by its JSON path, such as
+  `[0].severity`.
 
 ### Fixed
 

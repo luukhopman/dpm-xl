@@ -13,7 +13,7 @@ affiliated with or endorsed by the European Banking Authority.
 
 | Path | Content |
 | --- | --- |
-| `src/dpmxl/` | The package. `parser.py` (tokenizer, recursive-descent parser), `grammar.py` (vocabulary, TextMate grammar), `ast.py` (frozen node classes), `values.py` (`Number` with interval tolerance), `recordset.py` (keyed records, joins), `evaluator.py` (reference evaluator), `explain.py`, `references.py` (static analysis), `provider.py` (`DataProvider`, `MemoryProvider`), `columnar.py` (polars evaluator, optional), `cli.py`. |
+| `src/dpmxl/` | The package. `parser.py` (tokenizer, recursive-descent parser), `grammar.py` (vocabulary, TextMate grammar), `ast.py` (frozen node classes), `values.py` (`Number` with interval tolerance), `recordset.py` (keyed records, joins), `evaluator.py` (reference evaluator), `explain.py`, `references.py` (static analysis), `provider.py` (`DataProvider`, `MemoryProvider`), `rules.py` (rule files), `columnar.py` (polars evaluator, optional), `cli.py`. |
 | `tests/` | pytest suite. `test_columnar.py` checks both evaluators agree; `test_grammar_coverage.py` covers every grammar alternative; `test_docs.py` runs every docs example and docstring doctest and checks that the language reference covers `dpmxl.grammar`; `data/eba_expressions.txt` samples EBA rules. |
 | `docs/` | Documentation site (Zensical + mkdocstrings), configured in `zensical.toml`. |
 | `scripts/build_docs.py` | Strict site build plus `llms.txt`, `llms-full.txt` and Markdown page copies. |

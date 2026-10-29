@@ -7,7 +7,7 @@ import json
 import sys
 from collections import Counter
 from collections.abc import Iterable, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, replace
 from datetime import date
 from decimal import InvalidOperation
 from importlib.metadata import PackageNotFoundError, version
@@ -21,6 +21,7 @@ from .explain import explain
 from .parser import parse_program
 from .provider import CellKey, MemoryProvider, TableLayout
 from .references import references
+from .rules import Rule, load_rules
 from .values import Number, Value, ValueSet
 
 JSON_SCHEMA_VERSION = 1
@@ -109,13 +110,6 @@ def _version() -> str:
         return "unknown"
 
 
-@dataclass(frozen=True, slots=True)
-class _Rule:
-    label: str
-    expression: str
-    precondition: str | None = None
-
-
 _RULE_FILE_SUFFIXES = frozenset({".json", ".txt"})
 
 
@@ -132,54 +126,31 @@ def _looks_like_path(source: str) -> bool:
     )
 
 
-def _rules(source: str) -> list[_Rule]:
+def _rules(source: str) -> list[Rule]:
     """Read rules from an expression or a rule file.
 
     Returns:
-        list[_Rule]: The rules in file order.
+        list[Rule]: The rules in file order.
 
     Raises:
-        ValueError: If a JSON rule file is malformed.
         FileNotFoundError: If the source names a file that does not exist.
     """
     path = Path(source)
     if not path.is_file():
         if _looks_like_path(source):
             raise FileNotFoundError(f"no such rule file: {source}")
-        return [_Rule("expression", source)]
-    text = path.read_text(encoding="utf-8")
-    if path.suffix.casefold() != ".json":
-        return [
-            _Rule(f"line {number}", line)
-            for number, line in enumerate(text.splitlines(), start=1)
-            if line.strip() and not line.lstrip().startswith("#")
-        ]
-    entries = json.loads(text)
-    if not isinstance(entries, list):
-        raise ValueError("a JSON rule file must hold a list of rules")
-    rules = []
-    for index, entry in enumerate(entries, start=1):
-        if not isinstance(entry, dict):
-            raise ValueError(f"rule {index} is not a JSON object")
-        expression, precondition = (
-            value.get("expression") if isinstance(value, dict) else value
-            for value in (entry.get("expression"), entry.get("precondition"))
-        )
-        if expression:
-            rules.append(
-                _Rule(str(entry.get("code", index)), expression, precondition or None)
-            )
-    return rules
+        return [Rule("expression", source)]
+    return load_rules(path)
 
 
-def _expressions(rules: Iterable[_Rule]) -> Iterable[tuple[str, str]]:
+def _expressions(rules: Iterable[Rule]) -> Iterable[tuple[str, str]]:
     for rule in rules:
-        if rule.label == "expression":
+        if rule.code == "expression":
             yield "argument", rule.expression
             continue
-        yield f"{rule.label}:expression", rule.expression
+        yield f"{rule.code}:expression", rule.expression
         if rule.precondition:
-            yield f"{rule.label}:precondition", rule.precondition
+            yield f"{rule.code}:precondition", rule.precondition
 
 
 def _check(
@@ -195,6 +166,8 @@ def _check(
     except (OSError, ValueError) as error:
         print(f"error: {source}: {error}", file=sys.stderr)
         return INVALID_INPUT
+    skipped = [rule.code for rule in rules if not rule.active]
+    rules = [rule for rule in rules if rule.active]
     try:
         lookup, tables, parameters = _layouts(layouts)
     except (OSError, ValueError) as error:
@@ -241,6 +214,7 @@ def _check(
             "schema_version": JSON_SCHEMA_VERSION,
             "parsed": total - unparsed,
             "total": total,
+            "skipped": skipped,
         }
         document["errors"] = errors
         document["diagnostics"] = found
@@ -253,13 +227,20 @@ def _check(
             for severity in ("error", "warning")
             if counts[severity]
         ]
+        notes = [" and ".join(problems)] if problems else []
+        if skipped:
+            notes.append(f"{_plural(len(skipped), 'inactive rule')} skipped")
         print(
             f"{total - unparsed}/{total} expressions parsed"
-            + (f"; {' and '.join(problems)}" if problems else "")
+            + "".join(f"; {note}" for note in notes)
         )
     if strict:
         return 1 if counts["error"] else 0
     return 1 if unparsed else 0
+
+
+def _plural(count: int, noun: str) -> str:
+    return f"{count} {noun}{'' if count == 1 else 's'}"
 
 
 def _layouts(
@@ -310,9 +291,12 @@ def _evaluate(
         print(f"error: {error}", file=sys.stderr)
         return INVALID_INPUT
     if precondition and len(rules) == 1:
-        rules = [_Rule(rules[0].label, rules[0].expression, precondition)]
-    results = []
+        rules = [replace(rules[0], precondition=precondition)]
+    results: list[tuple[Rule, RuleResult | None, list[dict[str, Any]]]] = []
     for rule in rules:
+        if not rule.active:
+            results.append((rule, None, []))
+            continue
         result = evaluate_rule(
             rule.expression, provider, precondition=rule.precondition
         )
@@ -337,11 +321,18 @@ def _evaluate(
                     "schema_version": JSON_SCHEMA_VERSION,
                     "results": [
                         {
-                            "rule": rule.label,
+                            "rule": rule.code,
                             "expression": rule.expression,
-                            "status": result.status,
-                            "message": result.message,
-                            "counts": result.counts,
+                            "severity": rule.severity,
+                            "active": rule.active,
+                            "modules": list(rule.modules),
+                            "status": _status(result),
+                            "message": (result.message if result else "inactive rule"),
+                            "counts": (
+                                result.counts
+                                if result
+                                else {"passed": 0, "failed": 0, "null": 0}
+                            ),
                             "failures": failures,
                         }
                         for rule, result, failures in results
@@ -354,29 +345,46 @@ def _evaluate(
         for rule, result, failures in results:
             _print_result(rule, result, failures, single=len(rules) == 1)
         if len(rules) > 1:
-            statuses = Counter(result.status for _, result, _ in results)
+            statuses = Counter(_status(result) for _, result, _ in results)
             print(
                 f"{len(rules)} rules: "
                 + ", ".join(f"{count} {status}" for status, count in statuses.items())
             )
     return max(
-        (_EXIT_CODES.get(result.status, INVALID_INPUT) for _, result, _ in results),
+        (
+            _EXIT_CODES.get(result.status, INVALID_INPUT)
+            for _, result, _ in results
+            if result is not None
+        ),
         default=0,
     )
 
 
+def _status(result: RuleResult | None) -> str:
+    """Return a rule's status, ``skipped`` for an inactive rule.
+
+    Returns:
+        str: The status.
+    """
+    return "skipped" if result is None else result.status
+
+
 def _print_result(
-    rule: _Rule,
-    result: RuleResult,
+    rule: Rule,
+    result: RuleResult | None,
     failures: list[dict[str, Any]],
     *,
     single: bool,
 ) -> None:
     indent = "" if single else "  "
+    if result is None:
+        print(f"{rule.code}: skipped (inactive)")
+        return
     if single:
         print(f"status: {result.status}")
     else:
-        print(f"{rule.label}: {result.status}")
+        severity = " (warning)" if rule.severity == "warning" else ""
+        print(f"{rule.code}: {result.status}{severity}")
     if result.message:
         print(f"{indent}message: {result.message}")
     counts = result.counts

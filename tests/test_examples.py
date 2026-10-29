@@ -29,7 +29,8 @@ def test_cli_evaluates_the_example_rule_file(capsys) -> None:
     assert main(["check", rules]) == 0
     assert main(["eval", rules, data]) == 1
     output = capsys.readouterr().out
-    assert "4 rules: 2 failed, 1 passed, 1 not_applicable" in output
+    assert "5 rules: 2 failed, 1 passed, 1 not_applicable, 1 skipped" in output
+    assert "v0002: failed (warning)" in output
     assert main(["eval", rules, data, "--json"]) == 1
     document = json.loads(capsys.readouterr().out)
     assert document["schema_version"] == 1
@@ -39,7 +40,10 @@ def test_cli_evaluates_the_example_rule_file(capsys) -> None:
         "failed",
         "passed",
         "not_applicable",
+        "skipped",
     ]
+    assert [result["severity"] for result in results][:2] == ["error", "warning"]
+    assert results[4]["active"] is False
     assert results[1]["failures"][0]["cells"] == ["{tC_27.00, c0010, qCPI=LEI-B}"]
 
 

@@ -16,7 +16,7 @@ as an unknown function or a call with the wrong operands, and with
 
 ```console
 $ dpm-xl check examples/rules.json
-6/6 expressions parsed
+6/6 expressions parsed; 1 inactive rule skipped
 $ echo $?
 0
 ```
@@ -44,6 +44,7 @@ $ dpm-xl check "if {tC_01.00, r0010} > 0 then true" --json
   "schema_version": 1,
   "parsed": 0,
   "total": 1,
+  "skipped": [],
   "errors": [
     {
       "source": "argument",

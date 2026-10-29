@@ -173,7 +173,7 @@ $ dpm-xl eval examples/rules.json examples/data.json
 v0001: failed
   records: 1 passed, 1 failed, 0 not evaluated
   - c=0020: 1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision
-v0002: failed
+v0002: failed (warning)
   records: 1 passed, 1 failed, 0 not evaluated
   - qCPI=LEI-B: -5 should exceed 0: difference 5
 v0003: passed
@@ -181,7 +181,8 @@ v0003: passed
 v0004: not_applicable
   message: precondition not met
   records: 0 passed, 0 failed, 0 not evaluated
-4 rules: 2 failed, 1 passed, 1 not_applicable
+v0005: skipped (inactive)
+5 rules: 2 failed, 1 passed, 1 not_applicable, 1 skipped
 $ echo $?
 1
 ```
@@ -191,7 +192,7 @@ is what a CI job for a rule repository needs:
 
 ```console
 $ dpm-xl check examples/rules.json
-6/6 expressions parsed
+6/6 expressions parsed; 1 inactive rule skipped
 ```
 
 ## Next steps

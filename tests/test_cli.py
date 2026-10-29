@@ -250,7 +250,10 @@ def test_check_names_the_file_it_cannot_read(tmp_path, capsys) -> None:
     rules = tmp_path / "bad.json"
     rules.write_text("[1]", encoding="utf-8")
     assert main(["check", str(rules)]) == 3
-    assert capsys.readouterr().err == f"error: {rules}: rule 1 is not a JSON object\n"
+    assert (
+        capsys.readouterr().err
+        == f"error: {rules}: [0]: expected an object, got the number 1\n"
+    )
     broken = tmp_path / "broken.json"
     broken.write_text("{nope", encoding="utf-8")
     assert main(["check", "1 = 1", "--layouts", str(broken)]) == 3

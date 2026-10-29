@@ -54,6 +54,7 @@ nav = [
       { "dpmxl.evaluator" = "reference/api/evaluator.md" },
       { "dpmxl.explain" = "reference/api/explain.md" },
       { "dpmxl.provider" = "reference/api/provider.md" },
+      { "dpmxl.rules" = "reference/api/rules.md" },
       { "dpmxl.columnar" = "reference/api/columnar.md" },
       { "dpmxl.parser" = "reference/api/parser.md" },
       { "dpmxl.ast" = "reference/api/ast.md" },

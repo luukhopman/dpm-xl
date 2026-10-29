@@ -10,6 +10,8 @@ All notable changes to this project are documented here. The project follows
 - The contextual components `entityID`, `baseCurrency` and the
   `decimals…` names read the report parameters of those names, with their
   type; a missing one is null.
+- The language reference lists every place where dpm-xl differs from the
+  DPM-XL specification v0.11, with the section concerned.
 
 ### Fixed
 

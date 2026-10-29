@@ -1512,20 +1512,57 @@ with `order by`; a window is ignored.
 | `rank({tU})` | `syntax error: rank needs an over clause` |
 | `rank({tU} over (partition by r))` | `syntax error: rank needs an order by clause` |
 
-## Where dpm-xl differs from the grammar {#where-dpm-xl-differs-from-the-grammar}
+## Where dpm-xl differs {#where-dpm-xl-differs}
 
-Some readings differ from the published DPM-XL grammar on purpose, so that
+The [DPM-XL specification v0.11](https://dpm-alliance.github.io/dpm-xl-docs/)
+(2026-09-18; operators part, cited as §, and information model part, cited
+as IM §) is the reference. Some readings differ from it on purpose, so that
 EBA rules keep their meaning:
 
 - `not` binds looser than comparisons and `in`: `not a = b` is
-  `not (a = b)`.
+  `not (a = b)` (§1.1 puts `not` above `*`). `in` shares the level of the
+  comparisons (§1.1 puts it below them).
 - Chained comparisons such as `a < b < c` or `a in b in c`, `- not x`, and a
   selection that repeats an axis, `default` or `interval` are syntax errors.
 - Outside clauses `<-` is the persistent assignment, so compare with a
   negated operand as `a < -b`.
 - `{v_Code}` tests a filing indicator and `{vName}` reads a report
   parameter: the `_` after `v` is not cosmetic, unlike after `t`, `g`, `o`
-  and `p`.
+  and `p` (§3.1.1).
+- A [`default`](#default) stands for the records an operand lacks
+  where another operand has them, as an XBRL fallback value does; the
+  specification joins inner and generates implicit nulls only for keys the
+  operand's own table reports (§2.2.3.3, IM §4.2.1)
+  ([Defaults fill in missing records](../concepts/records-and-keys.md#defaults-fill-in-missing-records)).
+- A `with` context's `where` leaves alone a selection that lacks a key it
+  names; the specification makes that a semantic error (§3.2.5, example
+  10).
+- Ranges of codes with only digits are numeric and pad to four digits
+  (`r10` is `0010`); the specification orders them as text (§3.1.6). A
+  selection without an axis selects every code on it, where the
+  specification needs `*` for an axis that is not open (§3.1.6).
+- Clauses accept the keys `r`, `c` and `s` (§11 and §11.1.5 forbid them),
+  and there are no attribute components other than the
+  [contextual ones](#bare-names), which `rename` does not reject as a new
+  name (§2.2.3.3, §11.2.5).
+- Text compared with an item is read as an item, ignoring an `eba_` prefix
+  or a missing category, and other values are not cast to text, so `1 =
+  "1"` is an error (IM §2.3.2, §5.1.3).
+- `exp`, `ln`, `sqrt`, `power` and `log` drop an operand's tolerance
+  instead of rejecting it (§4.2.4.5 to §4.3.7.5); `exp` and `power` out of
+  range are null, which the specification leaves open.
+- An interval's tolerance comes from each fact's `decimals`, not from the
+  instance's `decimals…` parameters (IM §2.2.3.3.1).
+- A set may mix types (§13.1.5), a window clause of `rank` is ignored
+  (§7.8.5), and the bounds of a window are not checked (§7.1.8.6): `0
+  preceding` is the current record and bounds in the wrong order give
+  null.
+- The structure constraints of `if` (§8.1.5) are not enforced: a key-less
+  condition may choose between branches with different keys.
+- `time_shift` of a date value, rather than of a record set, is not
+  supported (§10.1.2).
+- `match` tests the whole text (`re.fullmatch`); the specification follows
+  Python without saying whether the pattern is anchored (§5.9).
 
 <!-- docs: invalid -->
 ```dpm-xl

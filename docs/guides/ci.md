@@ -142,5 +142,5 @@ lists every problem.
 dpm-xl parses every construct of the DPM-XL grammar and every EBA validation
 rule and precondition of DPM releases 3.4–4.4, except two EBA expressions with
 typos (`trueendif`, `ornot`). A few readings differ from the grammar on
-purpose; [Language](../reference/language.md#where-dpm-xl-differs-from-the-grammar)
+purpose; [Language](../reference/language.md#where-dpm-xl-differs)
 lists them.

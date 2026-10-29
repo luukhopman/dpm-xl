@@ -92,7 +92,10 @@ An open table has records only for the key combinations reported in it, so
 two tables, or two parts of one template, may each lack keys the other has.
 An operand with a written `default` (`default: null` included) then stands
 for its default where it lacks a key, as a fact variable with a fallback
-value does. One rule covers every construct that combines keyed operands:
+value does. The specification instead joins inner and fills in defaults
+only for keys the operand's own table reports (§2.2.3.3, IM §4.2.1), so
+this is a [deliberate difference](../reference/language.md#where-dpm-xl-differs).
+One rule covers every construct that combines keyed operands:
 
 - **Joins** (operators, and functions of several operands such as `nvl`,
   `max`, `match` and `filter`): the operands without a default decide the

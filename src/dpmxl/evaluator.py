@@ -2011,9 +2011,30 @@ def _match(value: Value, pattern: Value) -> Value:
         raise EvaluationError(f"invalid match pattern: {error}") from error
 
 
+# DPM-XL 4.2.5-4.2.7: the smallest operand each function accepts, and
+# whether it must exceed it; anything else is a run-time error.
+_DOMAINS = {
+    "ln": (Decimal(0), True),
+    "sqrt": (Decimal(0), False),
+    "log": (Decimal(0), True),
+}
+
+
+def _in_domain(number: Number, name: str, *, base: bool = False) -> None:
+    low, strict = (Decimal(1), True) if base else _DOMAINS[name]
+    if number.value < low or (strict and number.value == low):
+        what = "base" if base else "number"
+        bound = f"greater than {low}" if strict else f"at least {low}"
+        raise EvaluationError(
+            f"{name} needs a {what} {bound}, found {number.value.normalize()}"
+        )
+
+
 def _math(function: Callable[[float], float], name: str) -> Callable[[Value], Value]:
     def apply(value: Value) -> Value:
         number = _require_number(value, name)
+        if name in _DOMAINS:
+            _in_domain(number, name)
         try:
             return _float_number(function(float(number.value)))
         except (ValueError, OverflowError):
@@ -2034,6 +2055,8 @@ def _power(base: Value, exponent: Value) -> Value:
 def _log(value: Value, base: Value) -> Value:
     number = _require_number(value, "log")
     radix = _require_number(base, "log")
+    _in_domain(number, "log")
+    _in_domain(radix, "log", base=True)
     try:
         return _float_number(math.log(float(number.value), float(radix.value)))
     except (ValueError, ZeroDivisionError, OverflowError):

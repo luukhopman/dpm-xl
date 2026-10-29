@@ -13,6 +13,8 @@ All notable changes to this project are documented here. The project follows
   true; they used to fail with `cannot compare set with set`.
 - An analytic function with `order by` and no window clause takes the
   whole partition, as the specification says, instead of a running window.
+- `ln`, `sqrt` and `log` outside their domain, such as `ln(0)`, are an error
+  for their record instead of null.
 
 ## 1.2.3 - 2026-10-26
 

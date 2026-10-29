@@ -1023,8 +1023,9 @@ null when an operand is null.
 `exp(x)`, `ln(x)` and `sqrt(x)`: the exponential, natural logarithm and
 square root of a number. They are computed in binary floating point, to
 about 16 significant digits, and the result is exact, without tolerance. A
-result that is undefined or out of range, such as `ln(0)` or `sqrt(-1)`, is
-null. Errors: `exp needs numbers, found …`.
+result out of range, such as `exp(1000)`, is null. Errors: `exp needs
+numbers, found …`; `ln needs a number greater than 0, found 0` and `sqrt
+needs a number at least 0, found -1`, which fail only their record.
 
 | Expression | Result |
 | --- | --- |
@@ -1033,8 +1034,9 @@ null. Errors: `exp needs numbers, found …`.
 | `ln(1)` | `0` |
 | `sqrt(16)` | `4` |
 | `sqrt(2)` | `1.4142135623730951` |
-| `ln(0)` | `null` |
-| `sqrt(-1)` | `null` |
+| `exp(1000)` | `null` |
+| `ln(0)` | `error: ln needs a number greater than 0, found 0` |
+| `sqrt(-1)` | `error: sqrt needs a number at least 0, found -1` |
 | `sqrt("a")` | `error: sqrt needs numbers, found string` |
 
 #### `power` {#power}
@@ -1052,14 +1054,16 @@ point like [`exp`](#exp); null when undefined or out of range.
 #### `log` {#log}
 
 `log(x, base)`: the logarithm of `x` to `base`, in binary floating point
-like [`ln`](#exp); null outside its domain (`x` ≤ 0, `base` ≤ 0 or 1).
+like [`ln`](#exp). Errors: `log needs a number greater than 0, found …`
+and `log needs a base greater than 1, found …`, which fail only their
+record.
 
 | Expression | Result |
 | --- | --- |
 | `log(8, 2)` | `3` |
 | `log(100, 10)` | `2` |
-| `log(8, 1)` | `null` |
-| `log(-8, 2)` | `null` |
+| `log(8, 1)` | `error: log needs a base greater than 1, found 1` |
+| `log(-8, 2)` | `error: log needs a number greater than 0, found -8` |
 
 #### `max`, `min` {#max}
 

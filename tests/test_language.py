@@ -94,7 +94,6 @@ def values(expression: str, provider: MemoryProvider | None = None) -> dict:
         ('substr("abc", 5)', ""),
         ("substr(null, 1)", None),
         ("log(8, 2)", Number(Decimal(3))),
-        ("log(-1, 2)", None),
         ("year(#2026-05-31#)", Number(Decimal(2026))),
         ("semester(#2026-07-01#)", Number(Decimal(2))),
         ("quarter(#2026-05-31#)", Number(Decimal(2))),

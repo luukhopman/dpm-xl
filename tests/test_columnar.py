@@ -463,6 +463,7 @@ NEW_CONSTRUCTS = [
     'with {tT, c0010}: "a" & "b" = "ab"',
     'substr("abc", 2) = "bc"',
     "log({tONE, r0010, c0010}, 5) = 1",
+    "if {tONE, r0010, c0010} < 0 then ln({tONE, r0010, c0010}) else 1 endif = 1",
     "year(#2026-12-31#) = 2026",
     "date(2026, 12, 31) = #2026-12-31T00:00:00#",
     "{tONE, r0010, c0010} in union({5}, {6})",

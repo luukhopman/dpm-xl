@@ -134,6 +134,22 @@ def test_division_by_zero_is_a_runtime_error() -> None:
     assert status(rule, data) == "error"
 
 
+@pytest.mark.parametrize(
+    "rule",
+    ["ln(0) = 0", "ln(-1) = 0", "sqrt(-1) = 0", "log(8, 1) = 3", "log(0, 2) = 0"],
+)
+def test_math_outside_its_domain_is_a_runtime_error(rule: str) -> None:
+    # 4.2.5.6, 4.2.6.6, 4.2.7.6: generates a run-time error.
+    assert status(rule) == "error"
+
+
+def test_math_domain_errors_fail_only_their_records() -> None:
+    data = provider({("0010", "0010"): 4, ("0020", "0010"): -4})
+    rule = "with {tT, c0010}: if {r*} > 0 then sqrt({r*}) = 2 else true endif"
+    assert status(rule, data) == "passed"
+    assert status("sqrt({tT, r*, c0010}) = 2", data) == "error"
+
+
 def test_errors_fail_only_the_records_that_reach_the_result() -> None:
     # Column 0010 divides by zero, column 0020 does not.
     data = provider(

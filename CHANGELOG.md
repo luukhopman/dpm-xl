@@ -8,54 +8,50 @@ All notable changes to this project are documented here. The project follows
 ### Added
 
 - Rules in a JSON rule file take `severity` (`error` or `warning`),
-  `active` and `modules`; `dpm-xl eval` and `dpm-xl check` skip inactive
-  rules, and the output shows severity. `dpmxl.rules.load_rules` reads a
-  rule file in Python.
-- `dpm-xl eval --format junit` writes a JUnit XML report, one test case
-  per rule, and `--fail-on error|warning` sets which failing rules fail the
+  `active` and `modules`; `dpm-xl eval` and `check` skip inactive rules.
+- `dpmxl.rules.load_rules` reads a rule file, and `evaluate_rules`
+  evaluates its rules on one report.
+- `dpm-xl eval --format junit` writes a JUnit XML report, one test case per
+  rule.
+- `dpm-xl eval --fail-on error|warning` sets which failing rules fail the
   run; by default a failing `warning` rule does not.
-- Module files (`dpm-module/1`, which also reads dpm-synth's
-  `dpm-synth-template/1`) describe a module's tables, cells and rules;
+- Module files (`dpm-module/1`, or dpm-synth's `dpm-synth-template/1`):
   `dpmxl.module.load_module` reads one, and `dpm-xl check` and `eval` take
   one as their rule source.
 - `dpmxl.xbrl.ReportProvider` evaluates a module's rules on a report read
-  with dpm-xbrl, and `check_report` combines its filing findings and rule
-  results; install with `pip install "dpm-xl[xbrl]"`.
-- `dpm-xl check-report MODULE REPORT` checks an XBRL report's EBA filing
-  rules and its module's rules in one report, as text, JSON or JUnit XML,
-  with `--fail-on` and `--taxonomy-package`.
-- `dpmxl.rules.evaluate_rules` evaluates a list of rules on one report,
-  skipping inactive ones.
+  with dpm-xbrl (`pip install "dpm-xl[xbrl]"`).
+- `dpmxl.xbrl.check_report` returns a report's filing findings and its
+  module's rule results together.
+- `dpm-xl check-report MODULE REPORT` prints both as text, JSON or JUnit
+  XML.
 - The contextual components `entityID`, `baseCurrency` and the
   `decimals…` names read the report parameters of those names, with their
   type; a missing one is null.
-- The test suite parses all 14,174 distinct EBA expressions of DPM releases
-  3.4 to 4.4, committed as test data; the two with EBA typos fail with a
-  message that suggests the fix.
-- The end-to-end guide and the toolkit tour use `ReportProvider` and a
-  module file instead of a hand-written provider.
+- The tests parse all 14,174 distinct EBA expressions of DPM releases 3.4
+  to 4.4, committed as test data.
 - The language reference lists every place where dpm-xl differs from the
   DPM-XL specification v0.11, with the section concerned.
 
 ### Changed
 
-- **Breaking:** `{v_X}` and `{vX}` are the same variable, as DPM-XL v0.11
-  says: a template's filing indicator when `X` is shaped like a template
-  code or the provider's new `is_template` knows it, else report parameter
-  `X`. Both parse to `Variable`, which replaces `TableReported` and
-  `Parameter`.
-- A malformed JSON rule file names the field by its JSON path, such as
-  `[0].severity`.
-- **Breaking:** the `--json` output of `dpm-xl check` and `dpm-xl eval`
-  opens with `tool`, `version` and a `summary` of counts
-  (`schema_version` 2); `check` moves `parsed` and `total` into `summary`.
+- **Breaking:** `{v_X}` and `{vX}` are the same variable (DPM-XL v0.11
+  §3.1.1): a template's filing indicator when `X` is a template code, else
+  report parameter `X`.
+- **Breaking:** both parse to `Variable`, which replaces the
+  `TableReported` and `Parameter` nodes.
+- **Breaking:** the `--json` output opens with `tool`, `version` and a
+  `summary` of counts (`schema_version` 2).
 - **Breaking:** `load_memory_provider` moved from `dpmxl.cli` to
-  `dpmxl.provider` (and `dpmxl`), and `dpmxl.cli.INVALID_INPUT` is now
-  `EXIT_INPUT`, next to `EXIT_OK`, `EXIT_FAILED` and `EXIT_USAGE`.
+  `dpmxl.provider`.
+- **Breaking:** `dpmxl.cli.INVALID_INPUT` is now `EXIT_INPUT`.
 - An expression given on the command line is labelled `expression`, not
-  `argument`, and the text output counts null records as `null`.
-- Unreadable input is reported as `error: PATH: reason` for rule and data
-  files alike.
+  `argument`.
+- The text output of `dpm-xl eval` counts null records as `null`.
+- A malformed rule file names the field by its JSON path, such as
+  `[0].severity`.
+- Unreadable input is reported as `error: PATH: reason`.
+- The end-to-end guide and the toolkit tour use `ReportProvider` instead of
+  a hand-written provider.
 
 ### Fixed
 
@@ -96,8 +92,7 @@ All notable changes to this project are documented here. The project follows
   and no longer call points it settles ambiguous.
 - `diagnose` checks the `partition by` and `order by` keys of analytic
   functions; it used to skip them.
-- `diagnose` suggests a name one typo away, as `sum` for `sun`, also when
-  the name is too short for the similarity ratio.
+- `diagnose` suggests a short name one typo away, such as `sum` for `sun`.
 
 ## 1.2.3 - 2026-10-26
 

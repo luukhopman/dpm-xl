@@ -171,17 +171,17 @@ folder has a rule file and a data file:
 ```console
 $ dpm-xl eval examples/rules.json examples/data.json
 v0001: failed
-  records: 1 passed, 1 failed, 0 not evaluated
+  records: 1 passed, 1 failed, 0 null
   - c=0020: 1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision
 v0002: failed (warning)
-  records: 1 passed, 1 failed, 0 not evaluated
+  records: 1 passed, 1 failed, 0 null
   - qCPI=LEI-B: -5 should exceed 0: difference 5
 v0003: passed
-  records: 1 passed, 0 failed, 0 not evaluated
+  records: 1 passed, 0 failed, 0 null
 v0004: not_applicable
   message: precondition not met
-  records: 0 passed, 0 failed, 0 not evaluated
-v0005: skipped (inactive)
+  records: 0 passed, 0 failed, 0 null
+v0005: skipped (inactive rule)
 5 rules: 2 failed, 1 passed, 1 not_applicable, 1 skipped
 $ echo $?
 1

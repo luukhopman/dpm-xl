@@ -32,6 +32,7 @@ from .provider import (
     axis_matcher,
     axis_matches,
     is_template_code,
+    load_memory_provider,
     normalize_code,
     read_variable,
 )
@@ -81,6 +82,7 @@ __all__ = [
     "format_value",
     "is_template_code",
     "iter_points",
+    "load_memory_provider",
     "normalize_code",
     "parse",
     "parse_cached",

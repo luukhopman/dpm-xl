@@ -135,6 +135,18 @@ def _normalize(text: str) -> str:
     return "\n".join(line.rstrip() for line in text.strip("\n").splitlines())
 
 
+_VERSION = re.compile(r'("version": |name="version" value=)"[^"]*"')
+
+
+def _versionless(text: str) -> str:
+    """Normalize output, ignoring the version a JSON or JUnit document gives.
+
+    Returns:
+        str: The normalized text.
+    """
+    return _VERSION.sub(r'\1"…"', _normalize(text))
+
+
 def _run_cli(command: str) -> tuple[int, str]:
     output = io.StringIO()
     with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
@@ -162,7 +174,7 @@ def _check_console(block: Block, where: str) -> None:
             status, output = _run_cli(command)
         else:
             pytest.fail(f"{where}: only dpm-xl commands run in console blocks")
-        assert _normalize(output) == _normalize("\n".join(expected)), (
+        assert _versionless(output) == _versionless("\n".join(expected)), (
             f"{where}: output of {command!r} differs"
         )
 

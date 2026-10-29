@@ -33,7 +33,7 @@ def test_cli_evaluates_the_example_rule_file(capsys) -> None:
     assert "v0002: failed (warning)" in output
     assert main(["eval", rules, data, "--json"]) == 1
     document = json.loads(capsys.readouterr().out)
-    assert document["schema_version"] == 1
+    assert document["schema_version"] == 2
     results = document["results"]
     assert [result["status"] for result in results] == [
         "failed",
@@ -50,10 +50,10 @@ def test_cli_evaluates_the_example_rule_file(capsys) -> None:
 def test_cli_check_json_reports_positions(capsys) -> None:
     assert main(["check", "{tA} >=", "--json"]) == 1
     document = json.loads(capsys.readouterr().out)
-    assert document["schema_version"] == 1
+    assert document["schema_version"] == 2
     assert document["errors"] == [
         {
-            "source": "argument",
+            "source": "expression",
             "message": "expression ends where an operand is expected",
             "position": 7,
             "end": 7,

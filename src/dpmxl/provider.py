@@ -19,11 +19,13 @@ from __future__ import annotations
 import re
 from collections.abc import Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from datetime import date
+from decimal import InvalidOperation
 from functools import lru_cache
 from typing import Any, Protocol, TypeAlias, TypeVar, runtime_checkable
 
-from .ast import AxisName, AxisSelector
-from .values import Value
+from .ast import AxisName, AxisSelector, Item
+from .values import Number, Value, ValueSet
 
 
 @dataclass(frozen=True, slots=True)
@@ -755,6 +757,111 @@ class MemoryProvider:
         return _lookup(self.operations, code)
 
 
+def load_memory_provider(document: dict[str, Any]) -> MemoryProvider:
+    """Build a [`MemoryProvider`][dpmxl.provider.MemoryProvider] from a data document.
+
+    This is the data file format ``dpm-xl eval`` reads.
+
+    The document has ``tables`` (code, rows, columns, sheets, open_keys,
+    template, open_axes and data_types),
+    ``facts`` (table, row, column, sheet, keys, value, decimals, type),
+    ``reported`` template codes, ``parameters`` (a list is a set),
+    ``table_groups`` (group code to table codes), ``operations``
+    (operation code to expression) and ``earlier`` reports for
+    ``time_shift`` (``period``, ``count`` and a nested ``data`` document).
+
+    Returns:
+        MemoryProvider: The in-memory report.
+
+    Raises:
+        ValueError: For a malformed table, fact or parameter.
+    """
+    try:
+        return _memory_provider(document)
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError(f"malformed data document ({error!r})") from error
+
+
+def _table_layout(table: Mapping[str, Any]) -> TableLayout:
+    return TableLayout(
+        code=table["code"],
+        rows=tuple(table.get("rows", ())),
+        columns=tuple(table.get("columns", ())),
+        sheets=tuple(table.get("sheets", ())),
+        open_keys=tuple(table.get("open_keys", ())),
+        template=table.get("template"),
+        open_axes=tuple(table.get("open_axes", ())),
+        data_types={
+            (cell.get("row"), cell.get("column"), cell.get("sheet")): cell["type"]
+            for cell in table.get("data_types", ())
+        },
+    )
+
+
+def _memory_provider(document: dict[str, Any]) -> MemoryProvider:
+    tables = [_table_layout(table) for table in document.get("tables", ())]
+    values: dict[CellKey, Value] = {}
+    for index, fact in enumerate(document.get("facts", ()), start=1):
+        try:
+            keys = tuple(
+                (name, _typed(value)) for name, value in fact.get("keys", {}).items()
+            )
+            value = _typed(fact.get("value"), fact.get("type"), fact.get("decimals"))
+        except ValueError as error:
+            raise ValueError(f"fact {index}: {error}") from error
+        values[
+            fact["table"],
+            fact.get("row"),
+            fact.get("column"),
+            fact.get("sheet"),
+            keys,
+        ] = value
+    parameters = {
+        name: _typed(value) for name, value in document.get("parameters", {}).items()
+    }
+    return MemoryProvider(
+        tables,
+        values,
+        reported=document.get("reported"),
+        parameters=parameters,
+        table_groups={
+            code: tuple(group)
+            for code, group in document.get("table_groups", {}).items()
+        },
+        operations=dict(document.get("operations", {})),
+        earlier_reports={
+            (entry["period"], int(entry["count"])): _memory_provider(entry["data"])
+            for entry in document.get("earlier", ())
+        },
+    )
+
+
+def _typed(
+    value: Any, kind: str | None = None, decimals: int | str | None = None
+) -> Value:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return ValueSet.of(_typed(member, kind) for member in value)
+    if kind == "number" or (
+        isinstance(value, int | float) and not isinstance(value, bool)
+    ):
+        try:
+            number = Number.of(str(value), decimals)
+        except InvalidOperation:
+            raise ValueError(f"invalid number {value!r}") from None
+        except ValueError as error:
+            raise ValueError(f"invalid decimals {decimals!r}: {error}") from None
+        if not number.value.is_finite():
+            raise ValueError(f"invalid number {value!r}")
+        return number
+    if kind == "item" or (isinstance(value, str) and value.startswith("[")):
+        return Item.parse(str(value).strip("[]"))
+    if kind == "date":
+        return date.fromisoformat(str(value))
+    return value
+
+
 _T = TypeVar("_T")
 
 
@@ -786,6 +893,7 @@ __all__ = [
     "axis_matcher",
     "axis_matches",
     "is_template_code",
+    "load_memory_provider",
     "normalize_code",
     "read_variable",
 ]

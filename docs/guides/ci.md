@@ -25,7 +25,7 @@ A syntax error names the rule and points at the offending text:
 
 ```console
 $ dpm-xl check "with {tC_01.00, c0010}: {r0010} = {r0020} +* {r0030}"
-argument: error: unexpected '*' where an operand is expected
+expression: error: unexpected '*' where an operand is expected
 with {tC_01.00, c0010}: {r0010} = {r0020} +* {r0030}
                                            ^
 0/1 expressions parsed; 1 error
@@ -41,13 +41,20 @@ problem, for annotating a pull request:
 ```console
 $ dpm-xl check "if {tC_01.00, r0010} > 0 then true" --json
 {
-  "schema_version": 1,
-  "parsed": 0,
-  "total": 1,
+  "schema_version": 2,
+  "tool": "dpm-xl",
+  "version": "1.2.3",
+  "summary": {
+    "total": 1,
+    "parsed": 0,
+    "errors": 1,
+    "warnings": 0,
+    "skipped": 0
+  },
   "skipped": [],
   "errors": [
     {
-      "source": "argument",
+      "source": "expression",
       "message": "expected 'endif', found end of expression",
       "position": 34,
       "end": 34
@@ -55,7 +62,7 @@ $ dpm-xl check "if {tC_01.00, r0010} > 0 then true" --json
   ],
   "diagnostics": [
     {
-      "source": "argument",
+      "source": "expression",
       "severity": "error",
       "code": "syntax",
       "message": "expected 'endif', found end of expression",

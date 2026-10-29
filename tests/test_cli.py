@@ -127,7 +127,7 @@ def test_eval_reads_groups_operations_and_set_parameters(tmp_path, capsys) -> No
 @pytest.mark.parametrize("source", ["rules/v4.2.json", "missing.txt", "rules/v4"])
 def test_a_missing_rule_file_is_not_read_as_an_expression(source, capsys) -> None:
     assert main(["check", source]) == 3
-    assert f"no such rule file: {source}" in capsys.readouterr().err
+    assert capsys.readouterr().err == f"error: {source}: no such rule file\n"
 
 
 def test_expressions_with_a_slash_are_still_expressions(capsys) -> None:
@@ -175,7 +175,9 @@ def test_check_reports_problems_beyond_syntax(capsys) -> None:
     # Without --strict only syntax errors fail, as before.
     assert main(["check", "summ({tC_01.00, r0010}) > 0"]) == 0
     output = capsys.readouterr()
-    assert "argument: error: unknown function 'summ'; did you mean 'sum'?" in output.err
+    assert (
+        "expression: error: unknown function 'summ'; did you mean 'sum'?" in output.err
+    )
     assert output.out.strip() == "1/1 expressions parsed; 1 error"
     assert main(["check", "summ({tC_01.00, r0010}) > 0", "--strict"]) == 1
 
@@ -220,7 +222,7 @@ def test_check_warnings_do_not_fail(tmp_path, capsys) -> None:
 def test_check_json_lists_diagnostics(tmp_path, capsys) -> None:
     assert main(["check", "abs(1, 2) > (", "--json"]) == 1
     document = json.loads(capsys.readouterr().out)
-    assert document["parsed"] == 0
+    assert document["summary"]["parsed"] == 0
     assert [error["message"] for error in document["errors"]] == [
         "expression ends where an operand is expected"
     ]
@@ -257,4 +259,152 @@ def test_check_names_the_file_it_cannot_read(tmp_path, capsys) -> None:
     broken = tmp_path / "broken.json"
     broken.write_text("{nope", encoding="utf-8")
     assert main(["check", "1 = 1", "--layouts", str(broken)]) == 3
-    assert capsys.readouterr().err.startswith(f"error: {broken}: Expecting")
+    assert capsys.readouterr().err.startswith(f"error: {broken}: not JSON: Expecting")
+
+
+def test_unreadable_data_names_the_file(tmp_path, capsys) -> None:
+    assert main(["eval", "1 = 1", str(tmp_path / "missing.json")]) == 3
+    assert (
+        capsys.readouterr().err == f"error: {tmp_path / 'missing.json'}: no such file\n"
+    )
+    assert main(["eval", "1 = 1", str(tmp_path)]) == 3
+    assert capsys.readouterr().err.startswith(f"error: {tmp_path}: cannot read: ")
+    listed = tmp_path / "list.json"
+    listed.write_text("[]", encoding="utf-8")
+    assert main(["eval", "1 = 1", str(listed)]) == 3
+    assert capsys.readouterr().err == (
+        f"error: {listed}: a data file must hold a JSON object\n"
+    )
+
+
+def _rule_file(tmp_path, rules):
+    path = tmp_path / "rules.json"
+    path.write_text(json.dumps(rules), encoding="utf-8")
+    return str(path)
+
+
+SEVERITIES = [
+    {"code": "e", "expression": "{tA, r0010, c0010} > 5"},
+    {"code": "w", "expression": "{tA, r0020, c0010} > 5", "severity": "warning"},
+    {"code": "ok", "expression": "{tA, r0010, c0010} > 0"},
+    {"code": "na", "expression": "1 = 1", "precondition": "{v_C_09.00}"},
+    {"code": "off", "expression": "1 = 2", "active": False},
+]
+
+
+@pytest.mark.parametrize(
+    ("rules", "fail_on", "status"),
+    [
+        (SEVERITIES, "error", 1),
+        (SEVERITIES[1:], "error", 0),
+        (SEVERITIES[1:], "warning", 1),
+        (SEVERITIES[2:], "warning", 0),
+        (
+            [
+                *SEVERITIES[1:],
+                {"code": "x", "expression": "1 / 0 > 1", "severity": "warning"},
+            ],
+            "error",
+            3,
+        ),
+    ],
+)
+def test_eval_fails_on_the_chosen_severity(tmp_path, rules, fail_on, status) -> None:
+    data = _write(tmp_path, [_fact("0010", 1), _fact("0020", 2)])
+    assert (
+        main(["eval", _rule_file(tmp_path, rules), data, "--fail-on", fail_on])
+        == status
+    )
+
+
+def test_eval_json_opens_with_tool_version_and_summary(tmp_path, capsys) -> None:
+    data = _write(tmp_path, [_fact("0010", 1), _fact("0020", 2)])
+    main(["eval", _rule_file(tmp_path, SEVERITIES), data, "--format", "json"])
+    document = json.loads(capsys.readouterr().out)
+    assert list(document)[:5] == [
+        "schema_version",
+        "tool",
+        "version",
+        "summary",
+        "results",
+    ]
+    assert document["schema_version"] == 2
+    assert document["tool"] == "dpm-xl"
+    assert document["summary"] == {
+        "rules": 5,
+        "passed": 1,
+        "failed": 2,
+        "not_applicable": 1,
+        "error": 0,
+        "unsupported": 0,
+        "skipped": 1,
+    }
+
+
+def test_check_json_opens_with_tool_version_and_summary(capsys) -> None:
+    main(["check", "1 > 0 and", "--json"])
+    document = json.loads(capsys.readouterr().out)
+    assert [document[key] for key in ("schema_version", "tool")] == [2, "dpm-xl"]
+    assert document["summary"] == {
+        "total": 1,
+        "parsed": 0,
+        "errors": 1,
+        "warnings": 0,
+        "skipped": 0,
+    }
+
+
+def test_eval_writes_junit(tmp_path, capsys) -> None:
+    import xml.etree.ElementTree as ET
+
+    data = _write(tmp_path, [_fact("0010", 1), _fact("0020", 2)])
+    rules = [*SEVERITIES, {"code": "x", "expression": "1 / 0 > 1"}]
+    assert main(["eval", _rule_file(tmp_path, rules), data, "--format", "junit"]) == 3
+    suite = ET.fromstring(capsys.readouterr().out)
+    assert suite.attrib == {
+        "name": "rules.json",
+        "tests": "6",
+        "failures": "1",
+        "errors": "1",
+        "skipped": "2",
+    }
+    cases = {case.get("name"): case for case in suite.iter("testcase")}
+
+    def child(name: str, tag: str) -> ET.Element:
+        found = cases[name].find(tag)
+        assert found is not None
+        return found
+
+    assert child("e", "failure").get("type") == "error"
+    assert "1 should exceed 5" in (child("e", "failure").text or "")
+    assert cases["w"].find("failure") is None
+    assert (child("w", "system-out").text or "").startswith(
+        "1 failing record [warning]"
+    )
+    assert cases["ok"].find("*") is None
+    assert child("na", "skipped").get("message") == "precondition not met"
+    assert child("off", "skipped").get("message") == "inactive rule"
+    assert child("x", "error").get("message") == "division by zero"
+    assert (
+        main(
+            [
+                "eval",
+                _rule_file(tmp_path, SEVERITIES[1:]),
+                data,
+                "--format",
+                "junit",
+                "--fail-on",
+                "warning",
+            ]
+        )
+        == 1
+    )
+    suite = ET.fromstring(capsys.readouterr().out)
+    assert suite.get("failures") == "1"
+
+
+def test_inline_expressions_are_labelled_expression(capsys) -> None:
+    assert main(["check", "sun(1) > 0"]) == 0
+    assert capsys.readouterr().err.startswith(
+        "expression: error: unknown function 'sun'; did you mean 'sum'?"
+    )

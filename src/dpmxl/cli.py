@@ -5,26 +5,23 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import xml.etree.ElementTree as ET  # ruff: ignore[suspicious-xml-etree-import] - writes XML, never parses it
 from collections import Counter
 from collections.abc import Iterable, Sequence
-from dataclasses import asdict, replace
-from datetime import date
-from decimal import InvalidOperation
+from dataclasses import asdict, dataclass, replace
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
-from .ast import Item
 from .diagnostics import LayoutLookup, diagnose
-from .evaluator import RuleResult, evaluate_rule
+from .evaluator import RuleResult, SelectionCache, evaluate_rule
 from .explain import explain
 from .parser import parse_program
-from .provider import CellKey, MemoryProvider, TableLayout
+from .provider import DataProvider, _table_layout, load_memory_provider
 from .references import references
 from .rules import Rule, load_rules
-from .values import Number, Value, ValueSet
 
-JSON_SCHEMA_VERSION = 1
+JSON_SCHEMA_VERSION = 2
 """Version of the ``--json`` output layout; it changes only with a new major."""
 
 _DESCRIPTION = "Parse and evaluate EBA DPM-XL validation rules."
@@ -34,11 +31,18 @@ _EPILOG = """examples:
   dpm-xl check "with {tC_01.00}: {r0010} >= 0" --references
   dpm-xl eval "{tC_01.00, r0010, c0010} >= 0" data.json
   dpm-xl eval rules.json data.json --json
+  dpm-xl eval rules.json data.json --format junit --fail-on warning
 
 A rule source is one expression, a text file with one expression per line
 (# starts a comment), or a JSON list of objects with "code", "expression"
-and an optional "precondition". Data file format:
-https://luukhopman.github.io/dpm-xl/reference/data-formats/"""
+and optional "precondition", "severity", "active" and "modules". Data file
+format: https://luukhopman.github.io/dpm-xl/reference/data-formats/
+
+exit statuses:
+  0  done; nothing failed at or above --fail-on
+  1  an expression does not parse, or a rule failed
+  2  usage error
+  3  unreadable or invalid input, or a rule is an error or unsupported"""
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -46,10 +50,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Returns:
         int: Process exit code: 0 when everything parsed (with ``--strict``:
-        had no errors) or every rule held, 1 when an expression did not parse
-        (with ``--strict``: had an error) or a rule failed, 3 for an
-        evaluation error or unreadable input (argparse uses 2 for usage
-        errors).
+        had no errors) or no rule at or above ``--fail-on`` failed, 1 when an
+        expression did not parse (with ``--strict``: had an error) or such a
+        rule failed, 2 for a usage error and 3 for unreadable or invalid
+        input or a rule that is an error or unsupported.
     """
     parser = argparse.ArgumentParser(
         prog="dpm-xl",
@@ -85,7 +89,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--precondition",
         help="precondition for a single expression, such as {v_C_01.00}",
     )
-    run.add_argument("--json", action="store_true", help="print JSON")
+    run.add_argument(
+        "--format",
+        choices=("text", "json", "junit"),
+        default="text",
+        help="output format (default: text)",
+    )
+    run.add_argument(
+        "--json",
+        action="store_const",
+        const="json",
+        dest="format",
+        help="print JSON; short for --format json",
+    )
+    run.add_argument(
+        "--fail-on",
+        choices=("error", "warning"),
+        default="error",
+        help="exit with status 1 when a rule of this severity or worse fails "
+        "(default: error)",
+    )
     arguments = parser.parse_args(argv)
     if arguments.command == "check":
         return _check(
@@ -99,7 +122,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         arguments.source,
         arguments.data,
         arguments.precondition,
-        as_json=arguments.json,
+        output_format=arguments.format,
+        fail_on=arguments.fail_on,
     )
 
 
@@ -138,15 +162,31 @@ def _rules(source: str) -> list[Rule]:
     path = Path(source)
     if not path.is_file():
         if _looks_like_path(source):
-            raise FileNotFoundError(f"no such rule file: {source}")
+            raise FileNotFoundError("no such rule file")
         return [Rule("expression", source)]
     return load_rules(path)
+
+
+def _problem(path: object, error: Exception) -> str:
+    """Describe unreadable or invalid input as ``error: PATH: reason``.
+
+    Returns:
+        str: The message.
+    """
+    reason = str(error)
+    if isinstance(error, OSError) and not isinstance(error, FileNotFoundError):
+        reason = f"cannot read: {error.strerror or error}"
+    elif isinstance(error, FileNotFoundError) and error.filename is not None:
+        reason = "no such file"
+    elif isinstance(error, json.JSONDecodeError):
+        reason = f"not JSON: {error}"
+    return f"error: {path}: {reason}"
 
 
 def _expressions(rules: Iterable[Rule]) -> Iterable[tuple[str, str]]:
     for rule in rules:
         if rule.code == "expression":
-            yield "argument", rule.expression
+            yield "expression", rule.expression
             continue
         yield f"{rule.code}:expression", rule.expression
         if rule.precondition:
@@ -164,15 +204,15 @@ def _check(
     try:
         rules = _rules(source)
     except (OSError, ValueError) as error:
-        print(f"error: {source}: {error}", file=sys.stderr)
-        return INVALID_INPUT
+        print(_problem(source, error), file=sys.stderr)
+        return EXIT_INPUT
     skipped = [rule.code for rule in rules if not rule.active]
     rules = [rule for rule in rules if rule.active]
     try:
         lookup, tables, parameters = _layouts(layouts)
     except (OSError, ValueError) as error:
-        print(f"error: {layouts}: {error}", file=sys.stderr)
-        return INVALID_INPUT
+        print(_problem(layouts, error), file=sys.stderr)
+        return EXIT_INPUT
     total = 0
     unparsed = 0
     errors: list[dict[str, Any]] = []
@@ -210,10 +250,14 @@ def _check(
                 if not as_json:
                     print(f"{label}: {reference.spec.text()}")
     if as_json:
-        document: dict[str, Any] = {
-            "schema_version": JSON_SCHEMA_VERSION,
-            "parsed": total - unparsed,
-            "total": total,
+        document: dict[str, Any] = _header() | {
+            "summary": {
+                "total": total,
+                "parsed": total - unparsed,
+                "errors": counts["error"],
+                "warnings": counts["warning"],
+                "skipped": len(skipped),
+            },
             "skipped": skipped,
         }
         document["errors"] = errors
@@ -235,8 +279,8 @@ def _check(
             + "".join(f"; {note}" for note in notes)
         )
     if strict:
-        return 1 if counts["error"] else 0
-    return 1 if unparsed else 0
+        return EXIT_FAILED if counts["error"] else EXIT_OK
+    return EXIT_FAILED if unparsed else EXIT_OK
 
 
 def _plural(count: int, noun: str) -> str:
@@ -261,44 +305,62 @@ def _layouts(
     if not isinstance(document, dict):
         raise ValueError("a data file must hold a JSON object")
     try:
-        layouts = {
-            table.code: table for table in map(_table, document.get("tables", ()))
-        }
+        tables = map(_table_layout, document.get("tables", ()))
+        layouts = {table.code: table for table in tables}
         parameters = tuple(document.get("parameters", {}))
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError(f"malformed data document ({error!r})") from error
     return layouts.get, tuple(layouts), parameters
 
 
-INVALID_INPUT = 3
-"""Exit status for an evaluation error or unreadable input."""
+EXIT_OK = 0
+"""Exit status when nothing fails at or above the ``--fail-on`` severity."""
+EXIT_FAILED = 1
+"""Exit status when an expression does not parse or a rule fails."""
+EXIT_USAGE = 2
+"""Exit status of a usage error, such as an unknown option."""
+EXIT_INPUT = 3
+"""Exit status for unreadable or invalid input, or a rule that is an error."""
 
-_EXIT_CODES = {"passed": 0, "not_applicable": 0, "failed": 1}
+
+@dataclass(frozen=True, slots=True)
+class _Run:
+    """One rule's evaluation; ``result`` is ``None`` for a skipped rule."""
+
+    rule: Rule
+    result: RuleResult | None
+    failures: list[dict[str, Any]]
+    reason: str | None = None
+
+    @property
+    def status(self) -> str:
+        return "skipped" if self.result is None else self.result.status
+
+    @property
+    def message(self) -> str | None:
+        return self.reason if self.result is None else self.result.message
 
 
-def _evaluate(
-    source: str,
-    data_path: Path,
-    precondition: str | None,
-    *,
-    as_json: bool = False,
-) -> int:
-    try:
-        rules = _rules(source)
-        document = json.loads(data_path.read_text(encoding="utf-8"))
-        provider = load_memory_provider(document)
-    except (OSError, ValueError) as error:
-        print(f"error: {error}", file=sys.stderr)
-        return INVALID_INPUT
-    if precondition and len(rules) == 1:
-        rules = [replace(rules[0], precondition=precondition)]
-    results: list[tuple[Rule, RuleResult | None, list[dict[str, Any]]]] = []
+def _run_rules(
+    rules: Sequence[Rule], provider: DataProvider, module: str | None = None
+) -> list[_Run]:
+    """Evaluate active rules and explain every failing record.
+
+    Returns:
+        list[_Run]: One run per rule, in order; inactive rules and rules
+        for other modules are skipped.
+    """
+    cache = SelectionCache()
+    runs = []
     for rule in rules:
         if not rule.active:
-            results.append((rule, None, []))
+            runs.append(_Run(rule, None, [], "inactive rule"))
+            continue
+        if not rule.applies_to(module):
+            runs.append(_Run(rule, None, [], f"not a rule of module {module}"))
             continue
         result = evaluate_rule(
-            rule.expression, provider, precondition=rule.precondition
+            rule.expression, provider, precondition=rule.precondition, cache=cache
         )
         failures = []
         if result.evaluation is not None:
@@ -313,195 +375,221 @@ def _evaluate(
                         "cells": [point.label() for point in outcome.points],
                     }
                 )
-        results.append((rule, result, failures))
-    if as_json:
-        print(
-            json.dumps(
-                {
-                    "schema_version": JSON_SCHEMA_VERSION,
-                    "results": [
-                        {
-                            "rule": rule.code,
-                            "expression": rule.expression,
-                            "severity": rule.severity,
-                            "active": rule.active,
-                            "modules": list(rule.modules),
-                            "status": _status(result),
-                            "message": (result.message if result else "inactive rule"),
-                            "counts": (
-                                result.counts
-                                if result
-                                else {"passed": 0, "failed": 0, "null": 0}
-                            ),
-                            "failures": failures,
-                        }
-                        for rule, result, failures in results
-                    ],
-                },
-                indent=2,
-            )
-        )
-    else:
-        for rule, result, failures in results:
-            _print_result(rule, result, failures, single=len(rules) == 1)
-        if len(rules) > 1:
-            statuses = Counter(_status(result) for _, result, _ in results)
-            print(
-                f"{len(rules)} rules: "
-                + ", ".join(f"{count} {status}" for status, count in statuses.items())
-            )
-    return max(
-        (
-            _EXIT_CODES.get(result.status, INVALID_INPUT)
-            for _, result, _ in results
-            if result is not None
-        ),
-        default=0,
-    )
+        runs.append(_Run(rule, result, failures))
+    return runs
 
 
-def _status(result: RuleResult | None) -> str:
-    """Return a rule's status, ``skipped`` for an inactive rule.
+_NO_RECORDS = {"passed": 0, "failed": 0, "null": 0}
+
+
+def _run_json(run: _Run) -> dict[str, Any]:
+    rule = run.rule
+    return {
+        "rule": rule.code,
+        "expression": rule.expression,
+        "severity": rule.severity,
+        "active": rule.active,
+        "modules": list(rule.modules),
+        "status": run.status,
+        "message": run.message,
+        "counts": run.result.counts if run.result else dict(_NO_RECORDS),
+        "failures": run.failures,
+    }
+
+
+_STATUSES = ("passed", "failed", "not_applicable", "error", "unsupported", "skipped")
+
+
+def _rules_summary(runs: Sequence[_Run]) -> dict[str, int]:
+    statuses = Counter(run.status for run in runs)
+    return {"rules": len(runs)} | {status: statuses[status] for status in _STATUSES}
+
+
+def _header() -> dict[str, Any]:
+    return {
+        "schema_version": JSON_SCHEMA_VERSION,
+        "tool": "dpm-xl",
+        "version": _version(),
+    }
+
+
+def _failing(fail_on: str) -> frozenset[str]:
+    """Return the severities that ``--fail-on`` fails on.
 
     Returns:
-        str: The status.
+        frozenset[str]: ``error`` alone, or both severities for ``warning``.
     """
-    return "skipped" if result is None else result.status
+    return frozenset({"error"} if fail_on == "error" else {"error", "warning"})
 
 
-def _print_result(
-    rule: Rule,
-    result: RuleResult | None,
-    failures: list[dict[str, Any]],
+def _exit_status(runs: Sequence[_Run], failing: frozenset[str]) -> int:
+    """Return the exit status of a rule run.
+
+    Returns:
+        int: 3 when a rule is ``error`` or ``unsupported``, else 1 when a
+        rule of a ``failing`` severity failed, else 0.
+    """
+    if any(run.status in {"error", "unsupported"} for run in runs):
+        return EXIT_INPUT
+    if any(run.status == "failed" and run.rule.severity in failing for run in runs):
+        return EXIT_FAILED
+    return EXIT_OK
+
+
+def _evaluate(
+    source: str,
+    data_path: Path,
+    precondition: str | None,
     *,
-    single: bool,
-) -> None:
+    output_format: str = "text",
+    fail_on: str = "error",
+) -> int:
+    try:
+        rules = _rules(source)
+    except (OSError, ValueError) as error:
+        print(_problem(source, error), file=sys.stderr)
+        return EXIT_INPUT
+    try:
+        document = json.loads(data_path.read_text(encoding="utf-8"))
+        if not isinstance(document, dict):
+            raise ValueError("a data file must hold a JSON object")
+        provider = load_memory_provider(document)
+    except (OSError, ValueError) as error:
+        print(_problem(data_path, error), file=sys.stderr)
+        return EXIT_INPUT
+    if precondition and len(rules) == 1:
+        rules = [replace(rules[0], precondition=precondition)]
+    runs = _run_rules(rules, provider)
+    failing = _failing(fail_on)
+    if output_format == "json":
+        document = _header() | {
+            "summary": _rules_summary(runs),
+            "results": [_run_json(run) for run in runs],
+        }
+        print(json.dumps(document, indent=2))
+    elif output_format == "junit":
+        suite = _junit_suite(_suite_name(source))
+        _junit_rules(suite, runs, failing)
+        print(_junit_text(suite))
+    else:
+        _print_runs(runs, single=len(rules) == 1)
+    return _exit_status(runs, failing)
+
+
+def _suite_name(source: str) -> str:
+    path = Path(source)
+    return path.name if path.is_file() else "expression"
+
+
+def _print_runs(runs: Sequence[_Run], *, single: bool = False) -> None:
+    for run in runs:
+        _print_run(run, single=single)
+    if not single:
+        statuses = Counter(run.status for run in runs)
+        print(
+            f"{_plural(len(runs), 'rule')}: "
+            + ", ".join(f"{count} {status}" for status, count in statuses.items())
+        )
+
+
+def _print_run(run: _Run, *, single: bool) -> None:
     indent = "" if single else "  "
-    if result is None:
-        print(f"{rule.code}: skipped (inactive)")
+    if run.result is None:
+        print(f"{run.rule.code}: skipped ({run.reason})")
         return
     if single:
-        print(f"status: {result.status}")
+        print(f"status: {run.status}")
     else:
-        severity = " (warning)" if rule.severity == "warning" else ""
-        print(f"{rule.code}: {result.status}{severity}")
-    if result.message:
-        print(f"{indent}message: {result.message}")
-    counts = result.counts
+        severity = " (warning)" if run.rule.severity == "warning" else ""
+        print(f"{run.rule.code}: {run.status}{severity}")
+    if run.message:
+        print(f"{indent}message: {run.message}")
+    counts = run.result.counts
     print(
         f"{indent}records: {counts['passed']} passed, {counts['failed']} failed, "
-        f"{counts['null']} not evaluated"
+        f"{counts['null']} null"
     )
-    for failure in failures:
+    for failure in run.failures:
         key = ", ".join(f"{name}={value}" for name, value in failure["key"].items())
         print(f"{indent}- {key or 'scalar'}: {failure['summary']}")
 
 
-def load_memory_provider(document: dict[str, Any]) -> MemoryProvider:
-    """Build a [`MemoryProvider`][dpmxl.provider.MemoryProvider] from a JSON document.
+def _junit_suite(name: str) -> ET.Element:
+    suite = ET.Element("testsuite", name=name)
+    properties = ET.SubElement(suite, "properties")
+    for key, value in (("tool", "dpm-xl"), ("version", _version())):
+        ET.SubElement(properties, "property", name=key, value=value)
+    for counter in ("tests", "failures", "errors", "skipped"):
+        suite.set(counter, "0")
+    return suite
 
-    The document has ``tables`` (code, rows, columns, sheets, open_keys,
-    template, open_axes and data_types),
-    ``facts`` (table, row, column, sheet, keys, value, decimals, type),
-    ``reported`` template codes, ``parameters`` (a list is a set),
-    ``table_groups`` (group code to table codes), ``operations``
-    (operation code to expression) and ``earlier`` reports for
-    ``time_shift`` (``period``, ``count`` and a nested ``data`` document).
 
-    Returns:
-        MemoryProvider: The in-memory report.
+def _count(suite: ET.Element, counter: str) -> None:
+    suite.set(counter, str(int(suite.get(counter, "0")) + 1))
 
-    Raises:
-        ValueError: For a malformed table, fact or parameter.
+
+def _junit_rules(
+    suite: ET.Element, runs: Sequence[_Run], failing: frozenset[str]
+) -> None:
+    """Add one test case per rule to a JUnit test suite.
+
+    A failed rule of a ``failing`` severity is a failure, a rule that is
+    ``error`` or ``unsupported`` an error, and a skipped or not applicable
+    rule is skipped; a failed rule below the threshold passes with its
+    failures in ``system-out``.
     """
-    try:
-        return _memory_provider(document)
-    except (KeyError, TypeError, AttributeError) as error:
-        raise ValueError(f"malformed data document ({error!r})") from error
-
-
-def _table(table: dict[str, Any]) -> TableLayout:
-    return TableLayout(
-        code=table["code"],
-        rows=tuple(table.get("rows", ())),
-        columns=tuple(table.get("columns", ())),
-        sheets=tuple(table.get("sheets", ())),
-        open_keys=tuple(table.get("open_keys", ())),
-        template=table.get("template"),
-        open_axes=tuple(table.get("open_axes", ())),
-        data_types={
-            (cell.get("row"), cell.get("column"), cell.get("sheet")): cell["type"]
-            for cell in table.get("data_types", ())
-        },
-    )
-
-
-def _memory_provider(document: dict[str, Any]) -> MemoryProvider:
-    tables = [_table(table) for table in document.get("tables", ())]
-    values: dict[CellKey, Value] = {}
-    for index, fact in enumerate(document.get("facts", ()), start=1):
-        try:
-            keys = tuple(
-                (name, _typed(value)) for name, value in fact.get("keys", {}).items()
+    for run in runs:
+        case = ET.SubElement(
+            suite, "testcase", classname="dpm-xl.rules", name=run.rule.code
+        )
+        _count(suite, "tests")
+        lines = "\n".join(
+            f"{', '.join(f'{k}={v}' for k, v in failure['key'].items()) or 'scalar'}: "
+            f"{failure['summary']}"
+            for failure in run.failures
+        )
+        if run.status in {"error", "unsupported"}:
+            _count(suite, "errors")
+            ET.SubElement(
+                case, "error", message=run.message or run.status, type=run.status
             )
-            value = _typed(fact.get("value"), fact.get("type"), fact.get("decimals"))
-        except ValueError as error:
-            raise ValueError(f"fact {index}: {error}") from error
-        values[
-            fact["table"],
-            fact.get("row"),
-            fact.get("column"),
-            fact.get("sheet"),
-            keys,
-        ] = value
-    parameters = {
-        name: _typed(value) for name, value in document.get("parameters", {}).items()
-    }
-    return MemoryProvider(
-        tables,
-        values,
-        reported=document.get("reported"),
-        parameters=parameters,
-        table_groups={
-            code: tuple(group)
-            for code, group in document.get("table_groups", {}).items()
-        },
-        operations=dict(document.get("operations", {})),
-        earlier_reports={
-            (entry["period"], int(entry["count"])): _memory_provider(entry["data"])
-            for entry in document.get("earlier", ())
-        },
+        elif run.status == "failed" and run.rule.severity in failing:
+            _count(suite, "failures")
+            failure = ET.SubElement(
+                case,
+                "failure",
+                message=f"{_plural(len(run.failures), 'failing record')}",
+                type=run.rule.severity,
+            )
+            failure.text = lines
+        elif run.status == "failed":
+            ET.SubElement(case, "system-out").text = (
+                f"{_plural(len(run.failures), 'failing record')} "
+                f"[{run.rule.severity}]\n{lines}"
+            )
+        elif run.status in {"skipped", "not_applicable"}:
+            _count(suite, "skipped")
+            ET.SubElement(
+                case, "skipped", message=run.message or run.status.replace("_", " ")
+            )
+
+
+def _junit_text(suite: ET.Element) -> str:
+    ET.indent(suite)
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(
+        suite, encoding="unicode"
     )
-
-
-def _typed(
-    value: Any, kind: str | None = None, decimals: int | str | None = None
-) -> Value:
-    if value is None:
-        return None
-    if isinstance(value, list):
-        return ValueSet.of(_typed(member, kind) for member in value)
-    if kind == "number" or (
-        isinstance(value, int | float) and not isinstance(value, bool)
-    ):
-        try:
-            number = Number.of(str(value), decimals)
-        except InvalidOperation:
-            raise ValueError(f"invalid number {value!r}") from None
-        except ValueError as error:
-            raise ValueError(f"invalid decimals {decimals!r}: {error}") from None
-        if not number.value.is_finite():
-            raise ValueError(f"invalid number {value!r}")
-        return number
-    if kind == "item" or (isinstance(value, str) and value.startswith("[")):
-        return Item.parse(str(value).strip("[]"))
-    if kind == "date":
-        return date.fromisoformat(str(value))
-    return value
 
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
 
 
-__all__ = ["INVALID_INPUT", "JSON_SCHEMA_VERSION", "load_memory_provider", "main"]
+__all__ = [
+    "EXIT_FAILED",
+    "EXIT_INPUT",
+    "EXIT_OK",
+    "EXIT_USAGE",
+    "JSON_SCHEMA_VERSION",
+    "main",
+]

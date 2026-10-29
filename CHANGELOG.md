@@ -11,6 +11,9 @@ All notable changes to this project are documented here. The project follows
   `active` and `modules`; `dpm-xl eval` and `dpm-xl check` skip inactive
   rules, and the output shows severity. `dpmxl.rules.load_rules` reads a
   rule file in Python.
+- `dpm-xl eval --format junit` writes a JUnit XML report, one test case
+  per rule, and `--fail-on error|warning` sets which failing rules fail the
+  run; by default a failing `warning` rule does not.
 - The contextual components `entityID`, `baseCurrency` and the
   `decimals…` names read the report parameters of those names, with their
   type; a missing one is null.
@@ -26,6 +29,16 @@ All notable changes to this project are documented here. The project follows
   `Parameter`.
 - A malformed JSON rule file names the field by its JSON path, such as
   `[0].severity`.
+- **Breaking:** the `--json` output of `dpm-xl check` and `dpm-xl eval`
+  opens with `tool`, `version` and a `summary` of counts
+  (`schema_version` 2); `check` moves `parsed` and `total` into `summary`.
+- **Breaking:** `load_memory_provider` moved from `dpmxl.cli` to
+  `dpmxl.provider` (and `dpmxl`), and `dpmxl.cli.INVALID_INPUT` is now
+  `EXIT_INPUT`, next to `EXIT_OK`, `EXIT_FAILED` and `EXIT_USAGE`.
+- An expression given on the command line is labelled `expression`, not
+  `argument`, and the text output counts null records as `null`.
+- Unreadable input is reported as `error: PATH: reason` for rule and data
+  files alike.
 
 ### Fixed
 

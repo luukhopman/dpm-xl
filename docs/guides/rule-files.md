@@ -49,7 +49,7 @@ import json
 from pathlib import Path
 
 from dpmxl import SelectionCache, evaluate_rule, explain
-from dpmxl.cli import load_memory_provider
+from dpmxl.provider import load_memory_provider
 from dpmxl.rules import load_rules
 
 provider = load_memory_provider(json.loads(Path("examples/data.json").read_text()))
@@ -107,13 +107,13 @@ failure:
 ```console
 $ dpm-xl eval examples/rules.txt examples/data.json
 line 2: failed
-  records: 1 passed, 1 failed, 0 not evaluated
+  records: 1 passed, 1 failed, 0 null
   - c=0020: 1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision
 line 3: failed
-  records: 1 passed, 1 failed, 0 not evaluated
+  records: 1 passed, 1 failed, 0 null
   - qCPI=LEI-B: -5 should exceed 0: difference 5
 line 4: passed
-  records: 1 passed, 0 failed, 0 not evaluated
+  records: 1 passed, 0 failed, 0 null
 3 rules: 2 failed, 1 passed
 ```
 
@@ -122,7 +122,7 @@ A single expression takes its precondition from `--precondition`:
 ```console
 $ dpm-xl eval "{tC_01.00, r0010, c0010} > 200" examples/data.json --precondition "{v_C_01.00}"
 status: failed
-records: 0 passed, 1 failed, 0 not evaluated
+records: 0 passed, 1 failed, 0 null
 - scalar: 100 should exceed 200: difference 100
 ```
 
@@ -131,7 +131,18 @@ records: 0 passed, 1 failed, 0 not evaluated
 ```console
 $ dpm-xl eval "{tC_27.00, c0010} > 0" examples/data.json --json
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "tool": "dpm-xl",
+  "version": "1.2.3",
+  "summary": {
+    "rules": 1,
+    "passed": 0,
+    "failed": 1,
+    "not_applicable": 0,
+    "error": 0,
+    "unsupported": 0,
+    "skipped": 0
+  },
   "results": [
     {
       "rule": "expression",
@@ -162,7 +173,12 @@ $ dpm-xl eval "{tC_27.00, c0010} > 0" examples/data.json --json
 }
 ```
 
-The exit status is 0 when every rule passed or did not apply, 1 when a rule
-failed and 3 when a rule is an error or unsupported, or the input cannot be
-read. The [CLI reference](../reference/cli.md) lists every option and the JSON
-layout.
+`--format junit` writes a JUnit XML report instead, for CI systems that
+show test results.
+
+The exit status is 0 when no rule failed, 1 when a rule of severity `error`
+failed (or of any severity, with `--fail-on warning`) and 3 when a rule is
+an error or unsupported, or the input cannot be read. A failing `warning`
+rule is shown but does not fail the run. The
+[CLI reference](../reference/cli.md) lists every option, the JSON layout and
+the JUnit report.

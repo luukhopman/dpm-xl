@@ -129,10 +129,11 @@ def test_eval_skips_inactive_rules_and_shows_severity(tmp_path, capsys) -> None:
             {"code": "b", "expression": "{tT, r0010, c0010} / 0 > 1", "active": False},
         ],
     )
-    assert main(["eval", rules, _data(tmp_path)]) == 1
+    # A failing warning does not fail the run by default.
+    assert main(["eval", rules, _data(tmp_path)]) == 0
     output = capsys.readouterr().out
     assert "a: failed (warning)" in output
-    assert "b: skipped (inactive)" in output
+    assert "b: skipped (inactive rule)" in output
     assert "2 rules: 1 failed, 1 skipped" in output
     main(["eval", rules, _data(tmp_path), "--json"])
     skipped = json.loads(capsys.readouterr().out)["results"][1]

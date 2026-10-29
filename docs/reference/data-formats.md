@@ -7,7 +7,8 @@ description: The JSON rule file and data file formats that dpm-xl check and dpm-
 The CLI reads two JSON formats: rule files and data files. Python callers
 normally build a provider instead
 ([Connect your data](../guides/provider.md)); the CLI's
-`dpmxl.cli.load_memory_provider(document)` turns a data document into a
+[`load_memory_provider(document)`][dpmxl.provider.load_memory_provider]
+turns a data document into a
 [`MemoryProvider`][dpmxl.provider.MemoryProvider] if you want the same
 format in Python. The `--json` output of the CLI is described in the
 [CLI reference](cli.md#json-output).
@@ -94,7 +95,7 @@ This document uses every field; the Python below loads it the way
 
 ```python
 from dpmxl import evaluate_rule
-from dpmxl.cli import load_memory_provider
+from dpmxl.provider import load_memory_provider
 
 document = {
     "tables": [

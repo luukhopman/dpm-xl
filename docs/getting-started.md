@@ -1,5 +1,6 @@
 ---
-description: Install dpm-xl, evaluate a first rule against in-memory data, read the explanation and use the CLI.
+description: Tutorial - install dpm-xl, parse a first rule, evaluate it against in-memory data, read the explanation and use the CLI.
+icon: lucide/graduation-cap
 ---
 
 # Getting started
@@ -7,19 +8,37 @@ description: Install dpm-xl, evaluate a first rule against in-memory data, read 
 This tutorial takes you from installation to an explained rule failure, first
 in Python and then on the command line. It takes about ten minutes.
 
-## Install
+!!! info "Before you start"
 
-dpm-xl needs Python 3.11 or newer and has no dependencies.
+    You need Python 3.11 or newer and a terminal. No knowledge of DPM-XL is
+    assumed: each step says what the output means, and terms with a dotted
+    underline, such as datapoint, show a definition when you point at them.
+    The [glossary](reference/glossary.md) lists them all.
 
-```bash
-pip install dpm-xl
-```
+You will:
 
-or, in a project managed with uv:
+1. install dpm-xl;
+2. parse a rule;
+3. give it report data;
+4. evaluate it;
+5. explain the failure;
+6. do the same on the command line.
 
-```bash
-uv add dpm-xl
-```
+## 1. Install
+
+dpm-xl has no dependencies.
+
+=== "pip"
+
+    ```text
+    pip install dpm-xl
+    ```
+
+=== "uv"
+
+    ```text
+    uv add dpm-xl
+    ```
 
 Check the installation; it prints the installed version:
 
@@ -27,7 +46,7 @@ Check the installation; it prints the installed version:
 dpm-xl --version
 ```
 
-## Parse a rule
+## 2. Parse a rule
 
 A DPM-XL rule compares cells of report tables. This one says that in every
 column of table `C_01.00`, row `0010` is the sum of rows `0020` and `0030`:
@@ -38,9 +57,14 @@ from dpmxl import parse, tables
 expression = (
     "with {tC_01.00, c*, default: 0, interval: true}: {r0010} = {r0020} + {r0030}"
 )
-tree = parse(expression)
-print(type(tree).__name__, tables(tree))
+tree = parse(expression)  # (1)!
+print(type(tree).__name__, tables(tree))  # (2)!
 ```
+
+1. Returns the syntax tree, a frozen [`Node`][dpmxl.ast.Node], or raises
+   `DpmXlSyntaxError`.
+2. The node's class names the construct; `tables` lists the tables the
+   rule reads.
 
 ```text
 With ('C_01.00',)
@@ -72,7 +96,7 @@ with {tC_01.00, c0010}: {r0010} = {r0020} +* {r0030}
                                            ^
 ```
 
-## Provide report data
+## 3. Provide report data
 
 The evaluator reads no files. It asks a *provider* for the cells a selection
 covers. [`MemoryProvider`][dpmxl.provider.MemoryProvider] holds a report in
@@ -84,7 +108,7 @@ from dpmxl import MemoryProvider, Number, TableLayout
 
 layout = TableLayout("C_01.00", rows=("0010", "0020", "0030"), columns=("0010", "0020"))
 values = {
-    ("C_01.00", "0010", "0010", None, ()): Number.of(100, 0),
+    ("C_01.00", "0010", "0010", None, ()): Number.of(100, 0),  # (1)!
     ("C_01.00", "0020", "0010", None, ()): Number.of(60, 0),
     ("C_01.00", "0030", "0010", None, ()): Number.of(40, 0),
     ("C_01.00", "0010", "0020", None, ()): Number.of(1204, 0),
@@ -93,6 +117,9 @@ values = {
 }
 provider = MemoryProvider([layout], values)
 ```
+
+1. Table, row, column, sheet (`None`: the table has no sheets) and open
+   keys (`()`: not an open table), then the value with its XBRL decimals.
 
 `Number.of(1204, 0)` is a fact reported with XBRL `decimals="0"`: 1,204
 rounded to whole units, so anything from 1,203.5 to 1,204.5.
@@ -109,7 +136,7 @@ print(amount.low, amount.high)
 For your own storage you write a provider with three methods; see
 [Connect your data](guides/provider.md).
 
-## Evaluate
+## 4. Evaluate
 
 [`evaluate_rule`][dpmxl.evaluator.evaluate_rule] returns a
 [`RuleResult`][dpmxl.evaluator.RuleResult]. It never raises for a bad rule or
@@ -118,11 +145,14 @@ bad data; problems become the status `error`.
 ```python
 from dpmxl import evaluate_rule
 
-result = evaluate_rule(expression, provider, precondition="{v_C_01.00}")
+result = evaluate_rule(expression, provider, precondition="{v_C_01.00}")  # (1)!
 print(result.status, result.counts)
 for outcome in result.outcomes:
     print(outcome.key, outcome.passed)
 ```
+
+1. The precondition is evaluated first; when it does not hold, the status
+   is `not_applicable` and the rule is not evaluated.
 
 ```text
 failed {'passed': 1, 'failed': 1, 'null': 0}
@@ -135,7 +165,7 @@ record key `{'c': '0020'}` names the failing one. The precondition
 `{v_C_01.00}` makes the rule apply only when table `C_01.00` was reported;
 `MemoryProvider` treats every table with a value as reported.
 
-## Explain a failure
+## 5. Explain a failure
 
 [`explain`][dpmxl.explain.explain] fills the failing record's formula with the
 reported values:
@@ -143,12 +173,19 @@ reported values:
 ```python
 from dpmxl import explain
 
-explanation = explain(result.evaluation, expression, {"c": "0020"})
+explanation = explain(result.evaluation, expression, {"c": "0020"})  # (1)!
 print(explanation.summary)
-print(explanation.filled)
-print(explanation.difference, explanation.gap, explanation.direction)
-print([point.ref for point in explanation.primary])
+print(explanation.filled)  # (2)!
+print(explanation.difference, explanation.gap, explanation.direction)  # (3)!
+print([point.ref for point in explanation.primary])  # (4)!
 ```
+
+1. The evaluation, the rule and the key of the failing record.
+2. The formula with each cell replaced by its value.
+3. How far apart the sides are, how far apart they still are after the
+   rounding is allowed for, and whether the left side is above
+   (`too_high`) or below (`too_low`) the right.
+4. The cells on the left of the comparison, by their `ref`.
 
 ```text
 1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision
@@ -162,7 +199,7 @@ The sides differ by 7. Each of the three amounts may be off by up to 0.5, so
 cells on the left of the comparison, the values that disagree; a user
 interface can highlight them by their `ref`.
 
-## Use the CLI
+## 6. Use the CLI
 
 The same evaluation runs from the command line against a JSON data file. The
 repository's [`examples/`](https://github.com/luukhopman/dpm-xl/tree/main/examples)
@@ -195,10 +232,24 @@ $ dpm-xl check examples/rules.json
 6/6 expressions parsed; 1 inactive rule skipped
 ```
 
+## What you learned
+
+- A rule parses to a tree, and a syntax error says where it went wrong.
+- The evaluator reads no files: a provider holds the report, with each
+  number's reported precision.
+- A rule yields one record per key, and its status says whether any failed.
+- `explain` turns a failing record into a sentence, a filled formula and
+  the cells involved.
+- `dpm-xl eval` does the same for a rule file, and `dpm-xl check` checks
+  syntax only.
+
 ## Next steps
 
 - [Connect your data](guides/provider.md): write a provider for your own
   storage.
+- [From an XBRL report to explained failures](guides/end-to-end.md): check
+  a real report against its [module file](reference/module-file.md), or
+  run `dpm-xl check-report`.
 - [Explain failures in a UI](guides/explain.md): everything an
   [`Explanation`][dpmxl.explain.Explanation] holds.
 - [Records and keys](concepts/records-and-keys.md): how selections become

@@ -1,4 +1,4 @@
-"""Behaviour required by the EBA DPM-XL operators specification v0.9."""
+"""Behaviour required by the DPM-XL specification v0.11; § is the operators part."""
 
 from datetime import date
 from decimal import Decimal

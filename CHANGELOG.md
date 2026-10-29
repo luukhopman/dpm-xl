@@ -48,6 +48,8 @@ All notable changes to this project are documented here. The project follows
   their order; they used to keep the first one's.
 - `median` keeps the tolerance of the middle value, or the mean of the two
   middle values' tolerances, instead of dropping it.
+- The concepts pages cite the DPM-XL specification v0.11 instead of v0.9
+  and no longer call points it settles ambiguous.
 - `diagnose` checks the `partition by` and `order by` keys of analytic
   functions; it used to skip them.
 

@@ -7,8 +7,9 @@ description: How reported precision (XBRL decimals) turns numbers into intervals
 A fact reported as 1,204 with XBRL `decimals="0"` is a rounded amount: the
 true value lies anywhere from 1,203.5 to 1,204.5. A rule that adds such
 amounts must allow for the rounding, or it fails reports that are correct.
-EBA validation rules therefore use interval arithmetic, following the
-Eurofiling interval arithmetic functions (`iaf:*`, version 1.1.1).
+EBA validation rules therefore use interval arithmetic (EBA Filing Rules
+2.18), with the formulas of DPM-XL §4 and §7, which follow the Eurofiling
+interval arithmetic functions (`iaf:*`, version 1.1.1).
 
 ## Numbers with a tolerance
 
@@ -103,9 +104,11 @@ the left side is 1,204 ± 0.5 and the right side 1,211 ± 1, so the difference
 of 7 shrinks to at least 5.5. The gap is rounded down, so "at least" never
 overstates it.
 
-## Where the specification is ambiguous
+## Quotients with a negative divisor
 
-The specification is ambiguous about the radius formulas for products and
-quotients; dpm-xl uses the ones above, which avoid false failures. The
+The quotient's tolerance in DPM-XL §4.3.4.4 takes the absolute value of the
+numerator's endpoints only, so for a negative divisor it comes out negative.
+dpm-xl takes the largest deviation of the four endpoint quotients, which is
+the same for a positive divisor and stays sound for a negative one. The
 columnar evaluator uses `Decimal(38, 12)`; see
 [Evaluate large reports](../guides/columnar.md#precision).

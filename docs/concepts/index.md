@@ -1,5 +1,5 @@
 ---
-description: The semantics of DPM-XL as dpm-xl implements them, and where the specification leaves a choice.
+description: The semantics of DPM-XL as dpm-xl implements them, and the specification they follow.
 ---
 
 # Concepts
@@ -23,11 +23,13 @@ How DPM-XL rules are evaluated. These pages explain the semantics; the
 - [Parameters, operations and table groups](references.md): everything a
   rule reads besides cells.
 
-## Sources and choices
+## Sources
 
-These semantics follow the EBA *DPM-XL language specification v0.9*
-(operators and data model documents) and the Eurofiling interval arithmetic
-functions. Where the specification is ambiguous or contradicts itself (sum
-of no records, `count` over nulls, key-name aliases, the radius formulas for
-products and quotients), dpm-xl makes the choice that avoids false failures,
-and says so on the page concerned.
+These semantics follow the
+[DPM-XL specification v0.11](https://dpm-alliance.github.io/dpm-xl-docs/)
+(2026-09-18; its operators and information model parts and its ANTLR
+grammar) and the interval arithmetic rule of the EBA XBRL Filing Rules
+(v5.9, rule 2.18). Where dpm-xl reads a rule differently, so that EBA rules
+keep their meaning, the
+[language reference](../reference/language.md#where-dpm-xl-differs) lists
+it with the section concerned.

@@ -457,10 +457,10 @@ def test_clause_names_must_be_keys() -> None:
 
 
 def test_report_parameters_stand_in_for_keys_in_where_and_get() -> None:
-    expression = "{tC_27.00, c0010} [get refPeriod] > 0"
+    expression = "{tC_27.00, c0010} [get Level] > 0"
     assert codes(expression) == ["unknown-key"]
     assert found(expression)[0][0] == "warning"
-    assert codes(expression, parameters=["refPeriod"]) == []
+    assert codes(expression, parameters=["Level"]) == []
     assert found(expression, parameters=[])[0][:2] == ("error", "unknown-key")
     assert found(expression, parameters=[])[0][3].endswith(", nor a report parameter")
 
@@ -686,3 +686,12 @@ def test_analytic_functions_check_their_keys() -> None:
         )
     ]
     assert found("rank({tC_28.00, c0010} over (partition by INC order by f)) > 0") == []
+
+
+def test_contextual_components_are_known_names() -> None:
+    # DPM-XL 2.2.3.3.1: contextual components exist in every record set.
+    assert (
+        found("{tC_28.00, c0010} [where baseCurrency = [CU:EUR]] > 0", parameters=())
+        == []
+    )
+    assert found('entityID = "LEI"', parameters=()) == []

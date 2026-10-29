@@ -131,6 +131,7 @@ from .evaluator import (
     _check_call,
     _check_rename,
     _context_condition,
+    _contextual,
     _parse_cached,
 )
 from .provider import (
@@ -873,6 +874,8 @@ class ColumnarEvaluator:
 
     def _get(self, frame: Frame, name: str) -> Frame:
         key = resolve_key(name, frame.keys)
+        if key is None and _contextual(name) is not None:
+            raise ColumnarUnsupported("contextual components")
         if key is None:
             value = self.provider.parameter(name)
             if value is None:
@@ -1863,6 +1866,8 @@ def _key_column(name: str, keys: Sequence[str]) -> pl.Expr:
     key = resolve_key(name, keys)
     if _is_fact(name, keys):
         raise ColumnarUnsupported("where on the fact f")
+    if key is None and _contextual(name) is not None:
+        raise ColumnarUnsupported("contextual components")
     if key is None:
         raise EvaluationError(f"unknown key component or parameter {name!r}")
     return _key_text_column(key)

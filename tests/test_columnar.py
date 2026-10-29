@@ -488,6 +488,8 @@ NEW_CONSTRUCTS = [
     "with {tT, c0010} [where f > 50]: {r*} > 50",
     "{tONE, r0010, c0010} [where f = 5] = 5",
     "rank({tT, c0010, r*} over (order by f desc)) > 0",
+    "{tT, r*, c0010} [where isnull(entityID)] > 0",
+    "isnull({tT, r*, c0010} [get entityID])",
 ]
 
 

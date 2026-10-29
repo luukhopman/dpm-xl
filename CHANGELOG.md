@@ -5,6 +5,12 @@ All notable changes to this project are documented here. The project follows
 
 ## Unreleased
 
+### Added
+
+- The contextual components `entityID`, `baseCurrency` and the
+  `decimals…` names read the report parameters of those names, with their
+  type; a missing one is null.
+
 ### Fixed
 
 - `count` of a set is its number of members, as in `count({1, 2, 2}) = 2`;

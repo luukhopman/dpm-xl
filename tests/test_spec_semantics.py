@@ -393,6 +393,45 @@ def test_identifiers_differing_only_in_case_must_be_written_exactly() -> None:
     assert status("{tA, r0010, c0010} = 1", data) == "passed"
 
 
+def contextual(**parameters: Value) -> MemoryProvider:
+    data = provider({("0010", "0010"): 4, ("0020", "0010"): 6})
+    return MemoryProvider(
+        list(data.tables.values()), dict(data.values), parameters=parameters
+    )
+
+
+@pytest.mark.parametrize(
+    ("rule", "expected"),
+    [
+        ("{tT, r*, c0010} [where baseCurrency = [eba_CU:EUR]] > 0", "passed"),
+        ("{tT, r*, c0010} [where decimalsMonetary >= -3] > 0", "passed"),
+        ('{tT, r*, c0010} [get entityID] = "LEI1"', "passed"),
+        ("refPeriod = #2026-12-31#", "passed"),
+        ("decimalsInteger = 0", "not_applicable"),
+    ],
+)
+def test_contextual_components_are_report_parameters(rule: str, expected: str) -> None:
+    # 2.2.3.1.4 and 2.2.3.3.1: refPeriod, entityID, baseCurrency and the
+    # decimals components may be referenced in every expression.
+    data = contextual(
+        refPeriod="2026-12-31",
+        entityID="LEI1",
+        baseCurrency="eba_CU:EUR",
+        decimalsMonetary=Number.of(-3),
+    )
+    result = evaluate_rule(rule, data)
+    assert result.status == expected, result.message
+
+
+def test_missing_contextual_components_are_null() -> None:
+    data = contextual()
+    assert status("isnull(baseCurrency) and isnull(entityID)", data) == "passed"
+    assert status("{tT, r*, c0010} [where baseCurrency = [CU:EUR]] > 0", data) == (
+        "not_applicable"
+    )
+    assert status('{tT, r*, c0010} [where qX = "a"] > 0', data) == "error"
+
+
 def test_if_without_else_leaves_out_records_of_any_type() -> None:
     tables = [
         TableLayout("A", rows=("0010",), columns=("0010",)),

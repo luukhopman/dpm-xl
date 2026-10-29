@@ -101,7 +101,7 @@ from .ast import (
     With,
     walk,
 )
-from .grammar import SIGNATURES
+from .grammar import CONTEXTUAL_COMPONENTS, SIGNATURES
 from .parser import _may_be_program, parse, parse_program
 from .provider import (
     CellQuery,
@@ -395,6 +395,8 @@ class Evaluator:
                 temporary = self._temporaries.get(name.casefold())
                 if temporary is not None:
                     return temporary
+                if _contextual(name) is not None:
+                    return Recordset.scalar(self._contextual_value(name))
                 value = self.provider.parameter(name)
                 if value is not None:
                     return Recordset.scalar(value)
@@ -511,8 +513,23 @@ class Evaluator:
         """
         return (
             name.casefold() in self._temporaries
+            or _contextual(name) is not None
             or self.provider.parameter(name) is not None
         )
+
+    def _contextual_value(self, name: str) -> Value:
+        """Read a contextual component, such as ``baseCurrency``.
+
+        Returns:
+            Value: The report parameter of that name, of the component's
+            type; null when the provider lacks it (DPM-XL 2.2.3.3.1).
+        """
+        canonical = cast(str, _contextual(name))
+        value = self.provider.parameter(canonical)
+        if value is None:
+            self._notes.append(f"report parameter {canonical!r} is not available")
+            return None
+        return _parameter_value(canonical, CONTEXTUAL_COMPONENTS[canonical], value)
 
     def _clause_operand(
         self,
@@ -954,7 +971,14 @@ class Evaluator:
     def _get(self, data: Recordset, name: str) -> Recordset:
         key = resolve_key(name, data.keys)
         if key is None:
-            value = self.provider.parameter(name)
+            value = (
+                self._contextual_value(name)
+                if _contextual(name) is not None
+                else self.provider.parameter(name)
+            )
+            if value is None and _contextual(name) is not None:
+                mapped = data.map(lambda _value: None)
+                return Recordset(mapped.keys, mapped.records)
             if value is None:
                 raise EvaluationError(f"unknown key component or parameter {name!r}")
             mapped = data.map(lambda _value: value)
@@ -1474,6 +1498,18 @@ def _context_condition(
     for term in terms[1:]:
         kept = Binary("and", kept, term, span=(kept.span[0], term.span[1]))
     return kept
+
+
+def _contextual(name: str) -> str | None:
+    """Return the contextual component a name denotes, ignoring case.
+
+    Returns:
+        str | None: Its canonical name, such as ``baseCurrency``, or ``None``.
+    """
+    folded = name.casefold()
+    return next(
+        (known for known in CONTEXTUAL_COMPONENTS if known.casefold() == folded), None
+    )
 
 
 def _check_rename(new: str, others: Sequence[str]) -> None:

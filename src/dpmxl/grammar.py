@@ -56,6 +56,23 @@ WINDOW_KEYWORDS = frozenset(
 SELECTION_KEYWORDS = frozenset({"default", "interval"})
 """Option keywords inside a ``{...}`` selection."""
 
+CONTEXTUAL_COMPONENTS: Mapping[str, str] = MappingProxyType(
+    {
+        "refPeriod": "date",
+        "entityID": "string",
+        "baseCurrency": "item",
+        "decimalsInteger": "integer",
+        "decimalsMonetary": "integer",
+        "decimalsPercentage": "integer",
+        "decimalsDecimal": "integer",
+    }
+)
+"""The contextual components every record set has (DPM-XL 2.2.3.1.4 and
+2.2.3.3.1), by name, with their [parameter type][dpmxl.grammar.PARAMETER_TYPES].
+
+A rule reads them as names, such as ``baseCurrency``; the evaluator takes
+their values from the report parameters of the same name."""
+
 PARAMETER_TYPES = frozenset(
     {
         "boolean",
@@ -488,6 +505,7 @@ __all__ = [
     "ANALYTIC_FUNCTIONS",
     "AXIS_LETTERS",
     "CALL_NAMES",
+    "CONTEXTUAL_COMPONENTS",
     "FUNCTIONS",
     "FUNCTION_ALIASES",
     "KEYWORDS",

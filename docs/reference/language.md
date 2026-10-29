@@ -564,9 +564,17 @@ that, the report parameter of that name; inside a clause a key component
 comes first ([Key names](#key-names)). An unknown name is the evaluation
 error `unknown key component or parameter`.
 
+The contextual components of DPM-XL 2.2.3.1.4 and 2.2.3.3.1, listed in
+[`CONTEXTUAL_COMPONENTS`][dpmxl.grammar.CONTEXTUAL_COMPONENTS] (`refPeriod`,
+`entityID`, `baseCurrency`, `decimalsInteger`, `decimalsMonetary`,
+`decimalsPercentage`, `decimalsDecimal`), are the report parameters of
+those names, of the component's type, in any case; a missing one is null.
+
 | Expression | Result |
 | --- | --- |
 | `refPeriod` | `2026-12-31` |
+| `baseCurrency` | `null` |
+| `{tT, c0010}[where entityID = "LEI"]` | `no records` |
 | `missing` | `error: unknown key component or parameter 'missing'` |
 
 ### Typed parameter `{p_…}` {#typed-parameter}

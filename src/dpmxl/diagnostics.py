@@ -41,7 +41,13 @@ from .ast import (
     With,
     children,
 )
-from .grammar import CALL_NAMES, KEYWORDS, LITERAL_WORDS, SIGNATURES
+from .grammar import (
+    CALL_NAMES,
+    CONTEXTUAL_COMPONENTS,
+    KEYWORDS,
+    LITERAL_WORDS,
+    SIGNATURES,
+)
 from .parser import DpmXlSyntaxError, Token, _parse_recovering, _pointer, tokenize
 from .provider import TableLayout, axis_matcher
 from .recordset import STANDARD_KEYS, _is_fact, resolve_key
@@ -728,6 +734,8 @@ class _Checker:
             ):
                 continue
             if parameter:
+                if _is_contextual(name):
+                    continue
                 if self.parameters is None:
                     severity = "warning"
                 elif name in self.parameters:
@@ -739,6 +747,8 @@ class _Checker:
 
     def check_name(self, name: str, span: tuple[int, int], scope: _Scope) -> None:
         if name.casefold() in {temporary.casefold() for temporary in scope.temporaries}:
+            return
+        if _is_contextual(name):
             return
         if self.parameters is not None and name in self.parameters:
             return
@@ -1085,6 +1095,11 @@ def _closest(word: str, candidates: Iterable[str], *, cutoff: float) -> str | No
         if first == second:
             return None
     return by_folded[close[0]]
+
+
+def _is_contextual(name: str) -> bool:
+    # DPM-XL 2.2.3.1.4 and 2.2.3.3.1: every record set has them.
+    return name.casefold() in {known.casefold() for known in CONTEXTUAL_COMPONENTS}
 
 
 __all__ = ["DIAGNOSTIC_CODES", "Diagnostic", "LayoutLookup", "Severity", "diagnose"]

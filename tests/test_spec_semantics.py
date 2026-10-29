@@ -93,6 +93,22 @@ def test_count_of_no_records_is_zero() -> None:
     assert status("count({tO, r0010, c0010}) = 0", data) == "passed"
 
 
+@pytest.mark.parametrize(
+    ("rule", "expected"),
+    [
+        ("count({1, 2, 3, 3, 2}) = 3", "passed"),
+        ("count({}) = 0", "passed"),
+        ("count(union({1, 2}, {2, 3})) = 3", "passed"),
+        ("count(set_of({tT, r*, c0010})) = 2", "passed"),
+        ("count({1, 2} group by r) = 2", "error"),
+    ],
+)
+def test_count_of_a_set_is_its_number_of_members(rule: str, expected: str) -> None:
+    # 7.3.4: count of a scalar_set returns its cardinality.
+    data = provider({("0010", "0010"): 4, ("0020", "0010"): 4, ("0030", "0010"): 5})
+    assert status(rule, data) == expected
+
+
 def test_division_by_zero_is_a_runtime_error() -> None:
     # 4.3.4.6: a zero denominator generates a run-time error.
     data = provider({("0010", "0010"): 4, ("0020", "0010"): 0})

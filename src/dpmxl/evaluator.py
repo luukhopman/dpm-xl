@@ -1878,6 +1878,12 @@ def _membership(value: Value, members: Sequence[Value]) -> Value:
 def _aggregate(
     name: str, data: Recordset, group_by: tuple[str, ...] | None
 ) -> Recordset:
+    single = data.single() if not data.keys else None
+    if name == "count" and single is not None and isinstance(single.value, ValueSet):
+        # DPM-XL 7.3.4: count of a set is its number of members.
+        if group_by is not None:
+            raise EvaluationError("group by is not allowed with a set")
+        return Recordset.scalar(Number(Decimal(len(single.value))))
     group_keys: list[str] = []
     for key_name in group_by or ():
         key = resolve_key(key_name, data.keys)

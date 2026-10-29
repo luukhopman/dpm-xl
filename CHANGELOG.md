@@ -3,6 +3,13 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org).
 
+## Unreleased
+
+### Fixed
+
+- `count` of a set is its number of members, as in `count({1, 2, 2}) = 2`;
+  it used to be 1.
+
 ## 1.2.3 - 2026-10-26
 
 ### Fixed

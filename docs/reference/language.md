@@ -1364,13 +1364,17 @@ The sum of the numbers; their tolerances add up.
 
 ### `count` {#count}
 
-The number of non-null values, of any type.
+The number of non-null values, of any type. Of a set, the number of its
+members; a set takes no `group by`.
 
 | Expression | Result |
 | --- | --- |
 | `count({tT})` | `5` |
 | `count({tT, r0030, c0020})` | `0` |
 | `count({tO} group by c)` | `c=0010: 3; c=0020: 3` |
+| `count({1, 2, 3, 3, 2})` | `3` |
+| `count({})` | `0` |
+| `count(union({1, 2}, {2, 3}))` | `3` |
 
 ### `avg` {#avg}
 

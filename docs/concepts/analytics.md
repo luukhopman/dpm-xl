@@ -69,7 +69,9 @@ def show(expression):
 A running total per entity, in date order:
 
 ```python
-show("with {tO}: sum({c0010} over (partition by qEBB order by qDAT)) > 0")
+show(
+    "with {tO}: sum({c0010} over (partition by qEBB order by qDAT data points between unbounded preceding and current data point)) > 0"
+)
 ```
 
 ```text
@@ -105,9 +107,8 @@ B 2026-03-31 True
 - **`rank`** needs `order by` and ranks by those keys; ties share the lowest
   rank and leave gaps (1, 1, 3).
 - **Default window.** Without a window clause the window is the whole
-  partition, or, with `order by`, every record up to the current one and its
-  *peers*, the records with the same values for every order key (`range
-  between unbounded preceding and current data point`).
+  partition, even with `order by`; a running total needs `data points
+  between unbounded preceding and current data point`.
 - **`data points` windows** count records: `between 2 preceding and current
   data point` is the current record and the two before it.
 - **`range` windows** with an offset need a single number or date order key:

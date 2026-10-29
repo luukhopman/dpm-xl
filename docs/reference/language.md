@@ -1437,8 +1437,8 @@ An analytic function keeps its operand's records: each gets the aggregate
 of the records in its window, or its rank, within its partition.
 `partition by` and `order by` name keys of the operand
 ([Key names](#key-names)); without `partition by` the whole operand is one
-partition. Without a window the window is the whole partition, or with
-`order by` every record up to the current one and its peers. `data points`
+partition. Without a window the window is the whole partition, even with
+`order by`. `data points`
 windows count records; `range` windows with an offset need a single number
 or date order key, and `3 M preceding` is three calendar months earlier.
 The result has no `default`. The window keywords are reserved only inside
@@ -1456,7 +1456,8 @@ The result has no `default`. The window keywords are reserved only inside
 | Expression | Result |
 | --- | --- |
 | `sum({tU} over ())` | `r=0010: 6; r=0020: 6; r=0030: 6` |
-| `sum({tU} over (order by r))` | `r=0010: 1; r=0020: 3; r=0030: 6` |
+| `sum({tU} over (order by r))` | `r=0010: 6; r=0020: 6; r=0030: 6` |
+| `sum({tU} over (order by r data points between unbounded preceding and current data point))` | `r=0010: 1; r=0020: 3; r=0030: 6` |
 | `sum({tT} over (partition by c))` | `r=0010, c=0010: 200; r=0020, c=0010: 200; r=0030, c=0010: 200; r=0010, c=0020: 0; r=0020, c=0020: 0; r=0030, c=0020: 0` |
 | `avg({tU} over (order by r data points between 1 preceding and current data point))` | `r=0010: 1; r=0020: 1.5; r=0030: 2.5` |
 | `sum({tU} over (order by r data points between current data point and unbounded following))` | `r=0010: 6; r=0020: 5; r=0030: 3` |

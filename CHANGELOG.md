@@ -11,6 +11,8 @@ All notable changes to this project are documented here. The project follows
   it used to be 1.
 - `=` and `!=` compare two sets by their members, so `{1, 2} = {2, 1}` is
   true; they used to fail with `cannot compare set with set`.
+- An analytic function with `order by` and no window clause takes the
+  whole partition, as the specification says, instead of a running window.
 
 ## 1.2.3 - 2026-10-26
 

@@ -474,6 +474,7 @@ NEW_CONSTRUCTS = [
     "x := {tONE, r0010, c0010}; x = 5",
     "rank({tT, c0010, r*} over (order by r)) > 0",
     "sum({tT, c0010, r*} over (partition by r)) > 0",
+    "sum({tT, c0010, r*} over (order by r)) = 201",
 ]
 
 

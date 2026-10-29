@@ -97,7 +97,6 @@ from .ast import (
     TypedParameter,
     Unary,
     Where,
-    Window,
     WindowBound,
     With,
     walk,
@@ -1180,9 +1179,8 @@ def _window_span(
 ) -> tuple[int, int]:
     """Return the half-open range of sorted members in a record's window.
 
-    Without a window clause the window is the whole partition, or, with an
-    ``order by``, every member up to the current one and its peers: the
-    members with the same values for all order keys.
+    Without a window clause the window is the whole partition, whatever the
+    ``order by`` (DPM-XL 7.1.8.4).
 
     Returns:
         tuple[int, int]: Start and end positions.
@@ -1194,13 +1192,7 @@ def _window_span(
     count = len(members)
     window = node.window
     if window is None:
-        if not order:
-            return 0, count
-        window = Window(
-            "range",
-            WindowBound("unbounded preceding"),
-            WindowBound("current data point"),
-        )
+        return 0, count
     if window.unit == "data points":
         low = _row_bound(window.start, current, count)
         high = _row_bound(window.end, current, count) + 1

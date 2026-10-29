@@ -549,8 +549,14 @@ def plain(expression: str) -> dict:
             "rank({tT, c0010, r*} over (order by r desc))",
             {"0010": "3", "0020": "2", "0030": "1"},
         ),
+        # 7.1.8.4: without a window clause the window is the whole partition.
         (
             "sum({tT, c0010, r*} over (order by r))",
+            {"0010": "200", "0020": "200", "0030": "200"},
+        ),
+        (
+            "sum({tT, c0010, r*} over (order by r data points between unbounded "
+            "preceding and current data point))",
             {"0010": "100", "0020": "160", "0030": "200"},
         ),
         (
@@ -682,7 +688,11 @@ def test_dates_shifted_out_of_range_are_errors(expression: str) -> None:
 
 
 def test_analytic_peers_compare_every_order_key() -> None:
-    result = values("sum({tU, r*, c*} over (order by c, r))", grid())
+    result = values(
+        "sum({tU, r*, c*} over (order by c, r range between unbounded preceding "
+        "and current data point))",
+        grid(),
+    )
     assert {key: str(item.value) for key, item in result.items()} == {
         ("0010", "0010"): "1",
         ("0020", "0010"): "3",

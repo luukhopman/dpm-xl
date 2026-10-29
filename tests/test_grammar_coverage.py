@@ -214,7 +214,7 @@ EXAMPLES: list[tuple[str, str, str | None]] = [
     (
         "#commonAggrOp with analyticClause",
         "sum({tU, c0010, r*} over (order by r))",
-        "r=0010: 1; r=0020: 3; r=0030: 6",
+        "r=0010: 6; r=0020: 6; r=0030: 6",
     ),
     (
         "#rankOp",

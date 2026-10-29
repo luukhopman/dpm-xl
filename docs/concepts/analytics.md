@@ -102,8 +102,9 @@ B 2026-03-31 True
 
 ## Partitions, order and windows
 
-- **Partition and order keys** must be keys of the operand. Without
-  `partition by` the whole operand is one partition.
+- **Partition and order keys** must be keys of the operand, or `f`, its
+  value. Without `partition by` the whole operand is one partition. Null
+  order values come last.
 - **`rank`** needs `order by` and ranks by those keys; ties share the lowest
   rank and leave gaps (1, 1, 3).
 - **Default window.** Without a window clause the window is the whole

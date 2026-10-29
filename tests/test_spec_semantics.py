@@ -5,7 +5,17 @@ from decimal import Decimal
 
 import pytest
 
-from dpmxl import Item, MemoryProvider, Number, TableLayout, Value, evaluate_rule
+from dpmxl import (
+    Item,
+    MemoryProvider,
+    Number,
+    TableLayout,
+    Value,
+    evaluate_rule,
+    format_value,
+    parse,
+)
+from dpmxl.evaluator import Evaluator
 from dpmxl.provider import CellKey
 
 ROWS = ("0010", "0020", "0030")
@@ -305,6 +315,38 @@ def test_with_where_on_the_fact_applies_to_key_less_selections() -> None:
         "not_applicable"
     )
     assert status("{tONE, r0010, c0010} [where f = 5] = 5", data) == "passed"
+
+
+def ranks(expression: str, data: MemoryProvider) -> dict[str, str]:
+    result = Evaluator(data).run(parse(expression)).result
+    return {
+        str(key[0]): format_value(record.value)
+        for key, record in result.records.items()
+    }
+
+
+def test_rank_orders_by_the_fact_with_nulls_last() -> None:
+    # 7.8.7: rank(rs1 over (partition by qCountry order by f desc)).
+    data = provider({}, open_rows=[("X", 300), ("Y", 100), ("Z", 300)])
+    assert ranks("rank({tO, r0010, c0010} over (order by f desc))", data) == {
+        "X": "1",
+        "Z": "1",
+        "Y": "3",
+    }
+    # 7.8.4: records whose order value is null sort last.
+    nulls = provider({("0010", "0010"): 3, ("0030", "0010"): 1})
+    assert ranks("rank({tT, c0010} over (order by f))", nulls) == {
+        "0030": "1",
+        "0010": "2",
+        "0020": "3",
+    }
+    assert ranks("rank({tT, c0010} over (order by f desc))", nulls) == {
+        "0010": "1",
+        "0030": "2",
+        "0020": "3",
+    }
+    window = "sum({tT, c0010} over (order by f range between 2 preceding and current data point))"
+    assert ranks(window, nulls) == {"0030": "1", "0010": "4", "0020": "null"}
 
 
 def test_if_without_else_leaves_out_records_of_any_type() -> None:

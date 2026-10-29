@@ -1090,8 +1090,12 @@ def _analytic(node: Analytic, data: Recordset) -> Recordset:
     Raises:
         EvaluationError: For a key the operand lacks or an invalid window.
     """
+    width = len(data.keys)
 
     def position(name: str) -> int:
+        # The fact f (DPM-XL 7.8.7) follows the keys in each member's key.
+        if _is_fact(name, data.keys):
+            return width
         key = resolve_key(name, data.keys)
         if key is None:
             raise EvaluationError(
@@ -1104,8 +1108,9 @@ def _analytic(node: Analytic, data: Recordset) -> Recordset:
     order = [(position(name), descending) for name, descending in node.order_by]
     groups: dict[tuple[Hashable, ...], list[tuple[tuple[Hashable, ...], Record]]] = {}
     for key, record in data.records.items():
-        groups.setdefault(tuple([key[index] for index in partition]), []).append(
-            (key, record)
+        extended = (*key, _key_value(record.value))
+        groups.setdefault(tuple([extended[index] for index in partition]), []).append(
+            (extended, record)
         )
     result = Recordset(data.keys)
     reduce = _per_record(lambda values: _reduce(node.name, values, len(values)))
@@ -1114,13 +1119,15 @@ def _analytic(node: Analytic, data: Recordset) -> Recordset:
             members.sort(
                 key=lambda item: _sort_value(item[0][index]), reverse=descending
             )
+            # Null order values sort last either way (DPM-XL 7.8.4).
+            members.sort(key=lambda item: item[0][index] is None)
         ranks = _order_values(members, order)
         if node.name == "rank":
             first: dict[tuple[Any, ...], int] = {}
             for number, rank_key in enumerate(ranks, start=1):
                 first.setdefault(rank_key, number)
             for (key, record), rank_key in zip(members, ranks, strict=True):
-                result.records[key] = Record(
+                result.records[key[:width]] = Record(
                     Number(Decimal(first[rank_key])), record.points
                 )
             continue
@@ -1130,14 +1137,14 @@ def _analytic(node: Analytic, data: Recordset) -> Recordset:
             values: list[Value] = [
                 item.value for _, item in window if item.value is not None
             ]
-            result.records[key] = Record(
+            result.records[key[:width]] = Record(
                 reduce(values), tuple(item.points for _, item in window)
             )
     return result
 
 
 def _sort_value(value: Hashable) -> tuple[int, Any]:
-    """Order key values of mixed types: null first, then by type and value.
+    """Order key values of mixed types by type and value.
 
     Returns:
         tuple[int, Any]: A sort key.
@@ -1203,7 +1210,10 @@ def _window_span(
     value = members[current][0][index]
     bounds = []
     for bound, start in ((window.start, True), (window.end, False)):
-        if bound.kind == "current data point":
+        # A null order value has no offset: its window is its null peers.
+        if bound.kind == "current data point" or (
+            value is None and bound.kind in {"preceding", "following"}
+        ):
             bounds.append(_peer_bound(ranks, current, start=start))
         else:
             bounds.append(
@@ -1279,14 +1289,14 @@ def _range_bound(
     else:
         raise EvaluationError("a range window offset needs a number or date order key")
     goal = _sort_value(target)
-    # Members are sorted ascending on the key, or descending.
-    positions = range(count)
+    # Members are sorted ascending on the key, or descending, with nulls last.
+    positions = range(sum(1 for member in members if member[0][index] is not None))
     if start:
         for position in positions:
             found = _sort_value(members[position][0][index])
             if (found >= goal) if not descending else (found <= goal):
                 return position
-        return count
+        return len(positions)
     for position in reversed(positions):
         found = _sort_value(members[position][0][index])
         if (found <= goal) if not descending else (found >= goal):

@@ -483,6 +483,7 @@ NEW_CONSTRUCTS = [
     "{tT, r*, c0010} [where f > 50] > 50",
     "with {tT, c0010} [where f > 50]: {r*} > 50",
     "{tONE, r0010, c0010} [where f = 5] = 5",
+    "rank({tT, c0010, r*} over (order by f desc)) > 0",
 ]
 
 

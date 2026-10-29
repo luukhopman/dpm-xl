@@ -1445,8 +1445,8 @@ bound     ::= "unbounded" ( "preceding" | "following" )
 An analytic function keeps its operand's records: each gets the aggregate
 of the records in its window, or its rank, within its partition.
 `partition by` and `order by` name keys of the operand
-([Key names](#key-names)); without `partition by` the whole operand is one
-partition. Without a window the window is the whole partition, even with
+([Key names](#key-names)) or `f`, its value; without `partition by` the
+whole operand is one partition. Null order values come last. Without a window the window is the whole partition, even with
 `order by`. `data points`
 windows count records; `range` windows with an offset need a single number
 or date order key, and `3 M preceding` is three calendar months earlier.
@@ -1480,7 +1480,7 @@ The result has no `default`. The window keywords are reserved only inside
 
 `rank(x over (partition by … order by …))`: the position of each record in
 its partition by the order keys, from 1; ties share the lowest rank and
-leave gaps (1, 1, 3). Values do not matter, only keys. `rank` needs `over`
+leave gaps (1, 1, 3). `order by f` ranks by value. `rank` needs `over`
 with `order by`; a window is ignored.
 
 | Expression | Result |
@@ -1488,6 +1488,7 @@ with `order by`; a window is ignored.
 | `rank({tU} over (order by r desc))` | `r=0030: 1; r=0020: 2; r=0010: 3` |
 | `rank({tT} over (partition by c order by r desc))` | `r=0030, c=0010: 1; r=0020, c=0010: 2; r=0010, c=0010: 3; r=0030, c=0020: 1; r=0020, c=0020: 2; r=0010, c=0020: 3` |
 | `filter({tU}, rank({tU} over (order by r)) <= 2)` | `r=0010: 1; r=0020: 2` |
+| `rank({tT, c0020} over (order by f desc))` | `r=0010: 1; r=0020: 2; r=0030: 3` |
 | `rank({tU})` | `syntax error: rank needs an over clause` |
 | `rank({tU} over (partition by r))` | `syntax error: rank needs an order by clause` |
 

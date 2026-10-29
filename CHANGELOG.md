@@ -25,6 +25,9 @@ All notable changes to this project are documented here. The project follows
 - `where` can test a record's value as `f`, as in `[where f != 0]`, also in
   a `with` context, where a condition on `f` alone applies to every
   selection instead of being dropped.
+- `partition by` and `order by` of an analytic function can name `f`, so
+  `rank(x over (order by f desc))` ranks by value; null order values come
+  last.
 
 ## 1.2.3 - 2026-10-26
 

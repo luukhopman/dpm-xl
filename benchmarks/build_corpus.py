@@ -9,8 +9,8 @@ precondition expression of the ``OperationVersion`` table, one per line,
 sorted. A few expressions span several lines; their line breaks become spaces,
 so that each expression is one line.
 
-The corpus is derived from EBA data, so it is not committed to this
-repository.
+The expressions of releases 3.4 to 4.4 are committed, with the code of a
+rule using each, as ``tests/data/eba_corpus.json.gz``.
 """
 
 import sqlite3

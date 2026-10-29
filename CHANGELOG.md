@@ -29,6 +29,9 @@ All notable changes to this project are documented here. The project follows
 - The contextual components `entityID`, `baseCurrency` and the
   `decimals…` names read the report parameters of those names, with their
   type; a missing one is null.
+- The test suite parses all 14,174 distinct EBA expressions of DPM releases
+  3.4 to 4.4, committed as test data; the two with EBA typos fail with a
+  message that suggests the fix.
 - The end-to-end guide and the toolkit tour use `ReportProvider` and a
   module file instead of a hand-written provider.
 - The language reference lists every place where dpm-xl differs from the

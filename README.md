@@ -60,9 +60,11 @@ dpm-xl check-report module.json report.zip    # filing rules and module rules (x
 
 ## Features
 
-- Parses every construct of the DPM-XL grammar, including every EBA
-  validation rule and precondition of DPM releases 3.4–4.4 (14,000+ distinct
-  expressions, about 0.1 ms each).
+- Parses every construct of the DPM-XL grammar and all 14,174 distinct EBA
+  validation rule and precondition expressions of DPM releases 3.4–4.4 but
+  the two with typos in the EBA source, about 0.1 ms each; a
+  [test](https://github.com/luukhopman/dpm-xl/blob/main/tests/test_corpus.py)
+  parses every one.
 - Evaluates them with EBA's interval arithmetic, null logic and key joins, and
   points each failure at the cells involved.
 - Finds problems before evaluation, for editors and CI: every syntax error,

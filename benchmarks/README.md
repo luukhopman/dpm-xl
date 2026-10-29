@@ -16,7 +16,11 @@ them.
 ## 1. Build the corpus
 
 The corpus is every distinct rule and precondition expression of EBA DPM
-releases, one per line. It is derived from EBA data, so it is not committed.
+releases, one per line. The expressions of releases 3.4 to 4.4 are committed
+as `tests/data/eba_corpus.json.gz` (see `tests/data/eba_corpus.md`); to use
+them, write them one per line:
+`python -c "import gzip, json; print('\\n'.join(sorted(json.loads(gzip.open('tests/data/eba_corpus.json.gz').read()))))" > corpus.txt`.
+To build the corpus from other releases:
 
 1. Download the DPM 2.0 database of each release from the EBA website (a
    Microsoft Access `.accdb` file).

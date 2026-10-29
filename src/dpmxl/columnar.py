@@ -131,7 +131,6 @@ from .evaluator import (
     _check_call,
     _check_rename,
     _context_condition,
-    _is_fact,
     _parse_cached,
 )
 from .provider import (
@@ -141,7 +140,13 @@ from .provider import (
     declared_open_keys,
     normalize_code,
 )
-from .recordset import STANDARD_KEYS, EvaluationError, UnsupportedError, resolve_key
+from .recordset import (
+    STANDARD_KEYS,
+    EvaluationError,
+    UnsupportedError,
+    _is_fact,
+    resolve_key,
+)
 from .values import Number, Value, type_name
 
 DEC = pl.Decimal(38, 12)

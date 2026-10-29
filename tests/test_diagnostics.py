@@ -667,3 +667,9 @@ def test_the_columnar_engine_agrees(expression: str) -> None:
     except ColumnarUnsupported:
         pytest.skip("evaluated by the reference engine")
     assert (result.status == "passed") == (not errors)
+
+
+def test_clauses_may_name_the_fact() -> None:
+    # DPM-XL 11.1.5: a where condition may use the Fact Component, f.
+    assert found("{tC_28.00, c0010} [where f != 0] > 0", parameters=()) == []
+    assert found("with {tC_28.00} [where F != 0]: {c0010} > 0", parameters=()) == []

@@ -44,7 +44,7 @@ from .ast import (
 from .grammar import CALL_NAMES, KEYWORDS, LITERAL_WORDS, SIGNATURES
 from .parser import DpmXlSyntaxError, Token, _parse_recovering, _pointer, tokenize
 from .provider import TableLayout, axis_matcher
-from .recordset import STANDARD_KEYS, resolve_key
+from .recordset import STANDARD_KEYS, _is_fact, resolve_key
 
 Severity = Literal["error", "warning"]
 """``error`` or ``warning``; see [`Diagnostic`][dpmxl.diagnostics.Diagnostic]."""
@@ -723,7 +723,9 @@ class _Checker:
         keys, table = found
         severity: Severity = "error"
         for name in names:
-            if resolve_key(name, keys) is not None:
+            if resolve_key(name, keys) is not None or (
+                isinstance(node, Analytic) and _is_fact(name, keys)
+            ):
                 continue
             if parameter:
                 if self.parameters is None:
@@ -741,7 +743,11 @@ class _Checker:
         if self.parameters is not None and name in self.parameters:
             return
         if scope.clause:
-            if scope.keys is None or resolve_key(name, scope.keys) is not None:
+            if (
+                scope.keys is None
+                or resolve_key(name, scope.keys) is not None
+                or _is_fact(name, scope.keys)
+            ):
                 return
             assert scope.table is not None
             # Without the report parameters, a name in a clause that is not

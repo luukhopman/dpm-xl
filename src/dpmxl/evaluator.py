@@ -113,10 +113,12 @@ from .provider import (
     normalize_code,
 )
 from .recordset import (
+    _FACT,
     EvaluationError,
     Record,
     Recordset,
     UnsupportedError,
+    _is_fact,
     combine,
     resolve_key,
     unique_points,
@@ -940,7 +942,7 @@ class Evaluator:
                     for name, value in zip(data.keys, key, strict=True)
                 }
                 if fact:
-                    bindings[FACT] = record.value
+                    bindings[_FACT] = record.value
                 verdict = self.evaluate(condition, context, bindings).single()
                 kept = verdicts[part] = (
                     verdict is not None and _checked(verdict.value) is True
@@ -1485,19 +1487,6 @@ def _check_rename(new: str, others: Sequence[str]) -> None:
     )
     if clash is not None:
         raise EvaluationError(f"rename: key component {clash} already exists")
-
-
-FACT = "f"
-"""The name of a record's value in a ``where`` condition (DPM-XL 2.2.3)."""
-
-
-def _is_fact(name: str, keys: Sequence[str]) -> bool:
-    """Tell whether a name in a clause is the fact ``f`` rather than a key.
-
-    Returns:
-        bool: True for ``f`` (any case) unless the operand has a key ``f``.
-    """
-    return name.casefold() == FACT and FACT not in keys
 
 
 def _key_names(node: Node) -> tuple[str, ...]:

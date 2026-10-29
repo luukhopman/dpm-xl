@@ -535,6 +535,19 @@ def unique_points(points: Iterable[Any]) -> tuple[DataPoint, ...]:
     return tuple(result)
 
 
+_FACT = "f"
+"""The name of a record's value in a clause (DPM-XL 2.2.3.2)."""
+
+
+def _is_fact(name: str, keys: Sequence[str]) -> bool:
+    """Tell whether a name in a clause is the fact ``f`` rather than a key.
+
+    Returns:
+        bool: True for ``f`` (any case) unless the operand has a key ``f``.
+    """
+    return name.casefold() == _FACT and _FACT not in keys
+
+
 def resolve_key(name: str, keys: Iterable[str]) -> str | None:
     """Resolve a key name written in a rule against available key components.
 

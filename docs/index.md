@@ -42,6 +42,7 @@ validation into a reporting platform, or analyse and edit DPM-XL rules.
 ```bash
 pip install dpm-xl               # Python 3.11+, no dependencies
 pip install "dpm-xl[columnar]"   # adds the polars evaluator
+pip install "dpm-xl[xbrl]"       # adds dpm-xbrl, to check XBRL reports
 ```
 
 ## In 30 seconds

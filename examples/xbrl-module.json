@@ -1,0 +1,50 @@
+{
+  "format": "dpm-module/1",
+  "release": "4.2",
+  "module": "COREP_LR",
+  "entry_point": "http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_lr.json",
+  "reference_date": "2026-03-31",
+  "filing_indicators": ["C_43.00", "C_47.00", "C_48.02"],
+  "tables": [
+    {
+      "code": "C_47.00",
+      "cells": [
+        {"id": "C_47.00/r0010/c0010", "row": "0010", "column": "0010", "datapoint": "dp9001", "data_type": "m"},
+        {"id": "C_47.00/r0020/c0010", "row": "0020", "column": "0010", "datapoint": "dp9002", "data_type": "m"},
+        {"id": "C_47.00/r0030/c0010", "row": "0030", "column": "0010", "datapoint": "dp9003", "data_type": "m"},
+        {"id": "C_47.00/r0040/c0010", "row": "0040", "column": "0010", "datapoint": "dp9004", "data_type": "m"},
+        {"id": "C_47.00/r0050/c0010", "row": "0050", "column": "0010", "datapoint": "dp9005", "data_type": "m"},
+        {"id": "C_47.00/r0060/c0010", "row": "0060", "column": "0010", "datapoint": "dp9006", "data_type": "p"}
+      ]
+    },
+    {
+      "code": "C_48.02",
+      "open_keys": [{"code": "qRDT", "data_type": "s"}],
+      "cells": [
+        {"id": "C_48.02/c0010", "row": "*", "column": "0010", "datapoint": "dp9101", "data_type": "m"},
+        {"id": "C_48.02/c0020", "row": "*", "column": "0020", "datapoint": "dp9102", "data_type": "s"}
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "code": "e0001",
+      "expression": "with {tC_47.00, c0010, default: 0, interval: true}: {r0040} = {r0010} + {r0020} + {r0030}",
+      "precondition": "{v_C_47.00}"
+    },
+    {
+      "code": "e0002",
+      "expression": "with {tC_47.00, c0010, interval: true}: {r0060} = {r0050} / {r0040}",
+      "precondition": "{v_C_47.00}"
+    },
+    {"code": "e0003", "expression": "{tC_48.02, c0010} >= 0", "precondition": "{v_C_48.02}"},
+    {
+      "code": "e0004",
+      "expression": "match({tC_48.02, c0020}, \"[A-Z0-9]{18}[0-9]{2}\")",
+      "precondition": "{v_C_48.02}",
+      "severity": "warning"
+    },
+    {"code": "e0005", "expression": "{tC_43.00, r0010, c0010} > 0", "precondition": "{v_C_43.00}"},
+    {"code": "e0006", "expression": "total := sum({tC_48.02, c0010}); total <= {tC_47.00, r0040, c0010}"}
+  ]
+}

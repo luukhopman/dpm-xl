@@ -120,7 +120,9 @@ v0005 error False 0
 ```
 
 An axis whose every cell is `"*"` is open, and a table whose filing
-indicator differs from its code answers `{v_…}` for that template.
+indicator differs from its code answers `{v_…}` for that template. With the
+`xbrl` extra, [`ReportProvider`][dpmxl.xbrl.ReportProvider] evaluates the
+rules on a report read with dpm-xbrl.
 
 On the command line, a module file is a rule source like a rule file:
 `dpm-xl check` checks its rules against its tables, and `dpm-xl eval`

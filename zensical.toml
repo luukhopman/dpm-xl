@@ -57,6 +57,7 @@ nav = [
       { "dpmxl.provider" = "reference/api/provider.md" },
       { "dpmxl.rules" = "reference/api/rules.md" },
       { "dpmxl.module" = "reference/api/module.md" },
+      { "dpmxl.xbrl" = "reference/api/xbrl.md" },
       { "dpmxl.columnar" = "reference/api/columnar.md" },
       { "dpmxl.parser" = "reference/api/parser.md" },
       { "dpmxl.ast" = "reference/api/ast.md" },

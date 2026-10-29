@@ -404,6 +404,10 @@ MODULES = [
     "dpmxl.references",
     "dpmxl.values",
     "dpmxl.columnar",
+    "dpmxl.diagnostics",
+    "dpmxl.rules",
+    "dpmxl.module",
+    "dpmxl.xbrl",
 ]
 
 
@@ -411,6 +415,8 @@ MODULES = [
 def test_docstring_examples(name: str) -> None:
     if name == "dpmxl.columnar":
         pytest.importorskip("polars")
+    if name == "dpmxl.xbrl":
+        pytest.importorskip("dpmxbrl")
     module = importlib.import_module(name)
     finder = doctest.DocTestFinder(exclude_empty=True)
     runner = doctest.DocTestRunner(optionflags=doctest.ELLIPSIS)

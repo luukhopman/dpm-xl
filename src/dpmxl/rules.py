@@ -3,7 +3,9 @@
 A rule file is a JSON list of rule objects or a text file with one
 expression per line, as the data formats reference describes.
 [`load_rules`][dpmxl.rules.load_rules] reads either into
-[`Rule`][dpmxl.rules.Rule] objects.
+[`Rule`][dpmxl.rules.Rule] objects, and
+[`evaluate_rules`][dpmxl.rules.evaluate_rules] evaluates them on one report,
+skipping inactive rules.
 
 Examples:
     >>> rules = load_rules(
@@ -15,6 +17,13 @@ Examples:
     ... )
     >>> [(rule.code, rule.severity, rule.active) for rule in rules]
     [('v1', 'error', True), ('v2', 'warning', False)]
+    >>> from dpmxl import MemoryProvider, Number, TableLayout
+    >>> report = MemoryProvider(
+    ...     [TableLayout("T", rows=("0010", "0020"))],
+    ...     {("T", "0010", None, None, ()): Number.of(5, 0)},
+    ... )
+    >>> [(run.rule.code, run.status) for run in evaluate_rules(rules, report)]
+    [('v1', 'passed'), ('v2', 'skipped')]
 """
 
 from __future__ import annotations
@@ -24,7 +33,12 @@ import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+
+from .evaluator import RuleResult, SelectionCache, evaluate_rule
+
+if TYPE_CHECKING:
+    from .provider import DataProvider
 
 Severity: TypeAlias = Literal["error", "warning"]
 """How serious a rule's failure is: ``error`` blocks a report, ``warning`` not."""
@@ -83,6 +97,68 @@ class Rule:
             return True
         folded = module.casefold()
         return any(code.casefold() == folded for code in self.modules)
+
+
+@dataclass(frozen=True, slots=True)
+class RuleRun:
+    """One rule's evaluation on a report, or why it was skipped.
+
+    Attributes:
+        rule: The rule.
+        result: The rule's result; ``None`` when it was skipped.
+        skipped: Why the rule was skipped, such as ``inactive rule``;
+            ``None`` when it was evaluated.
+    """
+
+    rule: Rule
+    result: RuleResult | None = None
+    skipped: str | None = None
+
+    @property
+    def status(self) -> str:
+        """The result's status, or ``skipped``."""
+        return "skipped" if self.result is None else self.result.status
+
+    @property
+    def message(self) -> str | None:
+        """The result's message, or why the rule was skipped."""
+        return self.skipped if self.result is None else self.result.message
+
+
+def evaluate_rules(
+    rules: Sequence[Rule],
+    provider: DataProvider,
+    *,
+    module: str | None = None,
+    cache: SelectionCache | None = None,
+) -> list[RuleRun]:
+    """Evaluate rules on one report, skipping inactive ones.
+
+    Args:
+        rules: The rules, such as [`load_rules`][dpmxl.rules.load_rules]
+            returns.
+        provider: The report.
+        module: The report's module code; a rule whose ``modules`` do not
+            include it is skipped. ``None`` skips none.
+        cache: The selection cache to share; by default one for these
+            rules.
+
+    Returns:
+        list[RuleRun]: One run per rule, in order.
+    """
+    cache = SelectionCache() if cache is None else cache
+    runs = []
+    for rule in rules:
+        if not rule.active:
+            runs.append(RuleRun(rule, skipped="inactive rule"))
+        elif not rule.applies_to(module):
+            runs.append(RuleRun(rule, skipped=f"not a rule of module {module}"))
+        else:
+            result = evaluate_rule(
+                rule.expression, provider, precondition=rule.precondition, cache=cache
+            )
+            runs.append(RuleRun(rule, result))
+    return runs
 
 
 def load_rules(source: str | os.PathLike[str] | Sequence[Any]) -> list[Rule]:
@@ -237,7 +313,9 @@ __all__ = [
     "SEVERITIES",
     "Rule",
     "RuleFileError",
+    "RuleRun",
     "Severity",
+    "evaluate_rules",
     "load_rules",
     "rules_from",
 ]

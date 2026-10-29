@@ -13,7 +13,7 @@ affiliated with or endorsed by the European Banking Authority.
 
 | Path | Content |
 | --- | --- |
-| `src/dpmxl/` | The package. `parser.py` (tokenizer, recursive-descent parser), `grammar.py` (vocabulary, TextMate grammar), `ast.py` (frozen node classes), `values.py` (`Number` with interval tolerance), `recordset.py` (keyed records, joins), `evaluator.py` (reference evaluator), `explain.py`, `references.py` (static analysis), `provider.py` (`DataProvider`, `MemoryProvider`), `rules.py` (rule files), `module.py` (module files), `columnar.py` (polars evaluator, optional), `cli.py`. |
+| `src/dpmxl/` | The package. `parser.py` (tokenizer, recursive-descent parser), `grammar.py` (vocabulary, TextMate grammar), `ast.py` (frozen node classes), `values.py` (`Number` with interval tolerance), `recordset.py` (keyed records, joins), `evaluator.py` (reference evaluator), `explain.py`, `references.py` (static analysis), `provider.py` (`DataProvider`, `MemoryProvider`), `rules.py` (rule files), `module.py` (module files), `xbrl.py` (report bridge, optional), `columnar.py` (polars evaluator, optional), `cli.py`. |
 | `tests/` | pytest suite. `test_columnar.py` checks both evaluators agree; `test_grammar_coverage.py` covers every grammar alternative; `test_docs.py` runs every docs example and docstring doctest and checks that the language reference covers `dpmxl.grammar`; `data/eba_expressions.txt` samples EBA rules. |
 | `docs/` | Documentation site (Zensical + mkdocstrings), configured in `zensical.toml`. |
 | `scripts/build_docs.py` | Strict site build plus `llms.txt`, `llms-full.txt` and Markdown page copies. |
@@ -39,8 +39,14 @@ uv run python -c "import json; from dpmxl.grammar import textmate_grammar; print
 
 ## Conventions
 
-- No new runtime dependencies; polars stays optional (`columnar` extra).
-  Docs tools belong in the `docs` dependency group.
+- No new runtime dependencies; polars stays optional (`columnar` extra) and
+  dpm-xbrl too (`xbrl` extra); their tests skip without them. Docs tools
+  belong in the `docs` dependency group.
+- The `xbrl` extra needs dpm-xbrl 1.1, which is not on PyPI yet, so
+  `[tool.uv] override-dependencies` lets the lock take dpm-xbrl 1.0. Once
+  1.1 is published, remove the override and run `uv lock`. To work against
+  a local dpm-xbrl checkout, run
+  `uv pip install --no-config -e ../dpm-xbrl` and then `uv run --no-sync`.
 - The `docs` group takes dpm-synth from its GitHub `main` branch through
   `[tool.uv.sources]`, for the toolkit tour, because dpm-synth 1.0.0 is not
   on PyPI yet. Once it is published, remove that source and run `uv lock`

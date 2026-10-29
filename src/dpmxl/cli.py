@@ -14,13 +14,13 @@ from pathlib import Path
 from typing import Any
 
 from .diagnostics import LayoutLookup, diagnose
-from .evaluator import RuleResult, SelectionCache, evaluate_rule
+from .evaluator import RuleResult
 from .explain import explain
 from .module import Module, load_module
 from .parser import parse_program
 from .provider import DataProvider, _table_layout, load_memory_provider
 from .references import references
-from .rules import Rule, load_rules
+from .rules import Rule, RuleRun, evaluate_rules, load_rules
 
 JSON_SCHEMA_VERSION = 2
 """Version of the ``--json`` output layout; it changes only with a new major."""
@@ -347,20 +347,26 @@ EXIT_INPUT = 3
 
 @dataclass(frozen=True, slots=True)
 class _Run:
-    """One rule's evaluation; ``result`` is ``None`` for a skipped rule."""
+    """One rule's run and the explanation of each failing record."""
 
-    rule: Rule
-    result: RuleResult | None
+    run: RuleRun
     failures: list[dict[str, Any]]
-    reason: str | None = None
+
+    @property
+    def rule(self) -> Rule:
+        return self.run.rule
+
+    @property
+    def result(self) -> RuleResult | None:
+        return self.run.result
 
     @property
     def status(self) -> str:
-        return "skipped" if self.result is None else self.result.status
+        return self.run.status
 
     @property
     def message(self) -> str | None:
-        return self.reason if self.result is None else self.result.message
+        return self.run.message
 
 
 def _run_rules(
@@ -372,33 +378,23 @@ def _run_rules(
         list[_Run]: One run per rule, in order; inactive rules and rules
         for other modules are skipped.
     """
-    cache = SelectionCache()
-    runs = []
-    for rule in rules:
-        if not rule.active:
-            runs.append(_Run(rule, None, [], "inactive rule"))
-            continue
-        if not rule.applies_to(module):
-            runs.append(_Run(rule, None, [], f"not a rule of module {module}"))
-            continue
-        result = evaluate_rule(
-            rule.expression, provider, precondition=rule.precondition, cache=cache
-        )
-        failures = []
-        if result.evaluation is not None:
-            for outcome in result.failures:
-                explanation = explain(result.evaluation, rule.expression, outcome.key)
-                failures.append(
-                    {
-                        "key": {
-                            name: str(value) for name, value in outcome.key.items()
-                        },
-                        "summary": explanation.summary,
-                        "cells": [point.label() for point in outcome.points],
-                    }
-                )
-        runs.append(_Run(rule, result, failures))
-    return runs
+    return [_explained(run) for run in evaluate_rules(rules, provider, module=module)]
+
+
+def _explained(run: RuleRun) -> _Run:
+    failures = []
+    result = run.result
+    if result is not None and result.evaluation is not None:
+        for outcome in result.failures:
+            explanation = explain(result.evaluation, run.rule.expression, outcome.key)
+            failures.append(
+                {
+                    "key": {name: str(value) for name, value in outcome.key.items()},
+                    "summary": explanation.summary,
+                    "cells": [point.label() for point in outcome.points],
+                }
+            )
+    return _Run(run, failures)
 
 
 _NO_RECORDS = {"passed": 0, "failed": 0, "null": 0}
@@ -517,7 +513,7 @@ def _print_runs(runs: Sequence[_Run], *, single: bool = False) -> None:
 def _print_run(run: _Run, *, single: bool) -> None:
     indent = "" if single else "  "
     if run.result is None:
-        print(f"{run.rule.code}: skipped ({run.reason})")
+        print(f"{run.rule.code}: skipped ({run.message})")
         return
     if single:
         print(f"status: {run.status}")

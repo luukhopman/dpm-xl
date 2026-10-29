@@ -16,6 +16,7 @@ European Banking Authority.
 ```bash
 pip install dpm-xl               # Python 3.11+, no dependencies
 pip install "dpm-xl[columnar]"   # adds the polars evaluator
+pip install "dpm-xl[xbrl]"       # adds dpm-xbrl, to check XBRL reports
 ```
 
 ## Quickstart

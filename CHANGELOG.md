@@ -18,6 +18,11 @@ All notable changes to this project are documented here. The project follows
   `dpm-synth-template/1`) describe a module's tables, cells and rules;
   `dpmxl.module.load_module` reads one, and `dpm-xl check` and `eval` take
   one as their rule source.
+- `dpmxl.xbrl.ReportProvider` evaluates a module's rules on a report read
+  with dpm-xbrl, and `check_report` combines its filing findings and rule
+  results; install with `pip install "dpm-xl[xbrl]"`.
+- `dpmxl.rules.evaluate_rules` evaluates a list of rules on one report,
+  skipping inactive ones.
 - The contextual components `entityID`, `baseCurrency` and the
   `decimals…` names read the report parameters of those names, with their
   type; a missing one is null.

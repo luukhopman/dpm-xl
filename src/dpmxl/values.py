@@ -318,6 +318,12 @@ def compare(op: str, left: Value, right: Value) -> bool | None:
     """
     if left is None or right is None:
         return None
+    if isinstance(left, ValueSet) and isinstance(right, ValueSet) and op in {"=", "!="}:
+        # DPM-XL 13.7: sets are equal when each member of one is in the other.
+        equal = all(member in right for member in left.members) and all(
+            member in left for member in right.members
+        )
+        return equal if op == "=" else not equal
     if isinstance(left, Number) and isinstance(right, Number):
         difference = _subtract(left.value, right.value)
         tolerance = _add(left.tolerance, right.tolerance)

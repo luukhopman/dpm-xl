@@ -755,8 +755,11 @@ Compares two values and yields a Boolean. `<>` is `!=`; the node's `op` is
 
 - **Null:** null if either operand is null.
 - **Keys:** the operands [join](#records).
+Two sets are equal under `=` when each member of one is in the other.
+
 - **Errors:** `cannot compare number with string using '='` and the like
-  for other pairs, sets included; `items do not support '<'`.
+  for other pairs, a set with anything but a set included; `items do not
+  support '<'`.
 - **Node:** [`Binary`][dpmxl.ast.Binary].
 
 | Expression | Result |
@@ -772,7 +775,10 @@ Compares two values and yields a Boolean. `<>` is `!=`; the node's `op` is
 | `1 <> 2` | `true` |
 | `null = null` | `null` |
 | `1 = "1"` | `error: cannot compare number with string using '='` |
-| `{1} = {1}` | `error: cannot compare set with set using '='` |
+| `{1, 2} = {2, 1}` | `true` |
+| `symdiff({1, 2}, {1, 2}) = {}` | `true` |
+| `{1} = 1` | `error: cannot compare set with number using '='` |
+| `{1} < {2}` | `error: cannot compare set with set using '<'` |
 
 ### `in`, `not in` {#in}
 

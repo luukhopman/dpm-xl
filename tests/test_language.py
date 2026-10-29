@@ -212,7 +212,7 @@ def test_in_takes_any_set_operand() -> None:
 @pytest.mark.parametrize(
     ("expression", "message"),
     [
-        ("{1} = {1}", "cannot compare set with set"),
+        ("{1} < {1}", "cannot compare set with set"),
         ("{tT, r0010, c0010, default: {1}} > 0", "a set default applies only to set"),
         ("union({1}) = {1}", "union takes 2 or more operands, not 1"),
         ("setdiff({1}, {2}, {3}) = {1}", "setdiff takes 2 operands, not 3"),

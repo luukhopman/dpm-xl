@@ -9,6 +9,8 @@ All notable changes to this project are documented here. The project follows
 
 - `count` of a set is its number of members, as in `count({1, 2, 2}) = 2`;
   it used to be 1.
+- `=` and `!=` compare two sets by their members, so `{1, 2} = {2, 1}` is
+  true; they used to fail with `cannot compare set with set`.
 
 ## 1.2.3 - 2026-10-26
 

@@ -109,6 +109,24 @@ def test_count_of_a_set_is_its_number_of_members(rule: str, expected: str) -> No
     assert status(rule, data) == expected
 
 
+@pytest.mark.parametrize(
+    ("rule", "expected"),
+    [
+        ("{1, 2, 3} = {3, 2, 1}", "passed"),
+        ("{1, 2} = {1, 2, 3}", "failed"),
+        ("symdiff({1, 2}, {1, 2}) = {}", "passed"),
+        ("{1, 2} != {2, 3}", "passed"),
+        ("set_of({tT, r*, c0010}) = {4, 5}", "passed"),
+        ("{1} = 1", "error"),
+        ("{1} < {2}", "error"),
+    ],
+)
+def test_sets_compare_as_sets(rule: str, expected: str) -> None:
+    # 13.7: = and != on two sets test whether they hold the same members.
+    data = provider({("0010", "0010"): 4, ("0020", "0010"): 4, ("0030", "0010"): 5})
+    assert status(rule, data) == expected
+
+
 def test_division_by_zero_is_a_runtime_error() -> None:
     # 4.3.4.6: a zero denominator generates a run-time error.
     data = provider({("0010", "0010"): 4, ("0020", "0010"): 0})

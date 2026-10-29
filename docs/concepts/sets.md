@@ -88,8 +88,9 @@ failed [False, True]
 
 ## Restrictions
 
-Sets cannot be compared with `=` or the other comparison operators, and
-cannot be a rule's result. A set `default` on a cell selection is an error.
+Sets compare only with sets, and only with `=` and `!=`: two sets are
+equal when each member of one is in the other. A set cannot be a rule's
+result. A set `default` on a cell selection is an error.
 The columnar evaluator handles `in` with a set literal; it hands every other
 set operand (parameters, selections, set operators) to the reference
 evaluator.

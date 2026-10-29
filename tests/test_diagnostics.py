@@ -702,3 +702,23 @@ def test_contextual_components_are_known_names() -> None:
         == []
     )
     assert found('entityID = "LEI"', parameters=()) == []
+
+
+@pytest.mark.parametrize(
+    ("expression", "suggestion"),
+    [
+        # One typo away, though too short for the similarity ratio.
+        ("sun(1) > 0", "sum"),
+        ("smu(1) > 0", "sum"),
+        ("mx(1, 2) > 0", "max"),
+        ("summ(1) > 0", "sum"),
+    ],
+)
+def test_near_misses_get_a_suggestion(expression: str, suggestion: str) -> None:
+    (diagnostic,) = diagnose(expression)
+    assert diagnostic.suggestion == suggestion
+
+
+def test_names_two_typos_away_or_ambiguous_get_none() -> None:
+    (diagnostic,) = diagnose("xyz(1) > 0")
+    assert diagnostic.suggestion is None

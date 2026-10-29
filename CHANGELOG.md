@@ -66,6 +66,8 @@ All notable changes to this project are documented here. The project follows
   and no longer call points it settles ambiguous.
 - `diagnose` checks the `partition by` and `order by` keys of analytic
   functions; it used to skip them.
+- `diagnose` suggests a name one typo away, as `sum` for `sun`, also when
+  the name is too short for the similarity ratio.
 
 ## 1.2.3 - 2026-10-26
 

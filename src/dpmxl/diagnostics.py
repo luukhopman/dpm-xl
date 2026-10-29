@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import difflib
 import re
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Literal
 
@@ -1089,7 +1089,7 @@ def _closest(word: str, candidates: Iterable[str], *, cutoff: float) -> str | No
     by_folded = {candidate.casefold(): candidate for candidate in pool}
     close = difflib.get_close_matches(folded, list(by_folded), n=2, cutoff=cutoff)
     if not close:
-        return None
+        return _one_edit_away(folded, by_folded)
     if len(close) == 2:
         first, second = (
             difflib.SequenceMatcher(None, folded, match).ratio() for match in close
@@ -1097,6 +1097,57 @@ def _closest(word: str, candidates: Iterable[str], *, cutoff: float) -> str | No
         if first == second:
             return None
     return by_folded[close[0]]
+
+
+def _one_edit_away(word: str, candidates: Mapping[str, str]) -> str | None:
+    """Return the only candidate one typo from ``word``, for short words.
+
+    A typo is one character inserted, removed, replaced, or swapped with its
+    neighbour, so ``sun`` finds ``sum`` where the similarity ratio is too
+    low for a three-letter word.
+
+    Returns:
+        str | None: The candidate, or ``None`` when none or several are one
+        typo away, or ``word`` is shorter than three characters.
+    """
+    if len(word) < 3:
+        return None
+    found = [
+        original
+        for folded, original in candidates.items()
+        if _edit_distance(word, folded) == 1
+    ]
+    return found[0] if len(found) == 1 else None
+
+
+def _edit_distance(left: str, right: str) -> int:
+    """Return the edit distance, counting a swap of neighbours as one edit.
+
+    Returns:
+        int: The optimal string alignment distance.
+
+    Examples:
+        >>> _edit_distance("sun", "sum"), _edit_distance("smu", "sum")
+        (1, 1)
+        >>> _edit_distance("max", "min")
+        2
+    """
+    if abs(len(left) - len(right)) > 1:
+        return 2
+    previous: list[int] = []
+    row = list(range(len(right) + 1))
+    for i, char in enumerate(left, start=1):
+        earlier, previous, row = previous, row, [i]
+        for j, other in enumerate(right, start=1):
+            cost = min(
+                previous[j] + 1,
+                row[j - 1] + 1,
+                previous[j - 1] + (char != other),
+            )
+            if i > 1 and j > 1 and char == right[j - 2] and left[i - 2] == other:
+                cost = min(cost, earlier[j - 2] + 1)
+            row.append(cost)
+    return row[-1]
 
 
 def _is_contextual(name: str) -> bool:

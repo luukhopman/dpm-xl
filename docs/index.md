@@ -34,8 +34,8 @@ validation into a reporting platform, or analyse and edit DPM-XL rules.
 - Reads no files and knows no DPM release: data comes through a three-method
   [provider](guides/provider.md), so the same evaluator runs against a report
   upload, a database or test fixtures. [dpm-xbrl](https://luukhopman.github.io/dpm-xbrl/)
-  reads xBRL-CSV and XBRL-XML reports; the
-  [end-to-end guide](guides/end-to-end.md) connects the two.
+  reads xBRL-CSV and XBRL-XML reports; the `xbrl` extra connects the two
+  ([end-to-end guide](guides/end-to-end.md)).
 
 ## Installation
 

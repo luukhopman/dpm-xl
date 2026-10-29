@@ -12,7 +12,7 @@ through all three: generate it, plant an error, read it back, then evaluate
 the rules and explain the failure.
 
 ```bash
-pip install dpm-synth   # installs dpm-xl and dpm-xbrl too
+pip install dpm-synth "dpm-xl[xbrl]"   # dpm-synth, dpm-xl and dpm-xbrl
 ```
 
 The module is a small template in the repository,
@@ -30,16 +30,16 @@ template = load_template("examples/toolkit-tour/template.json")
 generated = generate(template, seed=7)
 print(generated.passed, "of", generated.rules, "rules pass")
 for fact in generated.report.facts:
-    print(fact.template, fact.datapoint, dict(fact.keys), fact.value)
+    print(fact.datapoint, dict(fact.keys), fact.value)
 ```
 
 ```text
 4 of 4 rules pass
-t_01.00 dp101 {} 1126000
-t_01.00 dp102 {} 971000
-t_01.00 dp103 {} 155000
-t_02.00 dp201 {'qCP': 'SYNTHZDE8GXD6NCF1086'} 571000
-t_02.00 dp201 {'qCP': 'SYNTHEPF91DHODZDOC37'} 555000
+dp101 {} 1126000
+dp102 {} 971000
+dp103 {} 155000
+dp201 {'qCP': 'SYNTHZDE8GXD6NCF1086'} 571000
+dp201 {'qCP': 'SYNTHEPF91DHODZDOC37'} 555000
 ```
 
 Every value is generated and the counterparties are fictional LEIs. The
@@ -88,52 +88,25 @@ The package breaks no EBA filing rule that the file can show; read from
 bytes without a `name`, its file name is not checked. Amounts are reported
 in thousands (`decimalsMonetary = -3`).
 
-## 4. Bind the facts to a provider
+## 4. Evaluate and explain with dpm-xl
 
 dpm-xl reads no files: it asks a [provider](provider.md) for the cells of
-each selection. The template places every datapoint at a table, row and
-column, so it gives a [`MemoryProvider`][dpmxl.provider.MemoryProvider] its
-table layouts and places the facts read by dpm-xbrl:
-
-```python
-from dpmxl import MemoryProvider, Number, TableLayout
-
-layouts, cells = [], {}
-for table in template.tables:
-    layouts.append(
-        TableLayout(
-            table.code,
-            rows=tuple(sorted({cell.row for cell in table.cells if cell.row})),
-            columns=tuple(sorted({cell.column for cell in table.cells})),
-            open_keys=tuple(key.code for key in table.open_keys),
-        )
-    )
-    for cell in table.cells:
-        cells[cell.datapoint] = table, cell
-
-decimals = report.decimals_parameters["decimalsMonetary"]  # every cell is monetary
-values = {}
-for fact in report.facts:
-    table, cell = cells[fact.datapoint]
-    keys = tuple((key.code, fact.keys[key.column]) for key in table.open_keys)
-    position = table.code, cell.row, cell.column, None, keys
-    values[position] = Number.of(fact.value, decimals)
-
-reported = [code for code, filed in report.filing_indicators.items() if filed]
-provider = MemoryProvider(layouts, values, reported=reported)
-```
-
-`Number.of` keeps the reported precision: 978,000 reported in thousands
-stands for 978,000 ± 500. For templates with other data types, see
-dpm-synth's guide to
-[validating the output](https://luukhopman.github.io/dpm-synth/guides/validate-output/).
-
-## 5. Evaluate and explain with dpm-xl
+each selection. The template is also a dpm-xl
+[module file](../reference/module-file.md), which places every datapoint at
+a table, row and column, so the shipped
+[`ReportProvider`][dpmxl.xbrl.ReportProvider] (the `xbrl` extra) answers
+from the facts dpm-xbrl read. It types each value by the cell's data type
+and keeps the reported precision: 978,000 reported in thousands stands for
+978,000 ± 500.
 
 ```python
 from dpmxl import evaluate_rule, explain
+from dpmxl.module import load_module
+from dpmxl.xbrl import ReportProvider
 
-for rule in template.rules:
+module = load_module("examples/toolkit-tour/template.json")
+provider = ReportProvider(module, report)
+for rule in module.rules:
     result = evaluate_rule(rule.expression, provider, precondition=rule.precondition)
     print(rule.code, result.status)
     for outcome in result.failures:
@@ -158,6 +131,7 @@ explain up to 1,500 of the difference; at least 5,500 they cannot.
 - [dpm-xbrl](https://luukhopman.github.io/dpm-xbrl/): read XBRL-XML as well,
   check the EBA filing rules, and read large packages as frames.
 - [From an XBRL report to explained failures](end-to-end.md): the same
-  provider for a real report layout, with the columnar engine.
+  provider for a real report layout, with the columnar engine, and
+  `check_report`, which checks the filing rules too.
 - [Explain failures in a UI](explain.md): the cells and the filled formula
   behind each summary.

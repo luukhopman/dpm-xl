@@ -21,6 +21,9 @@ All notable changes to this project are documented here. The project follows
 - `dpmxl.xbrl.ReportProvider` evaluates a module's rules on a report read
   with dpm-xbrl, and `check_report` combines its filing findings and rule
   results; install with `pip install "dpm-xl[xbrl]"`.
+- `dpm-xl check-report MODULE REPORT` checks an XBRL report's EBA filing
+  rules and its module's rules in one report, as text, JSON or JUnit XML,
+  with `--fail-on` and `--taxonomy-package`.
 - `dpmxl.rules.evaluate_rules` evaluates a list of rules on one report,
   skipping inactive ones.
 - The contextual components `entityID`, `baseCurrency` and the

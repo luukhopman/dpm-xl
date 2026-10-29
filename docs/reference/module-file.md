@@ -11,7 +11,8 @@ in the `dpm-module/1` format, read by
 [`load_module`][dpmxl.module.load_module]. dpm-synth's
 [`dpm-synth-template/1`](https://luukhopman.github.io/dpm-synth/reference/template-format/)
 has the same fields, so one file serves both tools: dpm-synth generates
-reports from it, and dpm-xl checks and evaluates its rules.
+reports from it, and dpm-xl checks its rules and evaluates them on a report
+([`dpm-xl check-report`](cli.md#dpm-xl-check-report)).
 
 ## Example
 

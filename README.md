@@ -50,11 +50,12 @@ failed {'passed': 1, 'failed': 1, 'null': 0}
 {'c': '0020'} 1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision
 ```
 
-On the command line, against a JSON data file:
+On the command line, against a JSON data file or an XBRL report:
 
 ```bash
-dpm-xl check rules.json            # report every problem in every expression
-dpm-xl eval rules.json data.json   # evaluate and explain every rule
+dpm-xl check rules.json                       # report every problem in every expression
+dpm-xl eval rules.json data.json              # evaluate and explain every rule
+dpm-xl check-report module.json report.zip    # filing rules and module rules (xbrl extra)
 ```
 
 ## Features
@@ -71,8 +72,9 @@ dpm-xl eval rules.json data.json   # evaluate and explain every rule
   for reports with millions of open-table rows.
 - Reads no files and knows no DPM release: data comes through a three-method
   provider, so the same evaluator runs against a report upload, a database or
-  test fixtures. [dpm-xbrl](https://pypi.org/project/dpm-xbrl/) reads
-  xBRL-CSV and XBRL-XML reports.
+  test fixtures. With the `xbrl` extra it evaluates a module file's rules on
+  xBRL-CSV and XBRL-XML reports read by
+  [dpm-xbrl](https://pypi.org/project/dpm-xbrl/).
 
 ## Toolkit
 

@@ -1,5 +1,5 @@
 ---
-description: The dpm-xl command line - check and eval, every option, the exit statuses and the JSON output schema.
+description: The dpm-xl command line - check, eval and check-report, every option, the exit statuses and the JSON output schema.
 ---
 
 # CLI
@@ -8,6 +8,8 @@ description: The dpm-xl command line - check and eval, every option, the exit st
 dpm-xl check [--layouts DATA] [--strict] [--references] [--json] SOURCE
 dpm-xl eval [--precondition EXPRESSION] [--format text|json|junit] [--json]
             [--fail-on error|warning] RULES DATA
+dpm-xl check-report [--format text|json|junit] [--json] [--fail-on error|warning]
+                    [--taxonomy-package ZIP] MODULE REPORT
 dpm-xl --version
 dpm-xl [COMMAND] --help
 ```
@@ -252,17 +254,74 @@ qCPI=LEI-B: -5 should exceed 0: difference 5</system-out>
 </testsuite>
 ```
 
+## `dpm-xl check-report`
+
+Checks an xBRL-CSV package or XBRL-XML instance against a
+[module file](module-file.md): the EBA filing rules
+[dpm-xbrl](https://luukhopman.github.io/dpm-xbrl/) checks, and the module's
+rules, evaluated with [`ReportProvider`][dpmxl.xbrl.ReportProvider]. Needs
+the `xbrl` extra (`pip install "dpm-xl[xbrl]"`); without it the command
+exits with status 2.
+
+| Option | Effect |
+| --- | --- |
+| `--format text\|json\|junit` | Print text (the default), one JSON document or a JUnit XML report. |
+| `--json` | Short for `--format json`. |
+| `--fail-on error\|warning` | Exit with status 1 when a filing finding or a failing rule of this severity or worse is found. Default `error`. |
+| `--taxonomy-package ZIP` | A local taxonomy package, repeatable: it resolves xBRL-CSV metadata and adds the filing rules that need the taxonomy. |
+
+```console
+$ dpm-xl check-report examples/xbrl-module.json examples/xbrl-report
+report: examples/xbrl-report (xbrl-csv); module COREP_LR, release 4.2
+warning: reports/report.json: 1 extended metadata document could not be resolved offline (http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_lr.json); tables without resolved metadata use the EBA datapoint/factValue convention
+filing rules broken: 0 errors, 0 warnings
+e0001: failed
+  records: 0 passed, 1 failed, 0 null
+  - scalar: 1,045,000 should equal 1,042,000 (812,000 + 190,000 + 40,000): difference 3,000, at least 1,000 given the reported precision
+e0002: passed
+  records: 1 passed, 0 failed, 0 null
+e0003: failed
+  records: 1 passed, 1 failed, 0 null
+  - qRDT=QW4KNDKKV7QH2LA40639: -12,000 should be at least 0: difference 12,000
+e0004: failed (warning)
+  records: 1 passed, 1 failed, 0 null
+  - qRDT=QW4KNDKKV7QH2LA40639: "QW4KNDKKV7QH2LA4063" does not have the required format
+e0005: not_applicable
+  message: precondition not met
+  records: 0 passed, 0 failed, 0 null
+e0006: passed
+  records: 1 passed, 0 failed, 0 null
+6 rules: 3 failed, 2 passed, 1 not_applicable
+```
+
+
+The JSON document has the layout of `eval`'s, with more in `summary`
+(`filing_errors`, `filing_warnings` and `unplaced_facts`, the facts in no
+table of the module) and these fields:
+
+| Field | Type | Content |
+| --- | --- | --- |
+| `report` | object | `path`, `format`, `entry_point`, `entity_id` and `reference_date` of the report. |
+| `module` | object | `module` and `release` of the module file. |
+| `warnings` | list | dpm-xbrl's warnings about the report, as text. |
+| `filing_rules` | list | One object per filing rule broken: `rule`, `title`, `code`, `severity`, `message`, `count` and `examples`, as dpm-xbrl gives them. |
+| `results` | list | One object per rule of the module, as for `eval`. |
+| `unplaced` | list | The facts in no table of the module: `template`, `datapoint` and `location`. |
+
+In JUnit XML each broken filing rule is a test case (class
+`dpm-xbrl.filing-rules`) besides one per rule of the module.
+
 ## Exit statuses
 
 The three dpm toolkit commands, dpm-xl, dpm-xbrl and dpm-synth, share these
 statuses.
 
-| Status | `check` | `eval` |
+| Status | `check` | `eval` and `check-report` |
 | --- | --- | --- |
-| 0 | Everything parsed; with `--strict`, nothing has an error. | No rule at or above `--fail-on` failed. |
-| 1 | An expression or precondition does not parse; with `--strict`, one has an error. | A rule at or above `--fail-on` failed. |
-| 2 | Usage error (unknown command or option). | Usage error. |
-| 3 | The rule file cannot be read or is malformed. | A rule is `error` or `unsupported`, or the rule or data file cannot be read or is malformed. |
+| 0 | Everything parsed; with `--strict`, nothing has an error. | No rule (or filing finding) at or above `--fail-on` failed. |
+| 1 | An expression or precondition does not parse; with `--strict`, one has an error. | A rule (or filing finding) at or above `--fail-on` failed. |
+| 2 | Usage error (unknown command or option). | Usage error, or `check-report` without the `xbrl` extra. |
+| 3 | The rule file cannot be read or is malformed. | A rule is `error` or `unsupported`, or an input file cannot be read or is malformed. |
 
 `dpmxl.cli` names them `EXIT_OK`, `EXIT_FAILED`, `EXIT_USAGE` and
 `EXIT_INPUT`.

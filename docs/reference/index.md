@@ -9,8 +9,8 @@ description: Reference material - the language, the CLI, the data formats and th
 - [Language](language.md): every DPM-XL construct with its syntax, types,
   null and interval behaviour, errors, tested examples and the node it
   parses to, and where dpm-xl differs from the grammar.
-- [CLI](cli.md): `dpm-xl check` and `dpm-xl eval`, every option, exit status
-  and the JSON output schema.
+- [CLI](cli.md): `dpm-xl check`, `dpm-xl eval` and `dpm-xl check-report`,
+  every option, exit status and the JSON output schema.
 - [Data formats](data-formats.md): rule files and data files.
 - [Module file](module-file.md): one module's tables, cells and rules,
   shared with dpm-synth.

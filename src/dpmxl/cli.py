@@ -1,4 +1,4 @@
-"""Command-line interface: ``dpm-xl check`` and ``dpm-xl eval``."""
+"""Command-line interface: ``dpm-xl check``, ``eval`` and ``check-report``."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, replace
 from importlib.metadata import PackageNotFoundError, version
+from importlib.util import find_spec
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,7 @@ _EPILOG = """examples:
   dpm-xl eval "{tC_01.00, r0010, c0010} >= 0" data.json
   dpm-xl eval rules.json data.json --json
   dpm-xl eval rules.json data.json --format junit --fail-on warning
+  dpm-xl check-report module.json report.zip --format junit
 
 A rule source is one expression, a text file with one expression per line
 (# starts a comment), or a JSON list of objects with "code", "expression"
@@ -90,27 +92,41 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--precondition",
         help="precondition for a single expression, such as {v_C_01.00}",
     )
-    run.add_argument(
-        "--format",
-        choices=("text", "json", "junit"),
-        default="text",
-        help="output format (default: text)",
+    _output_options(run)
+    report = commands.add_parser(
+        "check-report",
+        help="check an XBRL report's filing rules and its module's rules",
+        description="Check an xBRL-CSV or XBRL-XML report: the EBA filing rules "
+        "dpm-xbrl checks and the rules of its module file, in one report. "
+        'Needs the xbrl extra: pip install "dpm-xl[xbrl]".',
     )
-    run.add_argument(
-        "--json",
-        action="store_const",
-        const="json",
-        dest="format",
-        help="print JSON; short for --format json",
+    report.add_argument("module", type=Path, help="module file (dpm-module/1)")
+    report.add_argument(
+        "report", type=Path, help="xBRL-CSV package or XBRL-XML instance"
     )
-    run.add_argument(
-        "--fail-on",
-        choices=("error", "warning"),
-        default="error",
-        help="exit with status 1 when a rule of this severity or worse fails "
-        "(default: error)",
+    _output_options(report)
+    report.add_argument(
+        "--taxonomy-package",
+        action="append",
+        default=[],
+        type=Path,
+        metavar="ZIP",
+        help="local taxonomy package: resolves xBRL-CSV metadata and adds the "
+        "filing rules that need the taxonomy (repeatable)",
     )
     arguments = parser.parse_args(argv)
+    if arguments.command == "check-report":
+        if find_spec("dpmxbrl") is None:
+            report.error(
+                'check-report needs the xbrl extra: pip install "dpm-xl[xbrl]"'
+            )
+        return _check_report(
+            arguments.module,
+            arguments.report,
+            taxonomy_packages=arguments.taxonomy_package,
+            output_format=arguments.format,
+            fail_on=arguments.fail_on,
+        )
     if arguments.command == "check":
         return _check(
             arguments.source,
@@ -125,6 +141,29 @@ def main(argv: Sequence[str] | None = None) -> int:
         arguments.precondition,
         output_format=arguments.format,
         fail_on=arguments.fail_on,
+    )
+
+
+def _output_options(command: argparse.ArgumentParser) -> None:
+    command.add_argument(
+        "--format",
+        choices=("text", "json", "junit"),
+        default="text",
+        help="output format (default: text)",
+    )
+    command.add_argument(
+        "--json",
+        action="store_const",
+        const="json",
+        dest="format",
+        help="print JSON; short for --format json",
+    )
+    command.add_argument(
+        "--fail-on",
+        choices=("error", "warning"),
+        default="error",
+        help="exit with status 1 when a rule or finding of this severity or "
+        "worse fails (default: error)",
     )
 
 
@@ -597,6 +636,149 @@ def _junit_text(suite: ET.Element) -> str:
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(
         suite, encoding="unicode"
     )
+
+
+def _check_report(
+    module_path: Path,
+    report_path: Path,
+    *,
+    taxonomy_packages: Sequence[Path] = (),
+    output_format: str = "text",
+    fail_on: str = "error",
+) -> int:
+    # The xbrl extra: imported only for this command.
+    from dpmxbrl import ReportError, read_report
+
+    from .xbrl import ReportProvider
+
+    try:
+        module = load_module(module_path)
+    except (OSError, ValueError) as error:
+        print(_problem(module_path, error), file=sys.stderr)
+        return EXIT_INPUT
+    try:
+        report = read_report(report_path, taxonomy_packages=taxonomy_packages)
+    except ReportError as error:  # its message names the file
+        print(f"error: {error}", file=sys.stderr)
+        return EXIT_INPUT
+    provider = ReportProvider(module, report)
+    runs = _run_rules(module.rules, provider, module.module)
+    failing = _failing(fail_on)
+    findings = [_finding_json(finding) for finding in report.filing]
+    unplaced = provider.unplaced
+    if output_format == "json":
+        errors = sum(1 for finding in report.filing if finding.severity == "error")
+        document = _header() | {
+            "summary": {
+                "filing_errors": errors,
+                "filing_warnings": len(report.filing) - errors,
+                **_rules_summary(runs),
+                "unplaced_facts": len(unplaced),
+            },
+            "report": {
+                "path": str(report_path),
+                "format": report.format,
+                "entry_point": report.entry_point,
+                "entity_id": report.entity_id,
+                "reference_date": (
+                    report.reference_date.isoformat() if report.reference_date else None
+                ),
+            },
+            "module": {"module": module.module, "release": module.release},
+            "warnings": list(report.warnings),
+            "filing_rules": findings,
+            "results": [_run_json(run) for run in runs],
+            "unplaced": [
+                {
+                    "template": fact.template,
+                    "datapoint": fact.datapoint,
+                    "location": fact.location,
+                }
+                for fact in unplaced
+            ],
+        }
+        print(json.dumps(document, indent=2, ensure_ascii=False))
+    elif output_format == "junit":
+        suite = _junit_suite(report_path.name)
+        _junit_findings(suite, findings, failing)
+        _junit_rules(suite, runs, failing)
+        print(_junit_text(suite))
+    else:
+        print(
+            f"report: {report_path} ({report.format}); module {module.module}, "
+            f"release {module.release}"
+        )
+        for warning in report.warnings:
+            print(f"warning: {warning}")
+        errors = sum(1 for finding in findings if finding["severity"] == "error")
+        print(
+            f"filing rules broken: {_plural(errors, 'error')}, "
+            f"{_plural(len(findings) - errors, 'warning')}"
+        )
+        for finding in findings:
+            times = f" ({finding['count']} times)" if finding["count"] > 1 else ""
+            print(
+                f"  - [{finding['severity']}] {finding['rule']} "
+                f"{finding['message']}{times}"
+            )
+        _print_runs(runs)
+        if unplaced:
+            example = unplaced[0].location or unplaced[0].datapoint
+            print(
+                f"{_plural(len(unplaced), 'fact')} in no table of module "
+                f"{module.module}, such as {example}"
+            )
+    broken = any(finding["severity"] in failing for finding in findings)
+    status = _exit_status(runs, failing)
+    return EXIT_FAILED if broken and status == EXIT_OK else status
+
+
+def _finding_json(finding: Any) -> dict[str, Any]:
+    return {
+        "rule": finding.rule,
+        "title": getattr(finding, "title", finding.rule),
+        "code": finding.code,
+        "severity": finding.severity,
+        "message": finding.message,
+        "count": finding.count,
+        "examples": list(finding.examples),
+    }
+
+
+def _junit_findings(
+    suite: ET.Element, findings: Sequence[dict[str, Any]], failing: frozenset[str]
+) -> None:
+    """Add one test case per broken filing rule to a JUnit test suite.
+
+    A finding at a ``failing`` severity is a failure; others are listed in
+    the test case's ``system-out``.
+    """
+    by_rule: dict[str, list[dict[str, Any]]] = {}
+    for finding in findings:
+        by_rule.setdefault(finding["rule"], []).append(finding)
+    for rule, found in by_rule.items():
+        case = ET.SubElement(
+            suite,
+            "testcase",
+            classname="dpm-xbrl.filing-rules",
+            name=f"{rule} {found[0]['title']}",
+        )
+        _count(suite, "tests")
+        lines = "\n".join(
+            f"[{finding['severity']}] {finding['code']}: {finding['message']}"
+            for finding in found
+        )
+        if any(finding["severity"] in failing for finding in found):
+            _count(suite, "failures")
+            failure = ET.SubElement(
+                case,
+                "failure",
+                message="; ".join(finding["message"] for finding in found),
+                type=", ".join(finding["code"] for finding in found),
+            )
+            failure.text = lines
+        else:
+            ET.SubElement(case, "system-out").text = lines
 
 
 if __name__ == "__main__":  # pragma: no cover

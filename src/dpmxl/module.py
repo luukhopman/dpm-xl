@@ -304,6 +304,8 @@ def load_module(source: str | os.PathLike[str] | Mapping[str, Any]) -> Module:
     path = Path(source)
     try:
         text = path.read_text(encoding="utf-8")
+    except FileNotFoundError as error:
+        raise ModuleError("no such file") from error
     except (OSError, ValueError) as error:
         reason = error.strerror if isinstance(error, OSError) else None
         raise ModuleError(f"cannot read: {reason or error}") from error

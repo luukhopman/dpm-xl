@@ -313,3 +313,125 @@ def test_the_extra_is_named_when_dpm_xbrl_is_missing(monkeypatch) -> None:
     ) as caught:
         importlib.import_module("dpmxl.xbrl")
     assert caught.value.name == "dpmxbrl"
+
+
+# dpm-xl check-report --------------------------------------------------------
+
+MODULE_FILE, REPORT_DIR = (
+    str(EXAMPLES / "xbrl-module.json"),
+    str(EXAMPLES / "xbrl-report"),
+)
+
+
+def test_check_report_prints_findings_and_rules(capsys) -> None:
+    from dpmxl.cli import main
+
+    assert main(["check-report", MODULE_FILE, REPORT_DIR]) == 1
+    output = capsys.readouterr().out
+    assert output.startswith(
+        f"report: {REPORT_DIR} (xbrl-csv); module COREP_LR, release 4.2\n"
+    )
+    assert "filing rules broken: 0 errors, 0 warnings\n" in output
+    assert "e0004: failed (warning)\n" in output
+    assert output.endswith("6 rules: 3 failed, 2 passed, 1 not_applicable\n")
+
+
+def test_check_report_json(capsys) -> None:
+    import json
+
+    from dpmxl.cli import main
+
+    main(["check-report", MODULE_FILE, REPORT_DIR, "--json"])
+    document = json.loads(capsys.readouterr().out)
+    assert list(document)[:4] == ["schema_version", "tool", "version", "summary"]
+    assert document["summary"] == {
+        "filing_errors": 0,
+        "filing_warnings": 0,
+        "rules": 6,
+        "passed": 2,
+        "failed": 3,
+        "not_applicable": 1,
+        "error": 0,
+        "unsupported": 0,
+        "skipped": 0,
+        "unplaced_facts": 0,
+    }
+    assert document["module"] == {"module": "COREP_LR", "release": "4.2"}
+    assert document["report"]["reference_date"] == "2026-03-31"
+    assert document["results"][3]["severity"] == "warning"
+
+
+def _finding(severity):
+    return FilingFinding(
+        rule="2.19",
+        code="nilUsed",
+        severity=severity,
+        message="Nil is used.",
+        count=2,
+        examples=("a", "b"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("severity", "fail_on", "status"),
+    [("warning", "error", 0), ("warning", "warning", 1), ("error", "error", 1)],
+)
+def test_check_report_fails_on_findings(
+    monkeypatch, tmp_path, capsys, severity, fail_on, status
+) -> None:
+    import json
+
+    from dpmxl.cli import main
+
+    module = tmp_path / "module.json"
+    document = json.loads(Path(MODULE_FILE).read_text(encoding="utf-8"))
+    document["rules"] = []
+    module.write_text(json.dumps(document), encoding="utf-8")
+    monkeypatch.setattr(
+        dpmxbrl,
+        "read_report",
+        lambda path, **_: report([], filing=(_finding(severity),)),
+    )
+    assert (
+        main(["check-report", str(module), REPORT_DIR, "--fail-on", fail_on]) == status
+    )
+    assert f"  - [{severity}] 2.19 Nil is used. (2 times)\n" in capsys.readouterr().out
+    main(
+        [
+            "check-report",
+            str(module),
+            REPORT_DIR,
+            "--format",
+            "junit",
+            "--fail-on",
+            fail_on,
+        ]
+    )
+    junit = capsys.readouterr().out
+    assert 'classname="dpm-xbrl.filing-rules"' in junit
+    assert ("<failure" in junit) == bool(status)
+
+
+def test_check_report_lists_facts_outside_the_module(monkeypatch, capsys) -> None:
+    from dpmxl.cli import main
+
+    stray = fact("dp404", "1", location="reports/c_01.00.csv:2")
+    monkeypatch.setattr(dpmxbrl, "read_report", lambda path, **_: report([stray]))
+    main(["check-report", MODULE_FILE, REPORT_DIR])
+    assert (
+        "1 fact in no table of module COREP_LR, such as reports/c_01.00.csv:2"
+        in capsys.readouterr().out
+    )
+
+
+def test_check_report_rejects_unreadable_input(tmp_path, capsys) -> None:
+    from dpmxl.cli import main
+
+    assert main(["check-report", str(tmp_path / "missing.json"), REPORT_DIR]) == 3
+    assert (
+        capsys.readouterr().err == f"error: {tmp_path / 'missing.json'}: no such file\n"
+    )
+    assert main(["check-report", MODULE_FILE, str(tmp_path / "missing.zip")]) == 3
+    error = capsys.readouterr().err
+    assert error.startswith(f"error: {tmp_path / 'missing.zip'}: ")
+    assert error.count("missing.zip") == 1

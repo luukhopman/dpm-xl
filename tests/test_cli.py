@@ -408,3 +408,11 @@ def test_inline_expressions_are_labelled_expression(capsys) -> None:
     assert capsys.readouterr().err.startswith(
         "expression: error: unknown function 'sun'; did you mean 'sum'?"
     )
+
+
+def test_check_report_names_the_missing_extra(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("dpmxl.cli.find_spec", lambda name: None)
+    with pytest.raises(SystemExit) as exit_:
+        main(["check-report", "module.json", "report.zip"])
+    assert exit_.value.code == 2
+    assert 'needs the xbrl extra: pip install "dpm-xl[xbrl]"' in capsys.readouterr().err

@@ -221,7 +221,7 @@ def test_invalid_modules_name_the_field(change, message) -> None:
 
 
 def test_unreadable_module_files(tmp_path) -> None:
-    with pytest.raises(ModuleError, match=r"^cannot read: "):
+    with pytest.raises(ModuleError, match=r"^no such file$"):
         load_module(tmp_path / "missing.json")
     path = tmp_path / "module.json"
     path.write_text("{", encoding="utf-8")

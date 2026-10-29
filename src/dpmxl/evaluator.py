@@ -302,9 +302,9 @@ class Evaluator:
         self._notes: list[str] = []
         self._selection_cache: dict[tuple[object, ...], list[DataPoint]] = {}
         self._context_conditions: list[Node] = []
-        # Keys named by where and sub clauses written on the selection being
-        # evaluated; they override the context's where on those keys.
-        self._overrides: tuple[str, ...] = ()
+        # Whether the selection being evaluated has a where or sub clause of
+        # its own, which overrides the context's where.
+        self._overridden = False
         self._members: dict[int, list[Value]] = {}
         self._operations: list[str] = []
         self._temporaries: dict[str, Recordset] = {}
@@ -369,10 +369,10 @@ class Evaluator:
                     selected = self._selection(merged)
                 else:
                     selected = self._indirect(merged)
+                if self._overridden:
+                    return selected
                 for condition in self._context_conditions:
-                    kept = _context_condition(
-                        condition, self._overrides, selected.keys, self._known
-                    )
+                    kept = _context_condition(condition, selected.keys, self._known)
                     if kept is not None:
                         selected = self._where(selected, kept, context)
                 return selected
@@ -450,9 +450,7 @@ class Evaluator:
                 return _analytic(node, self.evaluate(operand, context, bindings))
             case Where(operand=operand, condition=condition):
                 return self._where(
-                    self._clause_operand(
-                        operand, _key_names(condition), context, bindings
-                    ),
+                    self._clause_operand(operand, context, bindings),
                     condition,
                     context,
                 )
@@ -461,7 +459,7 @@ class Evaluator:
             case Sub(operand=operand, name=name, value=value):
                 fixed = self.evaluate(value, context, bindings).single()
                 return self._sub(
-                    self._clause_operand(operand, (name,), context, bindings),
+                    self._clause_operand(operand, context, bindings),
                     name,
                     _checked(fixed.value) if fixed else None,
                 )
@@ -513,19 +511,17 @@ class Evaluator:
     def _clause_operand(
         self,
         operand: Node,
-        names: tuple[str, ...],
         context: SelectionSpec,
         bindings: Mapping[str, Value] | None,
     ) -> Recordset:
-        # DPM-XL 3.2: a where or sub clause on a selection overrides the
-        # with-level where on the same key instead of adding to it.
-        saved = self._overrides
-        direct = isinstance(operand, Selection | Where | Sub)
-        self._overrides = saved + names if direct else ()
+        # DPM-XL 3.2.6: a where or sub clause on a selection fully overrides
+        # the with-level where, whichever keys either names.
+        saved = self._overridden
+        self._overridden = isinstance(operand, Selection | Where | Sub)
         try:
             return self.evaluate(operand, context, bindings)
         finally:
-            self._overrides = saved
+            self._overridden = saved
 
     # Selections ---------------------------------------------------------
 
@@ -662,12 +658,12 @@ class Evaluator:
         # temporaries and assignments neither reach it nor receive its own.
         saved = (
             self._context_conditions,
-            self._overrides,
+            self._overridden,
             self._temporaries,
             self._assignments,
         )
         self._operations.append(code)
-        self._context_conditions, self._overrides = [], ()
+        self._context_conditions, self._overridden = [], False
         self._temporaries, self._assignments = {}, {}
         try:
             return self.evaluate(node, SelectionSpec(), None)
@@ -675,7 +671,7 @@ class Evaluator:
             self._operations.pop()
             (
                 self._context_conditions,
-                self._overrides,
+                self._overridden,
                 self._temporaries,
                 self._assignments,
             ) = saved
@@ -785,7 +781,7 @@ class Evaluator:
             only_keys=self.only_keys,
         )
         inner._context_conditions = list(self._context_conditions)
-        inner._overrides = self._overrides
+        inner._overridden = self._overridden
         inner._temporaries = dict(self._temporaries)
         inner._operations = list(self._operations)
         result = inner.evaluate(operand, context, bindings)
@@ -1407,7 +1403,6 @@ _ARTICLES = {
 
 def _context_condition(
     condition: Node,
-    overrides: tuple[str, ...],
     keys: tuple[str, ...],
     known: Callable[[str], bool] = lambda _name: False,
 ) -> Node | None:
@@ -1416,13 +1411,10 @@ def _context_condition(
     The context's where concerns the selections that have the keys it names:
     a key-less selection takes none of it, and the condition's ``and`` terms
     naming a key the selection lacks (a name that is neither one of its keys
-    nor ``known``) are left out. A where or sub clause written on the
-    selection overrides the context's where on the same key (DPM-XL 3.2):
-    the terms that name an overridden key are left out too.
+    nor ``known``) are left out.
 
     Args:
         condition: The ``with`` context's where condition.
-        overrides: Key names of the clauses written on the selection.
         keys: The selection's keys, which the names resolve against.
         known: Whether a name other than a key resolves, such as a report
             parameter.
@@ -1432,12 +1424,11 @@ def _context_condition(
     """
     if not keys:
         return None
-    overridden = {resolve_key(name, keys) for name in overrides} - {None}
 
     def applies(term: Node) -> bool:
-        resolved = [(name, resolve_key(name, keys)) for name in _key_names(term)]
-        return not any(key in overridden for _name, key in resolved) and all(
-            key is not None or known(name) for name, key in resolved
+        return all(
+            resolve_key(name, keys) is not None or known(name)
+            for name in _key_names(term)
         )
 
     if applies(condition):

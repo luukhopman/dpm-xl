@@ -394,7 +394,7 @@ selection of the body that has the keys it names. Its `and` terms that name
 a key the selection lacks (neither one of its keys nor a temporary or
 report parameter) leave that selection alone, and a key-less selection
 takes none of it. A `where` or `sub` written on a selection replaces the
-context condition's terms on the same key
+context's `where` entirely, whichever keys either names
 ([Clauses change keys and records](../concepts/records-and-keys.md#clauses-change-keys-and-records)).
 Parses to [`With`][dpmxl.ast.With].
 
@@ -407,6 +407,7 @@ Parses to [`With`][dpmxl.ast.With].
 | `with {tT}: with {c0010}: {r0010}` | `100` |
 | `with {tO, c0010}[where qKEY = "a"]: {tO}` | `qKEY=a, qDAT=2026-03-31: 10` |
 | `with {tO, c0010}[where qKEY = "a"]: {c0010}[sub qKEY = "b"]` | `qDAT=2026-06-30: 20` |
+| `with {tO, c0010}[where qKEY = "a"]: {c0010}[where qDAT > #2026-05-01#]` | `qKEY=b, qDAT=2026-06-30: 20; qKEY=c, qDAT=2026-09-30: 30` |
 | `with {tO}[where qKEY = "a"]: {c0010} + {tT, r0010, c0010}` | `qKEY=a, qDAT=2026-03-31: 110` |
 | `with {tO}[where qDAT > #2026-05-01#]: {c0010} + {tP, c0010}` | `qKEY=b, qDAT=2026-06-30: 22` |
 | `with {tO}[where qKEY = "a" and r = "0010"]: {c0010}` | `qKEY=a, qDAT=2026-03-31: 10` |

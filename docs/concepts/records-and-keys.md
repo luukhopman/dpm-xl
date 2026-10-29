@@ -159,8 +159,8 @@ A `with` context's `where` applies to each selection in its body that has
 the keys it names. Its terms (split at `and`) that name a key the selection
 lacks, neither a key nor a report parameter, leave that selection alone, and
 a key-less selection takes none of it. A `where` or `sub` on a selection
-inside the body overrides the terms that name the same key; the other terms
-still apply.
+inside the body overrides the context's `where` entirely, even on other
+keys.
 
 ```python
 show('with {tO, c0010} [where qEBB = "A"]: {tO} > {tT, r0020, c0010}')

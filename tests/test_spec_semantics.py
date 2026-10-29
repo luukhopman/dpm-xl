@@ -249,9 +249,9 @@ def test_open_table_without_rows_keeps_its_keys() -> None:
     assert status(rule, data) == "not_applicable"
 
 
-def test_clauses_on_a_selection_override_the_context_where_on_their_key() -> None:
-    # 3.2: a where on a selection replaces the with-level where on its key;
-    # where on other keys still applies.
+def test_clauses_on_a_selection_override_the_context_where() -> None:
+    # 3.2.6: a where or sub inside the expression fully overrides the
+    # with-level where, even on other keys.
     table = TableLayout("O2", rows=("0010",), columns=("0010",), open_keys=("qA", "qB"))
     data = MemoryProvider(
         [table],
@@ -261,17 +261,18 @@ def test_clauses_on_a_selection_override_the_context_where_on_their_key() -> Non
         },
     )
     context = 'with {tO2, r0010, c0010} [where qA = "a1" and B = "b1"]: '
-    for body, expected in [
-        ("{tO2} > 0", "passed"),
-        ('{tO2} [where qB = "b2"] > 0', "failed"),
-        ('{tO2} [where A = "a2"] > 0', "failed"),
-        ('{tO2} [sub qA = "a2"] > -10', "passed"),
-        ('{tO2} [sub qB = "b2"] > 0', "failed"),
-        ('{tO2} [where A != "a2"] [where B != "b1"] > -10', "passed"),
+    for body, expected, count in [
+        ("{tO2} > 0", "passed", 1),
+        ('{tO2} [where qB = "b2"] > 0', "failed", 1),
+        ('{tO2} [where A = "a2"] > 0', "failed", 1),
+        ('{tO2} [where qB = "b1"] > 0', "failed", 2),
+        ('{tO2} [sub qA = "a2"] > -10', "passed", 1),
+        ('{tO2} [sub qB = "b2"] > 0', "failed", 1),
+        ('{tO2} [where A != "a2"] [where B != "b1"] > -10', "passed", 1),
     ]:
         result = evaluate_rule(context + body, data)
         assert result.status == expected, body
-        assert len(result.outcomes) == 1, body
+        assert len(result.outcomes) == count, body
 
 
 def test_if_without_else_leaves_out_records_of_any_type() -> None:

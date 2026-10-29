@@ -19,6 +19,9 @@ All notable changes to this project are documented here. The project follows
   `date(2026, 2, 30)`, is null instead of an error.
 - `if` without `else` leaves out the records whose condition is not true,
   as the specification says, instead of making them true or null.
+- A `where` or `sub` on a selection inside `with … [where …]` replaces the
+  context's `where` entirely, as the specification says; it used to replace
+  only the terms on the same key.
 
 ## 1.2.3 - 2026-10-26
 

@@ -1,0 +1,13 @@
+[dpm-xl]: https://luukhopman.github.io/dpm-xl/
+[dpm-xbrl]: https://luukhopman.github.io/dpm-xbrl/
+[dpm-synth]: https://luukhopman.github.io/dpm-synth/
+[eba-filing-rules]: https://eba.europa.eu/sites/default/files/2026-07/020f25ef-fae1-4b0f-8df5-77f5f45747ec/eba_filing_rules_v5.9_2026_06_26.pdf
+[xbrl-csv-spec]: https://www.xbrl.org/Specification/xbrl-csv/REC-2021-10-13+corrected-errata-2023-04-19/xbrl-csv-REC-2021-10-13+corrected-errata-2023-04-19.html
+[oim-spec]: https://www.xbrl.org/Specification/oim/REC-2021-10-13+errata-2023-04-19/oim-REC-2021-10-13+corrected-errata-2023-04-19.html
+[report-packages]: https://www.xbrl.org/Specification/report-package/REC-2023-09-22+corrected-errata-2025-03-11/report-package-REC-2023-09-22+corrected-errata-2025-03-11.html
+[taxonomy-packages]: https://www.xbrl.org/Specification/taxonomy-package/REC-2016-04-19/taxonomy-package-REC-2016-04-19.html
+[utr]: https://www.xbrl.org/utr/utr.xml
+[xbrl-21]: https://www.xbrl.org/Specification/XBRL-2.1/REC-2003-12-31/XBRL-2.1-REC-2003-12-31+corrected-errata-2013-02-20.html
+[dpm-xl-spec]: https://dpm-alliance.github.io/dpm-xl-docs/0.11/
+[dpm-xl-spec-release]: https://github.com/dpm-alliance/dpm-xl-docs/releases/tag/0.11
+[vtl-21]: https://sdmx.org/wp-content/uploads/VTL-2.1-Reference-Manual.pdf

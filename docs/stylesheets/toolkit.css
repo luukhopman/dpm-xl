@@ -1,0 +1,56 @@
+/* Shared by the dpm-xl, dpm-xbrl and dpm-synth sites: copy it unchanged. */
+
+:root {
+  --toolkit-dpm-xl: #4f46e5;
+  --toolkit-dpm-xbrl: #0d9488;
+  --toolkit-dpm-synth: #d97706;
+}
+
+[data-md-color-scheme="slate"] {
+  --toolkit-dpm-xl: #818cf8;
+  --toolkit-dpm-xbrl: #2dd4bf;
+  --toolkit-dpm-synth: #fbbf24;
+}
+
+/* Each package's colour, from its logo, on its icon in the toolkit cards. */
+.md-typeset .dpm-xl {
+  color: var(--toolkit-dpm-xl);
+}
+
+.md-typeset .dpm-xbrl {
+  color: var(--toolkit-dpm-xbrl);
+}
+
+.md-typeset .dpm-synth {
+  color: var(--toolkit-dpm-synth);
+}
+
+/* A row of small links to the standards a package implements. */
+.md-typeset .toolkit-badges p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.md-typeset .toolkit-badges a {
+  border: 0.05rem solid var(--md-default-fg-color--lighter);
+  border-radius: 1rem;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.6rem;
+  transition: border-color 125ms, color 125ms;
+}
+
+.md-typeset .toolkit-badges a:is(:hover, :focus) {
+  border-color: var(--md-accent-fg-color);
+  color: var(--md-accent-fg-color);
+}
+
+/* The three toolkit cards in one row where there is room. */
+.md-typeset .grid.toolkit-cards {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+}
+
+.md-typeset .toolkit-badges a {
+  text-decoration: none;
+}

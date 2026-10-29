@@ -49,6 +49,7 @@ import runpy
 import shlex
 from collections.abc import Callable
 from dataclasses import dataclass
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 import pytest
@@ -312,6 +313,23 @@ def test_code_annotations_are_explained(path: Path) -> None:
             f"{path.relative_to(ROOT)}:{block.line}: annotations {numbers} need "
             "a numbered list with one item each right after the block"
         )
+
+
+def test_markdown_copies_leave_out_presentation_markup() -> None:
+    spec = spec_from_file_location("build_docs", ROOT / "scripts" / "build_docs.py")
+    assert spec and spec.loader
+    build_docs = module_from_spec(spec)
+    spec.loader.exec_module(build_docs)
+    text = (
+        '<div class="grid cards" markdown>\n\n'
+        "-   :lucide-rocket:{ .lg .middle } **Start**\n\n"
+        "    [:lucide-arrow-right: Tutorial](start.md)\n\n"
+        "</div>\n\n"
+        "[Get started](start.md){ .md-button .md-button--primary }\n"
+    )
+    assert build_docs.plain(text) == (
+        "-   **Start**\n\n    [Tutorial](start.md)\n\n[Get started](start.md)\n"
+    )
 
 
 # Result tables -------------------------------------------------------------

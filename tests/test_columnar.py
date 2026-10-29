@@ -477,6 +477,7 @@ NEW_CONSTRUCTS = [
     "5 in {tONE, r0010, c0010}",
     "{p_X, number, default: 5} = {tONE, r0010, c0010}",
     "x := {tONE, r0010, c0010}; x = 5",
+    "x := {tONE, r0010, c0010}; {o_x} = 5",
     "rank({tT, c0010, r*} over (order by r)) > 0",
     "sum({tT, c0010, r*} over (partition by r)) > 0",
     "sum({tT, c0010, r*} over (order by r)) = 201",

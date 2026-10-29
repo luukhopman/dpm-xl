@@ -621,6 +621,18 @@ class Evaluator:
             EvaluationError: For tables of a group with different keys.
         """
         if spec.operation is not None:
+            # DPM-XL 3.1.6: an operation of the same script, from a := assignment,
+            # comes first; operation names ignore case (DPM-XL 2.4.1).
+            temporary = next(
+                (
+                    result
+                    for name, result in self._temporaries.items()
+                    if name.casefold() == spec.operation.casefold()
+                ),
+                None,
+            )
+            if temporary is not None:
+                return _restrict(temporary, spec)
             return _restrict(self._operation(spec.operation), spec)
         code = cast(str, spec.table_group)
         method = getattr(self.provider, "table_group", None)

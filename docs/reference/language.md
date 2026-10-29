@@ -604,9 +604,11 @@ before the default. Parses to [`TypedParameter`][dpmxl.ast.TypedParameter].
 "{" "o" "_"? code ( "," ( axis | "default" ":" default | "interval" ":" ( "true" | "false" ) ) )* "}"
 ```
 
-Evaluates operation `Code`, the expression the provider's optional
-`operation(code)` method returns, on its own: the referring rule's `with`
-context, temporaries and assignments do not reach it. On its result, axes
+Reads the result of temporary `Code` of the same script, assigned with
+[`:=`](#temporary-assignment) and matched ignoring case, or else evaluates operation
+`Code`, the expression the provider's optional `operation(code)` method
+returns, on its own: the referring rule's `with` context, temporaries and
+assignments do not reach it. On its result, axes
 keep the matching `r`, `c` and `s` records, `default` fills nulls and
 `interval: false` makes numbers exact. An operation that refers to itself
 is an evaluation error; without the provider method the rule is
@@ -616,6 +618,7 @@ unsupported. Parses to a `Selection` with `spec.operation`.
 | --- | --- |
 | `{o_v1}` | `r=0010: 200; r=0020: 120; r=0030: 80` |
 | `{o_v1, r0010}` | `200` |
+| `op1 := {tT, c0010} * 10; {oOp1, r0010}` | `1000` |
 | `{o_X}` | `unsupported: operation X needs a provider that resolves operations` |
 
 ### Table group `{g_…}` {#table-group}

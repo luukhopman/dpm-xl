@@ -41,8 +41,9 @@ failed [({'c': '0010'}, True), ({'c': '0020'}, False)]
 
 A temporary keeps the records of its expression, keys included. In later
 statements its name wins over a report parameter of that name and loses to a
-key component inside a clause. The rule's context, temporaries and
-assignments do not reach operations referenced with `{o_…}`, which are
+key component inside a clause. `{o_Name, …}` reads a temporary of the
+same script, as an operation. The rule's context, temporaries and
+assignments do not reach operations the provider supplies, which are
 evaluated on their own.
 
 ## Persistent assignments

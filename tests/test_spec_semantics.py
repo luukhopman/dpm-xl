@@ -349,6 +349,18 @@ def test_rank_orders_by_the_fact_with_nulls_last() -> None:
     assert ranks(window, nulls) == {"0030": "1", "0010": "4", "0020": "null"}
 
 
+def test_operations_include_temporaries_of_the_script() -> None:
+    # 3.1.6.1: op1 := {tT1, r010-020, c010} * 10; ... {oOp1, r010} ...
+    data = provider({("0010", "0010"): 1, ("0020", "0010"): 2, ("0010", "0020"): 5})
+    rule = (
+        "op1 := {tT, r0010-0020, c0010} * 10; {oOp1, r0010} + {tT, r0010, c0020} = 15"
+    )
+    assert status(rule, data) == "passed"
+    assert status("x := {tT, r*, c0010}; count({o_x, r0010-0020}) = 2", data) == (
+        "passed"
+    )
+
+
 def test_if_without_else_leaves_out_records_of_any_type() -> None:
     tables = [
         TableLayout("A", rows=("0010",), columns=("0010",)),

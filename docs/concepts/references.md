@@ -63,8 +63,9 @@ error           parameter Limit is not a date
 
 ## Operation references
 
-`{o_Code, …}` evaluates the expression the provider's `operation(code)`
-returns, on its own: the referring rule's context, temporaries and
+`{o_Code, …}` reads temporary `Code` of the same script (`Code := …`), or
+else evaluates the expression the provider's `operation(code)` returns, on
+its own: the referring rule's context, temporaries and
 assignments neither reach it nor receive its own. On the result:
 
 - axes keep the matching `r`/`c`/`s` records, dropping a key selected by one

@@ -28,6 +28,8 @@ All notable changes to this project are documented here. The project follows
 - `partition by` and `order by` of an analytic function can name `f`, so
   `rank(x over (order by f desc))` ranks by value; null order values come
   last.
+- `{o_X}` reads temporary `X` of the same script, as in `op1 := …;
+  {oOp1, r0010}`, before asking the provider for an operation.
 
 ## 1.2.3 - 2026-10-26
 

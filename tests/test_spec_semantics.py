@@ -196,6 +196,21 @@ def test_division_by_an_interval_containing_zero_is_an_error() -> None:
     )
 
 
+def test_max_and_min_take_the_largest_radius_among_ties() -> None:
+    # 4.3.5.4, 4.3.6.4, 7.4.4, 7.5.4: if multiple Operands share the same
+    # maximum centre, the largest radius among them is taken.
+    data = provider({("0010", "0010"): 5, ("0020", "0010"): 5, ("0030", "0010"): 1})
+    data.values["T", "0020", "0010", None, ()] = Number.of(5, -1)
+    for rule in [
+        "max({tT, r*, c0010, interval: true}) = 9",
+        "max_aggr({tT, r*, c0010, interval: true}) = 9",
+        "max(5, {tT, r0020, c0010, interval: true}) = 9",
+        "max({tT, r0020, c0010, interval: true}, 5) = 9",
+        "min(5, {tT, r0020, c0010, interval: true}, 6) = 1",
+    ]:
+        assert status(rule, data) == "passed", rule
+
+
 def test_errors_fail_only_the_records_that_reach_the_result() -> None:
     # Column 0010 divides by zero, column 0020 does not.
     data = provider(

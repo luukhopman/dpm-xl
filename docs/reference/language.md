@@ -1087,8 +1087,8 @@ record.
 #### `max`, `min` {#max}
 
 With two or more operands, `max(a, b, …)` and `min(a, b, …)` pick the
-largest or smallest value per record, keeping its tolerance; null if any
-operand is null. Numbers compare by value; dates, text and items, which
+largest or smallest value per record, keeping its tolerance, the largest
+among equal values; null if any operand is null. Numbers compare by value; dates, text and items, which
 cannot be mixed with numbers, by their text (ISO dates in date order).
 Booleans are an error. With one operand they are
 [aggregates](#aggregate-max).
@@ -1098,6 +1098,7 @@ Booleans are an error. With one operand they are
 | `max(1, 5, 3)` | `5` |
 | `min({tT, c0010}, {tT, c0020})` | `r=0010: 5; r=0020: -5; r=0030: null` |
 | `max({tT, c0010}, 50)` | `r=0010: 100; r=0020: 60; r=0030: 50` |
+| `max(100, {tT, r0010, c0010, interval: true})` | `100 ± 0.5` |
 | `max(#2026-01-01#, #2026-02-01#)` | `2026-02-01` |
 | `max(1, null)` | `null` |
 | `max(1, "a")` | `error: max cannot compare numbers with dates, text or items` |
@@ -1430,7 +1431,8 @@ tolerance.
 
 With one operand, `max` and `min` are aggregates, also spelled `max_aggr`
 and `min_aggr`, which take exactly one operand. They pick the largest or
-smallest value, keeping its tolerance. Besides numbers they order dates,
+smallest value, keeping its tolerance, the largest among equal values.
+Besides numbers they order dates,
 text and items by their text (ISO dates in date order, items by category
 and code), as presence checks expect; Booleans, and numbers mixed with
 other values, are errors. With several operands `max` and `min` are the

@@ -64,6 +64,11 @@ EXPRESSIONS = [
     "with {tO} [where qKEY != [qK:b]]: {r0010, c0010} [sub qKEY = [qK:b]] > 5",
     "with {tO} [where qKEY != [qK:b]]: {r0010, c0010} [where qKEY != [qK:c]] > 5",
     "with {tT, c0010}: abs({r0010} - {r0020}) <= max({r0030}, 50)",
+    # Among equal values, max and min keep the largest tolerance.
+    "with {tT, interval: true}: max({r0010, c0010}, 100) = 100.5",
+    "with {tT, interval: true}: max(100, {r0010, c0010}) = 100.5",
+    "max_aggr(({tT, interval: true} - {tT}) * {tT}) = 602",
+    "with {tT, interval: true}: min({r0030, c0010}, 41) = 40.5",
     "if {tT, r0010, c0010} > 50 then {tT, r0020, c0010} > 70 endif",
     "if {tT, r0010, c0010} > 500 then {tT, r0020, c0010} > 70 else false endif",
     # Without else, records whose condition is not true are left out.

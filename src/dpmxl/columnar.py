@@ -1687,21 +1687,19 @@ def _extreme(name: str, frames: Sequence[Frame]) -> Frame:
     keys, df = _joined(frames)
     count = len(frames)
     any_null = pl.any_horizontal(_c(NUM, index).is_null() for index in range(count))
-    values = pl.concat_list([_c(NUM, index) for index in range(count)])
-    thresholds = pl.concat_list([_c(THR, index) for index in range(count)])
-    position = values.list.arg_max() if name == "max" else values.list.arg_min()
+    numbers = [_c(NUM, index) for index in range(count)]
+    extreme = (
+        pl.max_horizontal(numbers) if name == "max" else pl.min_horizontal(numbers)
+    )
+    # DPM-XL 4.3.5.4: among equal values, the largest threshold.
+    threshold = pl.max_horizontal(
+        pl.when(_c(NUM, index) == extreme).then(_c(THR, index))
+        for index in range(count)
+    )
     selected = [pl.col(_key(key)) for key in keys]
     selected += [
-        pl.when(any_null)
-        .then(None)
-        .otherwise(values.list.get(position))
-        .cast(DEC)
-        .alias(NUM),
-        pl.when(any_null)
-        .then(None)
-        .otherwise(thresholds.list.get(position))
-        .cast(DEC)
-        .alias(THR),
+        pl.when(any_null).then(None).otherwise(extreme).cast(DEC).alias(NUM),
+        pl.when(any_null).then(None).otherwise(threshold).cast(DEC).alias(THR),
         pl.lit(None, pl.String).alias(TXT),
         pl.lit(None, pl.Boolean).alias(FLAG),
     ]
@@ -1765,9 +1763,12 @@ def _aggregate(name: str, frame: Frame, group_by: tuple[str, ...] | None) -> Fra
             pl.col(THR).filter(present).sum() / num_count.cast(DEC)
         )
     elif name in {"max", "min"}:
-        index = pl.col(NUM).arg_max() if name == "max" else pl.col(NUM).arg_min()
-        num = pl.when(num_count > 0).then(pl.col(NUM).get(index))
-        thr = pl.when(num_count > 0).then(pl.col(THR).get(index))
+        chosen = pl.col(NUM).max() if name == "max" else pl.col(NUM).min()
+        num = pl.when(num_count > 0).then(chosen)
+        # DPM-XL 7.4.4 and 7.5.4: among equal values, the largest threshold.
+        thr = pl.when(num_count > 0).then(
+            pl.col(THR).filter(pl.col(NUM) == chosen).max()
+        )
     elif name == "median":
         raise ColumnarUnsupported("median")
     else:  # pragma: no cover

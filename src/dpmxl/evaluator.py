@@ -1942,9 +1942,21 @@ def _reduce(name: str, values: list[Value], record_count: int) -> Value:
         return (Number(ordered[middle - 1]) + Number(ordered[middle])) / Number(
             Decimal(2)
         )
-    if name == "max":
-        return max(numbers, key=lambda number: number.value)
-    return min(numbers, key=lambda number: number.value)
+    # DPM-XL 4.3.5.4 and 7.5.4: among equal centres, the largest radius.
+    pick = max if name == "max" else min
+    centre = pick(number.value for number in numbers)
+    return _widest(numbers, centre)
+
+
+def _widest(numbers: list[Number], centre: Decimal) -> Number:
+    """Return the number with this centre and the largest tolerance.
+
+    Returns:
+        Number: The centre with the largest tolerance of the numbers at it.
+    """
+    return Number(
+        centre, max(number.tolerance for number in numbers if number.value == centre)
+    )
 
 
 def _ordering_text(value: Value) -> str:

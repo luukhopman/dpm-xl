@@ -42,6 +42,8 @@ All notable changes to this project are documented here. The project follows
 - Division by an interval that contains zero, such as `0.4 ± 0.5`, is an
   error for its record, as the specification says; the zero endpoint used
   to be skipped.
+- `max` and `min` keep the largest tolerance among equal values, whatever
+  their order; they used to keep the first one's.
 - `diagnose` checks the `partition by` and `order by` keys of analytic
   functions; it used to skip them.
 

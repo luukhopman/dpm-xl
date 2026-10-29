@@ -305,7 +305,12 @@ SEVERITIES = [
                 {"code": "x", "expression": "1 / 0 > 1", "severity": "warning"},
             ],
             "error",
-            3,
+            0,
+        ),
+        (
+            [*SEVERITIES[1:], {"code": "x", "expression": "1 / 0 > 1"}],
+            "error",
+            1,
         ),
     ],
 )
@@ -359,7 +364,7 @@ def test_eval_writes_junit(tmp_path, capsys) -> None:
 
     data = _write(tmp_path, [_fact("0010", 1), _fact("0020", 2)])
     rules = [*SEVERITIES, {"code": "x", "expression": "1 / 0 > 1"}]
-    assert main(["eval", _rule_file(tmp_path, rules), data, "--format", "junit"]) == 3
+    assert main(["eval", _rule_file(tmp_path, rules), data, "--format", "junit"]) == 1
     suite = ET.fromstring(capsys.readouterr().out)
     assert suite.attrib == {
         "name": "rules.json",

@@ -43,9 +43,9 @@ format: https://luukhopman.github.io/dpm-xl/reference/data-formats/
 
 exit statuses:
   0  done; nothing failed at or above --fail-on
-  1  an expression does not parse, or a rule failed
+  1  an expression does not parse, or a rule failed or is an error
   2  usage error
-  3  unreadable or invalid input, or a rule is an error or unsupported"""
+  3  unreadable or invalid input"""
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -55,8 +55,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         int: Process exit code: 0 when everything parsed (with ``--strict``:
         had no errors) or no rule at or above ``--fail-on`` failed, 1 when an
         expression did not parse (with ``--strict``: had an error) or such a
-        rule failed, 2 for a usage error and 3 for unreadable or invalid
-        input or a rule that is an error or unsupported.
+        rule failed or is an error, 2 for a usage error and 3 for unreadable
+        or invalid input.
     """
     parser = argparse.ArgumentParser(
         prog="dpm-xl",
@@ -483,12 +483,13 @@ def _exit_status(runs: Sequence[_Run], failing: frozenset[str]) -> int:
     """Return the exit status of a rule run.
 
     Returns:
-        int: 3 when a rule is ``error`` or ``unsupported``, else 1 when a
-        rule of a ``failing`` severity failed, else 0.
+        int: 1 when a rule of a ``failing`` severity failed or is an
+        ``error``, else 0. An ``unsupported`` rule does not count.
     """
-    if any(run.status in {"error", "unsupported"} for run in runs):
-        return EXIT_INPUT
-    if any(run.status == "failed" and run.rule.severity in failing for run in runs):
+    if any(
+        run.status in {"failed", "error"} and run.rule.severity in failing
+        for run in runs
+    ):
         return EXIT_FAILED
     return EXIT_OK
 

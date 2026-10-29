@@ -152,7 +152,7 @@ status: error
 message: division by zero
 records: 0 passed, 0 failed, 0 null
 $ echo $?
-3
+1
 ```
 
 ### JSON output
@@ -319,9 +319,9 @@ statuses.
 | Status | `check` | `eval` and `check-report` |
 | --- | --- | --- |
 | 0 | Everything parsed; with `--strict`, nothing has an error. | No rule (or filing finding) at or above `--fail-on` failed. |
-| 1 | An expression or precondition does not parse; with `--strict`, one has an error. | A rule (or filing finding) at or above `--fail-on` failed. |
+| 1 | An expression or precondition does not parse; with `--strict`, one has an error. | A rule (or filing finding) at or above `--fail-on` failed, or such a rule is `error`. An `unsupported` rule does not count. |
 | 2 | Usage error (unknown command or option). | Usage error, or `check-report` without the `xbrl` extra. |
-| 3 | The rule file cannot be read or is malformed. | A rule is `error` or `unsupported`, or an input file cannot be read or is malformed. |
+| 3 | The rule file cannot be read or is malformed. | An input file cannot be read or is malformed. |
 
 `dpmxl.cli` names them `EXIT_OK`, `EXIT_FAILED`, `EXIT_USAGE` and
 `EXIT_INPUT`.

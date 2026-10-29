@@ -351,12 +351,12 @@ class ReportCheck:
             fail_on: ``error`` counts only errors, ``warning`` warnings too.
 
         Returns:
-            bool: Whether a filing finding, or a failing rule, has a
-            severity at or above ``fail_on``.
+            bool: Whether a filing finding, or a rule that failed or is an
+            ``error``, has a severity at or above ``fail_on``.
         """
         failing = {"error"} if fail_on == "error" else {"error", "warning"}
         return any(finding.severity in failing for finding in self.filing) or any(
-            run.status == "failed" and run.rule.severity in failing
+            run.status in {"failed", "error"} and run.rule.severity in failing
             for run in self.rules
         )
 

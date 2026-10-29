@@ -15,7 +15,7 @@ from dpmxl import (
     format_value,
     parse,
 )
-from dpmxl.evaluator import Evaluator
+from dpmxl.evaluator import Evaluator, _median
 from dpmxl.provider import CellKey
 
 ROWS = ("0010", "0020", "0030")
@@ -209,6 +209,29 @@ def test_max_and_min_take_the_largest_radius_among_ties() -> None:
         "min(5, {tT, r0020, c0010, interval: true}, 6) = 1",
     ]:
         assert status(rule, data) == "passed", rule
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        # A single middle operand: its radius.
+        ([("1", 0), ("2", -1), ("3", 0)], ("2", "5")),
+        # Ties at the median centre: the largest radius among them.
+        ([("2", 0), ("2", -1), ("5", 0)], ("2", "5")),
+        ([("1", 0), ("2", 0), ("2", -1), ("5", 0)], ("2", "5")),
+        # Two distinct middle centres: the mean of their radii.
+        ([("1", 0), ("3", 0), ("5", -1), ("9", 0)], ("4", "2.75")),
+    ],
+)
+def test_median_carries_the_radius(values, expected) -> None:
+    # 7.7.4: the radius of the median.
+    result = _median([Number.of(value, decimals) for value, decimals in values])
+    assert (str(result.value.normalize()), str(result.tolerance.normalize())) == (
+        expected
+    )
+    data = provider({("0010", "0010"): 1, ("0020", "0010"): 3, ("0030", "0010"): 5})
+    rule = "median({tT, r*, c0010, interval: true}) = 3.5"
+    assert status(rule, data) == "passed"
 
 
 def test_errors_fail_only_the_records_that_reach_the_result() -> None:

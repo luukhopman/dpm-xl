@@ -497,6 +497,7 @@ NEW_CONSTRUCTS = [
     "rank({tT, c0010, r*} over (order by f desc)) > 0",
     "{tT, r*, c0010} [where isnull(entityID)] > 0",
     "isnull({tT, r*, c0010} [get entityID])",
+    "median({tT, r*, c0010, interval: true}) = 60.5",
 ]
 
 

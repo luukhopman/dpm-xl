@@ -1419,13 +1419,15 @@ The mean of the numbers, with the sum's tolerance divided by the count.
 
 ### `median` {#median}
 
-The middle number, or the mean of the two middle numbers; exact, without
-tolerance.
+The middle number with its tolerance, the largest among equal values, or
+the mean of the two middle numbers and of their tolerances.
 
 | Expression | Result |
 | --- | --- |
 | `median({tU})` | `2` |
 | `median({tT, c0020})` | `0` |
+| `median({tT, c0010, interval: true})` | `60 ± 0.5` |
+| `median({tT, c0020, interval: true})` | `0 ± 0.5` |
 
 ### `max`, `min`, `max_aggr`, `min_aggr` {#aggregate-max}
 

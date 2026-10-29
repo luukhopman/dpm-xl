@@ -44,6 +44,8 @@ All notable changes to this project are documented here. The project follows
   to be skipped.
 - `max` and `min` keep the largest tolerance among equal values, whatever
   their order; they used to keep the first one's.
+- `median` keeps the tolerance of the middle value, or the mean of the two
+  middle values' tolerances, instead of dropping it.
 - `diagnose` checks the `partition by` and `order by` keys of analytic
   functions; it used to skip them.
 

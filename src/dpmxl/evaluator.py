@@ -1935,13 +1935,7 @@ def _reduce(name: str, values: list[Value], record_count: int) -> Value:
             total += number
         return total / Number(Decimal(len(numbers)))
     if name == "median":
-        ordered = sorted(number.value for number in numbers)
-        middle = len(ordered) // 2
-        if len(ordered) % 2:
-            return Number(ordered[middle])
-        return (Number(ordered[middle - 1]) + Number(ordered[middle])) / Number(
-            Decimal(2)
-        )
+        return _median(numbers)
     # DPM-XL 4.3.5.4 and 7.5.4: among equal centres, the largest radius.
     pick = max if name == "max" else min
     centre = pick(number.value for number in numbers)
@@ -1957,6 +1951,24 @@ def _widest(numbers: list[Number], centre: Decimal) -> Number:
     return Number(
         centre, max(number.tolerance for number in numbers if number.value == centre)
     )
+
+
+def _median(numbers: list[Number]) -> Number:
+    """Return the median, with the tolerance DPM-XL 7.7.4 gives it.
+
+    Returns:
+        Number: The middle centre with the largest tolerance at it, or the
+        mean of the two middle centres and of their tolerances.
+    """
+    ordered = sorted(numbers, key=lambda number: number.value)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return _widest(numbers, ordered[middle].value)
+    low, high = ordered[middle - 1], ordered[middle]
+    if low.value == high.value:
+        return _widest(numbers, low.value)
+    # The mean of the centres and, as a sum halved, of the tolerances.
+    return (low + high) / Number(Decimal(2))
 
 
 def _ordering_text(value: Value) -> str:

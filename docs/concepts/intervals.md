@@ -40,6 +40,7 @@ Number(value=Decimal('5'), tolerance=Decimal('0'))
 | `a / b` | The largest deviation of the four endpoint quotients from `a / b`; an error when `b`'s interval contains zero |
 | `-a`, `abs(a)` | `δa` |
 | `min`, `max` | The chosen value's tolerance; among equal values, the largest |
+| `median` | The middle value's tolerance, or the mean of the two middle ones' |
 
 ```python
 a, b = Number.of(10, 0), Number.of("7.0", 1)

@@ -466,6 +466,7 @@ NEW_CONSTRUCTS = [
     "if {tONE, r0010, c0010} < 0 then ln({tONE, r0010, c0010}) else 1 endif = 1",
     "year(#2026-12-31#) = 2026",
     "date(2026, 12, 31) = #2026-12-31T00:00:00#",
+    "isnull(date(2026, 2, 30))",
     "{tONE, r0010, c0010} in union({5}, {6})",
     "count({5, 6, 6}) = 2",
     "{5, 6} = {6, 5}",

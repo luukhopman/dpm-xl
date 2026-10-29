@@ -1184,14 +1184,16 @@ as a date.
 
 #### `date` {#date}
 
-`date(year, month, day)`: the date of three whole numbers. Errors: `date
-needs whole numbers`, `invalid date: …` for a day the month lacks.
+`date(year, month, day)`: the date of three whole numbers; null when they
+form no date, such as a day the month lacks. Errors: `date needs whole
+numbers`.
 
 | Expression | Result |
 | --- | --- |
 | `date(2026, 2, 28)` | `2026-02-28` |
 | `date(2026, 12, 31) = #2026-12-31#` | `true` |
-| `date(2026, 2, 30)` | `error: invalid date: 2026-02-30` |
+| `date(2026, 2, 30)` | `null` |
+| `date(2026, 13, 1)` | `null` |
 
 ### Time functions {#time-functions}
 

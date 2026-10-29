@@ -16,7 +16,7 @@ they are `datetime.date`.
 | `year(d)`, `month(d)`, `day(d)` | The parts of a date |
 | `quarter(d)`, `semester(d)` | 1–4 and 1–2 |
 | `week(d)` | The ISO 8601 week |
-| `date(y, m, d)` | A date; an impossible day such as `date(2026, 2, 30)` is an error |
+| `date(y, m, d)` | A date; null for an impossible day such as `date(2026, 2, 30)` |
 
 ```dpm-xl
 year({p_refPeriod, date}) = 2026

@@ -144,7 +144,7 @@ def test_concatenation_and_substr_work_per_record() -> None:
         ('substr("abc", 1.5) = "a"', "substr needs whole numbers"),
         ("substr(1, 1) = 1", "substr needs text, found number"),
         ("year(1) = 1", "year needs a date, found number"),
-        ("date(2026, 2, 30) = #2026-02-28#", "invalid date"),
+        ("date(2026, 1.5, 1) = #2026-01-01#", "date needs whole numbers"),
     ],
 )
 def test_text_and_date_function_errors(expression: str, message: str) -> None:

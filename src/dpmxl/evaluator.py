@@ -2108,12 +2108,9 @@ def _make_date(year: Value, month: Value, day: Value) -> Value:
     parts = [_integer(value, "date") for value in (year, month, day)]
     try:
         return date(*parts)
-    except ValueError as error:
-        # Python's own wording differs between versions; name the date.
-        year_part, month_part, day_part = parts
-        raise EvaluationError(
-            f"invalid date: {year_part:04d}-{month_part:02d}-{day_part:02d}"
-        ) from error
+    except ValueError:
+        # DPM-XL 10.3.6: a day, month or year that does not exist is null.
+        return None
 
 
 def _float_number(value: float | complex) -> Value:

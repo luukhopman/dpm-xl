@@ -150,6 +150,14 @@ def test_math_domain_errors_fail_only_their_records() -> None:
     assert status("sqrt({tT, r*, c0010}) = 2", data) == "error"
 
 
+@pytest.mark.parametrize(
+    "rule", ["isnull(date(2025, 2, 30))", "isnull(date(2025, 13, 1))"]
+)
+def test_date_of_no_calendar_day_is_null(rule: str) -> None:
+    # 10.3.6: the resulting Date is null.
+    assert status(rule) == "passed"
+
+
 def test_errors_fail_only_the_records_that_reach_the_result() -> None:
     # Column 0010 divides by zero, column 0020 does not.
     data = provider(

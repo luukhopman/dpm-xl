@@ -8,6 +8,8 @@ Every Markdown page under ``docs/`` (and the README) is checked:
 * ``console`` blocks hold ``$ dpm-xl ...`` commands, each followed by its
   expected output (stdout and stderr, as a terminal shows them);
   ``$ echo $?`` prints the previous command's exit status.
+* in both, the ``version`` of a JSON or JUnit document is ignored, so the
+  samples need not change with each release.
 * every line of a ``dpm-xl`` block must parse with
   :func:`dpmxl.parse_program`.
 
@@ -248,7 +250,7 @@ def test_page_examples(path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
             last_output = output.getvalue()
         elif block.lang == "text" and block.follows_python:
             assert last_output is not None
-            assert _normalize(last_output) == _normalize(block.code), (
+            assert _versionless(last_output) == _versionless(block.code), (
                 f"{where}: printed output differs"
             )
             last_output = None

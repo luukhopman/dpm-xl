@@ -62,7 +62,8 @@ uv run python -c "import json; from dpmxl.grammar import textmate_grammar; print
   the columnar evaluator raises `ColumnarUnsupported` for it.
 - Every `python` and `console` block in `docs/` and `README.md` is executed;
   a `text` block directly after a `python` block must equal its output. Use
-  `<!-- docs: skip -->` sparingly. Real outputs only.
+  `<!-- docs: skip -->` sparingly. Real outputs only; the tests ignore the
+  version in JSON and JUnit output, so samples need not change with it.
 - Every row of an `| Expression | Result |` table is evaluated against
   `examples/language_report.py` and must show the actual result. A change
   to `dpmxl.grammar` needs its entry and index row in

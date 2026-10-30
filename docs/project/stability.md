@@ -17,7 +17,7 @@ change that breaks the public API needs a new major version.
   that a `FrameProvider` returns.
 - The thread-safety guarantees in [Run rules in threads](../guides/threads.md).
 - The CLI: its commands, options, [exit statuses](../reference/cli.md#exit-statuses)
-  and the `--json` layout, versioned by `schema_version` (1), and the
+  and the `--json` layout, versioned by `schema_version` (2), and the
   [data formats](../reference/data-formats.md) it reads.
 
 Names starting with an underscore are internal, as are modules whose names

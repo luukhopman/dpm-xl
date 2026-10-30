@@ -52,7 +52,8 @@ write.
   page it belongs to.
 - **Docs examples run.** Every `python` and `console` block in `docs/` is
   executed by `tests/test_docs.py`, and a `text` block right after a
-  `python` block must match its output exactly. Every `dpm-xl` block must
+  `python` block must match its output exactly, except the version in
+  JSON and JUnit output, which the tests ignore. Every `dpm-xl` block must
   parse, and every row of an `| Expression | Result |` table is evaluated
   against `examples/language_report.py`; see that file for the
   conventions.

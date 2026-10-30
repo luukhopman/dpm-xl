@@ -96,7 +96,7 @@ jobs:
       - run: uvx dpm-xl check rules/rules.json --strict
 ```
 
-Pin the version (`uvx dpm-xl@1.3.0 ...`) if you want a new release to be a
+Pin a version (`uvx dpm-xl@VERSION ...`) if you want a new release to be a
 deliberate change.
 
 ## With pytest

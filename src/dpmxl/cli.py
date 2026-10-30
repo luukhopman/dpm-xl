@@ -377,11 +377,11 @@ def _layouts(
 EXIT_OK = 0
 """Exit status when nothing fails at or above the ``--fail-on`` severity."""
 EXIT_FAILED = 1
-"""Exit status when an expression does not parse or a rule fails."""
+"""Exit status when an expression does not parse, or a rule fails or is an error."""
 EXIT_USAGE = 2
 """Exit status of a usage error, such as an unknown option."""
 EXIT_INPUT = 3
-"""Exit status for unreadable or invalid input, or a rule that is an error."""
+"""Exit status for unreadable or invalid input."""
 
 
 @dataclass(frozen=True, slots=True)

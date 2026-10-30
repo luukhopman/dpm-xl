@@ -41,7 +41,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -353,7 +353,8 @@ def _module(document: object) -> Module:
     except RuleFileError as error:
         raise ModuleError(str(error)) from None
     rules = tuple(
-        rule if rule.source is not None else _with_source(rule) for rule in rules
+        rule if rule.source is not None else replace(rule, source="eba")
+        for rule in rules
     )
     _unique([rule.code for rule in rules], "rules[{}].code".format)
     filing_indicators = tuple(
@@ -379,18 +380,6 @@ def _module(document: object) -> Module:
         filing_indicators=filing_indicators,
         currency=_optional_text(root, "currency", ""),
         decimals=_decimals(root),
-    )
-
-
-def _with_source(rule: Rule) -> Rule:
-    return Rule(
-        rule.code,
-        rule.expression,
-        rule.precondition,
-        rule.severity,
-        rule.active,
-        rule.modules,
-        "eba",
     )
 
 

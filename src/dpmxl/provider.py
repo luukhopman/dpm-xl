@@ -107,13 +107,26 @@ class DataPoint:
             '{tC_01.00, r0010, c0010}'
             >>> DataPoint("C_27.00", column="0010", keys={"qCPI": "LEI-B"}).label()
             '{tC_27.00, c0010, qCPI=LEI-B}'
+
+            A point ``time_shift`` read from an earlier report names the
+            shift:
+
+            >>> earlier = EarlierRef("Q", 1, None)
+            >>> DataPoint("C_01.00", "0010", "0010", ref=earlier).label()
+            '{tC_01.00, r0010, c0010} (Q-1)'
         """
         parts = [f"t{self.table}"]
         for prefix, value in (("r", self.row), ("c", self.column), ("s", self.sheet)):
             if value and value != "*":
                 parts.append(f"{prefix}{value}")
         parts.extend(f"{name}={value}" for name, value in self.keys.items())
-        return "{" + ", ".join(parts) + "}"
+        shifts = []
+        ref = self.ref
+        while isinstance(ref, EarlierRef):
+            shifts.append(f"{ref.period}{-ref.count:+d}")
+            ref = ref.ref
+        suffix = f" ({', '.join(shifts)})" if shifts else ""
+        return "{" + ", ".join(parts) + "}" + suffix
 
 
 @runtime_checkable

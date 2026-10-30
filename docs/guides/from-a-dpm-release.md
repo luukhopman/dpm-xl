@@ -198,6 +198,12 @@ a later release changes a category the version uses. COREP_OF 4.1.0, for
 example, came with release 4.2, so its entry point is
 `…/fws/corep/4.2/mod/corep_of.json` in releases 4.2 to 4.4.
 
+The basis is the release that introduced the module version: the
+subcategory versions its headers and variables name are kept, and each
+item takes its category bindings valid in that release. An item that moves
+to another category in that release has both qnames, as the taxonomy
+mostly lists both, the binding that starts later first.
+
 Whether a rule is active is not tied to a release: the EBA deactivates rules
 in the database itself, in releases such as 4.3.0.1. Export from the newest
 database to get the current state. The June 2026 database of 4.3 has 27

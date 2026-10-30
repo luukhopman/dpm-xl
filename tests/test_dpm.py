@@ -110,6 +110,7 @@ def test_cells_leave_out_excluded_and_void_ones(db: DpmRelease, caplog) -> None:
         "T_01.00.a/r0050/c0010",
         "T_01.00.a/r0060/c0010",
         "T_01.00.a/r0070/c0010",
+        "T_01.00.a/r0080/c0010",
     ]
     assert cells[0] == {
         "id": "T_01.00.a/r0010/c0010",
@@ -153,6 +154,9 @@ def test_composed_categories_give_items_of_each(db: DpmRelease) -> None:
     # y2 moves from CC to CD in release 2.0, which lists both
     assert open_cell["row"] == "*"
     assert open_cell["items"] == ["eba_CC:y1", "eba_CC:y2", "eba_CD:z2"]
+    restricted = _table(export_module(db, "DEMO"), "T_01.00.a")["cells"][5]
+    # in subcategory order, an item's later binding first
+    assert restricted["items"] == ["eba_CD:z2", "eba_CC:y2", "eba_CC:y1"]
     older = _table(export_module(db, "DEMO", "1.0"), "T_02.00")["cells"][1]
     assert older["items"] == ["eba_CC:y1", "eba_CC:y2"]
 
@@ -294,7 +298,7 @@ def test_cli_exports_a_module(database: Path, tmp_path: Path, capsys) -> None:
     assert captured.out == ""
     assert "note: DEMO: left out 1 rule whose scope spans" in captured.err
     assert captured.err.endswith(
-        f"wrote {target}: module DEMO, release 2.0.1: 2 tables, 7 cells, 3 rules\n"
+        f"wrote {target}: module DEMO, release 2.0.1: 2 tables, 8 cells, 3 rules\n"
     )
     assert load_module(target).module == "DEMO"
     assert main(["check", str(target)]) == 0

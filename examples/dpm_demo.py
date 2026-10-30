@@ -62,6 +62,7 @@ ROWS: dict[str, list[tuple]] = {
         (22, 5, 505, "{T_01.00.a, r0050, c0010}", 0, 0),  # es, text that may be empty
         (22, 6, 506, "{T_01.00.a, r0060, c0010}", 0, 0),  # no item allowed
         (22, 7, 507, "{T_01.00.a, r0070, c0010}", 0, 0),  # an item of another category
+        (22, 8, 508, "{T_01.00.a, r0080, c0010}", 0, 0),  # an item that moves
         (31, 10, 510, "{T_02.00, r*, c0010}", 0, 0),
         (31, 11, 511, "{T_02.00, r*, c0020}", 0, 0),
         (41, 20, 520, "{O_01.00, r0010, c0010}", 0, 0),
@@ -72,6 +73,7 @@ ROWS: dict[str, list[tuple]] = {
         (5, 63, 61, None),
         (6, 66, 61, None),
         (7, 67, 61, None),
+        (8, 68, 61, None),
         (10, None, 64, None),
         (11, None, 65, None),
         (20, None, None, None),
@@ -81,6 +83,7 @@ ROWS: dict[str, list[tuple]] = {
         (22, 61, 561, 2),
         (22, 66, 566, 3),
         (22, 67, 567, 4),
+        (22, 68, 568, 5),
         (31, 50, 550, 1),
         (31, 51, 551, 2),
         (31, 64, 564, 3),
@@ -97,6 +100,7 @@ ROWS: dict[str, list[tuple]] = {
         (65, 0),
         (66, 0),
         (67, 0),
+        (68, 0),
     ],
     "HeaderVersion": [
         # HeaderVID, HeaderID, PropertyID, SubCategoryVID, KeyVariableVID, S, E
@@ -108,6 +112,7 @@ ROWS: dict[str, list[tuple]] = {
         (565, 65, 1006, None, None, 1, None),
         (566, 66, 1002, 703, None, 1, None),  # an empty subcategory: no item
         (567, 67, 1002, 704, None, 1, None),  # a subcategory of CC for a CA property
+        (568, 68, 1006, 705, None, 1, None),
     ],
     "VariableVersion": [
         # VariableVID, VariableID, PropertyID, SubCategoryVID, Code, Start, End
@@ -117,6 +122,7 @@ ROWS: dict[str, list[tuple]] = {
         (505, 505, 1005, None, None, 1, None),
         (506, 506, 1002, None, None, 1, None),
         (507, 507, 1002, None, None, 1, None),
+        (508, 508, 1006, None, None, 1, None),
         (510, 510, 1001, None, None, 1, None),
         (511, 511, 1006, None, None, 1, None),
         (520, 520, 1001, None, None, 1, None),
@@ -172,6 +178,7 @@ ROWS: dict[str, list[tuple]] = {
         (71, 20),
         (72, 20),
         (73, 22),
+        (74, 21),
     ],  # SubCategoryID, CategoryID
     "SubCategoryVersion": [  # SubCategoryVID, SubCategoryID, Start, End
         (700, 70, 1, None),
@@ -179,6 +186,7 @@ ROWS: dict[str, list[tuple]] = {
         (702, 71, 2, None),  # a later version, which DEMO 2.0.0 does not name
         (703, 72, 1, None),  # no items
         (704, 73, 1, None),
+        (705, 74, 1, None),
     ],
     "SubCategoryItem": [  # SubCategoryVID, ItemID, Order
         (700, 2002, 1),
@@ -188,6 +196,8 @@ ROWS: dict[str, list[tuple]] = {
         (702, 2002, 1),
         (704, 2001, 1),  # x1 is in CA
         (704, 2010, 2),  # y1 is only in CC: left out
+        (705, 2011, 1),  # y2, in CC and, from release 2.0, CD
+        (705, 2010, 2),
     ],
     "Operation": [
         (1, "v1"),

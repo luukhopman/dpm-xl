@@ -533,14 +533,15 @@ class DpmRelease:
             "variables", lambda: {row[0]: row for row in self._rows("VariableVersion")}
         )
 
-    def _bindings(self, release: int) -> dict[int, dict[int, str]]:
-        """Return the item codes of each category in a release.
+    def _bindings(self, release: int) -> dict[int, dict[int, Sequence[Any]]]:
+        """Return the item bindings of each category in a release.
 
         Returns:
-            dict: ``CategoryID`` to ``ItemID`` to the item's code.
+            dict: ``CategoryID`` to ``ItemID`` to its ``ItemCategory`` row,
+            which has a code.
         """
 
-        def build() -> dict[int, dict[int, str]]:
+        def build() -> dict[int, dict[int, Sequence[Any]]]:
             chosen = _latest(
                 self._rows("ItemCategory"),
                 lambda row: (row[1], row[0]),
@@ -549,10 +550,10 @@ class DpmRelease:
                 end=4,
                 tie=0,
             )
-            bindings: dict[int, dict[int, str]] = defaultdict(dict)
+            bindings: dict[int, dict[int, Sequence[Any]]] = defaultdict(dict)
             for (category, item), row in chosen.items():
                 if row[2]:
-                    bindings[category][item] = row[2]
+                    bindings[category][item] = row
             return bindings
 
         return self._memo(f"bindings:{release}", build)
@@ -602,7 +603,8 @@ class DpmRelease:
         Items of the categories composed into it (``SuperCategoryComposition``)
         are included under their own category's prefix. An item that moves
         from one composed category to another in the release has both
-        qnames, as the EBA's taxonomy of the release lists both.
+        qnames, as the EBA's taxonomy of the release mostly lists both; the
+        binding that starts later comes first.
 
         Returns:
             dict: ``ItemID`` to its qnames, such as ``eba_GA:LU``.
@@ -620,7 +622,7 @@ class DpmRelease:
             children: dict[int, list[int]] = defaultdict(list)
             for super_category, child in sorted(compositions):
                 children[super_category].append(child)
-            items: dict[int, list[str]] = defaultdict(list)
+            found: dict[int, list[tuple[int, str]]] = defaultdict(list)
             seen: set[int] = set()
             pending = [category]
             while pending:
@@ -629,10 +631,18 @@ class DpmRelease:
                     continue
                 seen.add(current)
                 prefix = self._prefix(current)
-                for item, code in self._bindings(release).get(current, {}).items():
-                    items[item].append(f"{prefix}:{code}")
+                for item, row in self._bindings(release).get(current, {}).items():
+                    found[item].append((row[3] or 0, f"{prefix}:{row[2]}"))
                 pending.extend(children.get(current, ()))
-            return items
+            return {
+                item: [
+                    qname
+                    for _, qname in sorted(
+                        bindings, key=lambda binding: binding[0], reverse=True
+                    )
+                ]
+                for item, bindings in found.items()
+            }
 
         return self._memo(f"items:{category}:{release}", build)
 
@@ -668,9 +678,8 @@ class DpmRelease:
         )
         if properties is None:
             return None
-        return self._bindings(release).get(properties, {}).get(
-            prop
-        ) or self._ended_binding(properties, prop, release)
+        row = self._bindings(release).get(properties, {}).get(prop)
+        return row[2] if row else self._ended_binding(properties, prop, release)
 
     def _data_type(self, prop: int | None) -> str | None:
         types = self._memo(

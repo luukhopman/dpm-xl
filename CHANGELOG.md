@@ -74,6 +74,8 @@ All notable changes to this project are documented here. The project follows
   an empty subcategory; a missing `items` leaves the items open.
 - The export leaves out a subcategory's items that are not in the
   property's category, with a note, instead of writing invalid qnames.
+- An item bound in two categories of a property lists its later binding's
+  qname first.
 
 ### Changed
 

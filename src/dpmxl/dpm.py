@@ -225,7 +225,7 @@ def open_release(path: str | Path) -> DpmRelease:
             database, such as one converted with mdbtools or downloaded from
             dpm-toolkit; or the Access file (``.accdb``) itself, which needs
             ``mdb-export`` of mdbtools on ``PATH`` and is read into memory,
-            taking a minute.
+            which takes about ten seconds.
 
     Returns:
         DpmRelease: The database, open read-only; close it, or use it in a
@@ -258,7 +258,8 @@ def _from_access(path: Path) -> sqlite3.Connection:
     """Read the tables an export needs from an Access file into memory.
 
     Returns:
-        sqlite3.Connection: An in-memory database of those tables.
+        sqlite3.Connection: An in-memory database of those tables, committed,
+        so that ``backup`` and ``VACUUM INTO`` can copy it.
 
     Raises:
         DpmError: If ``mdb-export`` is not on ``PATH`` or fails.
@@ -298,6 +299,7 @@ def _from_access(path: Path) -> sqlite3.Connection:
                 for row in rows
             ),
         )
+    connection.commit()
     return connection
 
 

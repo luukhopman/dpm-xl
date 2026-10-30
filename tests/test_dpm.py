@@ -243,6 +243,9 @@ def test_an_access_file_is_read_with_mdb_export(
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     with open_release(access) as from_access, open_release(database) as from_sqlite:
         assert export_module(from_access, "DEMO") == export_module(from_sqlite, "DEMO")
+        # the tables are committed, so the database can be copied or saved
+        assert not from_access._connection.in_transaction
+        from_access._connection.execute("VACUUM INTO ?", (str(tmp_path / "copy.db"),))
 
 
 def test_cli_lists_modules(database: Path, capsys) -> None:

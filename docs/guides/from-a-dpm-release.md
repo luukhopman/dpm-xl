@@ -162,7 +162,7 @@ explains the rules that stay failing.
 ## 7. Check the report
 
 `dpm-xl check-report` reads the report with [dpm-xbrl], checks its filing
-rules and evaluates the module's rules on it:
+rules and evaluates the module's validation rules on it:
 
 ```bash
 dpm-xl check-report corep_of.json report.zip

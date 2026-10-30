@@ -109,9 +109,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     _output_options(run)
     report = commands.add_parser(
         "check-report",
-        help="check an XBRL report's filing rules and its module's rules",
+        help="check an XBRL report's filing rules and validation rules",
         description="Check an xBRL-CSV or XBRL-XML report: the EBA filing rules "
-        "dpm-xbrl checks and the rules of its module file, in one report. "
+        "dpm-xbrl checks and the validation rules of its module file, in one report. "
         'Needs the xbrl extra: pip install "dpm-xl[xbrl]".',
     )
     report.add_argument("module", type=Path, help="module file (dpm-module/1)")

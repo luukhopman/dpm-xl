@@ -33,7 +33,10 @@ code that is not a plain name: `` {t`C 01.00`} ``.
 - otherwise it is report parameter `X`, `parameter(X)`;
 - either is null when the provider does not know it.
 
-In the EBA rules every `{v_…}` names a template and `{vReportingLevel}` is
+A template is an EBA reporting form, such as `C_07.00`, and is filed
+under one filing indicator; it may be split into several tables, such as
+`C_07.00.a` and `C_07.00.b`, which rules select by table code. In the EBA
+rules every `{v_…}` names a template and `{vReportingLevel}` is
 the only parameter, so both spellings keep their usual meaning.
 
 ```python

@@ -1,5 +1,5 @@
 ---
-description: The dpm-module/1 JSON format - one module's tables, cells, open keys, datapoints and rules - shared with dpm-synth's template format, and how dpm-xl reads it.
+description: The dpm-module/1 JSON format - one module's tables, cells, open keys, datapoints and rules - read by dpm-xl and dpm-synth, and how dpm-xl reads it.
 ---
 
 # Module file

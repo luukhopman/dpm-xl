@@ -264,7 +264,7 @@ qCPI=LEI-B: -5 should exceed 0: difference 5</system-out>
 Checks an xBRL-CSV package or XBRL-XML instance against a
 [module file](module-file.md): the EBA filing rules
 [dpm-xbrl](https://luukhopman.github.io/dpm-xbrl/) checks, and the module's
-rules, evaluated with [`ReportProvider`][dpmxl.xbrl.ReportProvider]. Needs
+validation rules, evaluated with [`ReportProvider`][dpmxl.xbrl.ReportProvider]. Needs
 the `xbrl` extra (`pip install "dpm-xl[xbrl]"`); without it the command
 exits with status 2.
 

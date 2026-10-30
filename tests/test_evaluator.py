@@ -13,6 +13,7 @@ from dpmxl import (
     Value,
     evaluate_rule,
     explain,
+    load_memory_provider,
 )
 from dpmxl.explain import MINUS, TIMES
 from dpmxl.provider import CellKey
@@ -652,3 +653,46 @@ def test_memory_provider_filing_indicators_do_not_scan_each_call() -> None:
     assert provider.table_reported("C_07.00") is False
     provider.tables = {}
     assert not provider.is_template("C_07.00")
+
+
+def _fact_document(value: Any, kind: str, **extra: Any) -> dict[str, Any]:
+    fact = {"table": "A", "row": "0010", "column": "0010", "value": value}
+    return {
+        "tables": [{"code": "A", "rows": ["0010"], "columns": ["0010"]}],
+        "facts": [{**fact, "type": kind, **extra}],
+    }
+
+
+@pytest.mark.parametrize(
+    ("value", "kind", "extra", "expected"),
+    [
+        ("5", "m", {"decimals": 0}, Number.of(5, 0)),
+        (" -1204.5 ", "m", {"decimals": "INF"}, Number.of("-1204.5")),
+        ("0.25", "p", {"decimals": 2}, Number.of("0.25", 2)),
+        ("3", "i", {}, Number.of(3)),
+        ("1.5e3", "r", {"decimals": -2}, Number.of("1.5e3", -2)),
+        ("7", "o", {}, Number.of(7)),
+    ],
+)
+def test_data_files_read_numeric_text_of_dpm_types(
+    value: str, kind: str, extra: dict[str, Any], expected: Number
+) -> None:
+    provider = load_memory_provider(_fact_document(value, kind, **extra))
+    assert provider.values["A", "0010", "0010", None, ()] == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "kind", "message"),
+    [
+        ("1,000", "m", "invalid number '1,000'"),
+        ("NaN", "p", "invalid number 'NaN'"),
+        ("", "i", "invalid number ''"),
+        ("2.5", "o", "invalid whole number '2.5'"),
+        ("x", "o", "invalid whole number 'x'"),
+    ],
+)
+def test_data_files_reject_invalid_numeric_text(
+    value: str, kind: str, message: str
+) -> None:
+    with pytest.raises(ValueError, match=f"^fact 1: {message}$"):
+        load_memory_provider(_fact_document(value, kind))

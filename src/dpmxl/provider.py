@@ -20,7 +20,7 @@ import re
 from collections.abc import Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date
-from decimal import InvalidOperation
+from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 from typing import Any, Protocol, TypeAlias, TypeVar, runtime_checkable
 
@@ -883,11 +883,17 @@ def _typed(
         return None
     if isinstance(value, list):
         return ValueSet.of(_typed(member, kind) for member in value)
-    if kind == "number" or (
+    if kind == "o":
+        # The DPM's ordinal: a whole number, exact.
+        text = str(value).strip()
+        if isinstance(value, bool) or not _WHOLE_NUMBER.fullmatch(text):
+            raise ValueError(f"invalid whole number {value!r}")
+        return Number(Decimal(text))
+    if kind in _NUMBER_TYPES or (
         isinstance(value, int | float) and not isinstance(value, bool)
     ):
         try:
-            number = Number.of(str(value), decimals)
+            number = Number.of(str(value).strip(), decimals)
         except InvalidOperation:
             raise ValueError(f"invalid number {value!r}") from None
         except ValueError as error:
@@ -901,6 +907,11 @@ def _typed(
         return date.fromisoformat(str(value))
     return value
 
+
+_WHOLE_NUMBER = re.compile(r"[+-]?[0-9]+")
+# "number", and the DPM's numeric data types, read with their decimals as
+# dpmxl.xbrl reads a report's facts.
+_NUMBER_TYPES = frozenset({"number", "m", "p", "i", "r"})
 
 _T = TypeVar("_T")
 

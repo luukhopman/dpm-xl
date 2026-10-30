@@ -573,6 +573,26 @@ def test_group_by_axis_keys_of_an_empty_operand_has_no_groups(
     assert reference.status == "not_applicable", reference.message
 
 
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ('{tO, r0010, c0010} [where Level = "con"] >= 0', "passed"),
+        ('{tO, r0010, c0010} [where "con" = Level] >= 0', "passed"),
+        ('with {tO, c0010} [where Level = "con"]: {r0010} >= 0', "passed"),
+        ("{tO, r0010, c0010} [where Level = qKEY] >= 0", "not_applicable"),
+        ("{tO, r0010, c0010} [where Missing = 1] >= 0", "error"),
+    ],
+)
+def test_report_parameters_in_where_go_to_the_reference_engine(
+    expression: str, expected: str
+) -> None:
+    provider = data()
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    reference = evaluate_rule(expression, provider)
+    assert reference.status == expected, reference.message
+
+
 def parts(a_keys: tuple[str, ...], b_keys: tuple[str, ...]) -> MemoryProvider:
     # Two parts of one open-keyed template.
     tables = [

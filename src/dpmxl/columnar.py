@@ -1903,7 +1903,9 @@ def _key_column(name: str, keys: Sequence[str]) -> pl.Expr:
     if key is None and _contextual(name) is not None:
         raise ColumnarUnsupported("contextual components")
     if key is None:
-        raise EvaluationError(f"unknown key component or parameter {name!r}")
+        # A report parameter, or an unknown name; the reference evaluator
+        # reads the provider's parameters.
+        raise ColumnarUnsupported(f"{name!r} is not a key of the operand")
     return _key_text_column(key)
 
 

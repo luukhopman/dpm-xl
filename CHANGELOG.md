@@ -32,6 +32,18 @@ All notable changes to this project are documented here. The project follows
 - `ReportProvider` and `check_report` take earlier reports as `previous`,
   for `time_shift` across periods.
 - `dpm-xl check-report --previous REPORT` passes an earlier report.
+- `ReportProvider` and `check-report` place XBRL-XML facts through the
+  report's taxonomy packages (`--taxonomy-package`), which they require.
+- Facts in no table of the module, or with a value that does not read as
+  their data type, are findings that count towards `--fail-on`.
+- A report of another entry point than its module is an error, as is a
+  previous report of another entity or entry point.
+- A fact in a file named by a filing indicator, such as `f_19.00.dp.csv`,
+  is placed in that filing indicator's tables by its datapoint.
+- Items in a report compare by namespace, so a domain declared under its
+  own prefix equals its `eba_` name.
+- `{vX}` of a report is false for a template without a positive filing
+  indicator, even when it has facts (EBA filing rule 1.6).
 - The contextual components `entityID`, `baseCurrency` and the
   `decimals…` names read the report parameters of those names, with their
   type; a missing one is null.

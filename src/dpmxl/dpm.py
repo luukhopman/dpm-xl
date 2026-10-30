@@ -1,0 +1,1343 @@
+"""Export modules of an EBA DPM 2.0 release to module files.
+
+The EBA publishes each DPM 2.0 release as a database, a Microsoft Access
+file with the tables of the DPM metamodel: tables, cells, variables,
+properties, categories, items, modules and validation rules.
+[`open_release`][dpmxl.dpm.open_release] opens the database, as SQLite
+with the table and column names the EBA publishes (or as the Access file,
+with mdbtools), and [`export_module`][dpmxl.dpm.export_module] writes one
+module of one release as a ``dpm-module/1`` document, which
+[`load_module`][dpmxl.module.load_module] reads.
+
+One database holds every release up to its own: each versioned row has a
+window from ``StartReleaseID`` to ``EndReleaseID``, both included, and the
+row of a release is the one whose window holds it, the latest starting one
+where two do. The release selects the module version and its rules; the
+version's tables, cells and items are those it was published with, as in
+its taxonomy. The EBA data errors that the export meets are corrected or
+left out, as the guide describes, and each is reported as a warning of the
+``dpmxl.dpm`` logger.
+
+Examples:
+    >>> import sqlite3
+    >>> from dpmxl.dpm import DpmError, DpmRelease
+    >>> try:
+    ...     DpmRelease(sqlite3.connect(":memory:"))
+    ... except DpmError as error:
+    ...     print(error)
+    not an EBA DPM 2.0 database: it has no Release table
+"""
+
+from __future__ import annotations
+
+import csv
+import io
+import logging
+import re
+import shutil
+import sqlite3
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - runs mdb-export, found on PATH, without a shell
+from collections import Counter, defaultdict
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Self
+
+from .module import FORMATS, MODULE_FORMAT
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_DECIMALS: Mapping[str, int] = {"m": 0, "p": 4, "i": 0, "r": 2}
+"""The ``decimals`` an export writes: monetary 0, percentage 4, integer 0,
+decimal 2; within the least accuracy of EBA filing rule 2.18."""
+
+ENTRY_POINT = "http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/{framework}/{release}/mod/{module}.json"
+"""The EBA's xBRL-CSV entry point of a module version: the framework and
+module codes in lower case and the release that introduced the version."""
+
+TABLES: Mapping[str, tuple[str, ...]] = {
+    "Release": ("ReleaseID", "Code", "Date", "Type"),
+    "Organisation": ("OrgID", "Acronym"),
+    "Framework": ("FrameworkID", "Code"),
+    "Module": ("ModuleID", "FrameworkID"),
+    "ModuleVersion": (
+        "ModuleVID",
+        "ModuleID",
+        "Code",
+        "Name",
+        "VersionNumber",
+        "StartReleaseID",
+        "EndReleaseID",
+        "FromReferenceDate",
+        "ToReferenceDate",
+    ),
+    "ModuleVersionComposition": ("ModuleVID", "TableID", "TableVID"),
+    "ModuleParameters": ("ModuleVID", "VariableVID"),
+    "Table": ("TableID", "IsAbstract"),
+    "TableVersion": (
+        "TableVID",
+        "TableID",
+        "Code",
+        "AbstractTableID",
+        "StartReleaseID",
+        "EndReleaseID",
+    ),
+    "TableVersionCell": (
+        "TableVID",
+        "CellID",
+        "VariableVID",
+        "CellCode",
+        "IsExcluded",
+        "IsVoid",
+    ),
+    "Cell": ("CellID", "RowID", "ColumnID", "SheetID"),
+    "TableVersionHeader": ("TableVID", "HeaderID", "HeaderVID", "Order"),
+    "Header": ("HeaderID", "IsKey"),
+    "HeaderVersion": (
+        "HeaderVID",
+        "HeaderID",
+        "PropertyID",
+        "SubCategoryVID",
+        "KeyVariableVID",
+        "StartReleaseID",
+        "EndReleaseID",
+    ),
+    "VariableVersion": (
+        "VariableVID",
+        "VariableID",
+        "PropertyID",
+        "SubCategoryVID",
+        "Code",
+        "StartReleaseID",
+        "EndReleaseID",
+    ),
+    "Property": ("PropertyID", "DataTypeID"),
+    "DataType": ("DataTypeID", "Code", "Name"),
+    "PropertyCategory": ("PropertyID", "CategoryID", "StartReleaseID", "EndReleaseID"),
+    "Category": ("CategoryID", "Code", "OwnerID", "IsEnumerated"),
+    "Item": ("ItemID", "IsActive"),
+    "ItemCategory": ("ItemID", "CategoryID", "Code", "StartReleaseID", "EndReleaseID"),
+    "SuperCategoryComposition": (
+        "SuperCategoryID",
+        "CategoryID",
+        "StartReleaseID",
+        "EndReleaseID",
+    ),
+    "SubCategory": ("SubCategoryID", "CategoryID"),
+    "SubCategoryVersion": (
+        "SubCategoryVID",
+        "SubCategoryID",
+        "StartReleaseID",
+        "EndReleaseID",
+    ),
+    "SubCategoryItem": ("SubCategoryVID", "ItemID", "Order"),
+    "Operation": ("OperationID", "Code"),
+    "OperationVersion": (
+        "OperationVID",
+        "OperationID",
+        "PreconditionOperationVID",
+        "Expression",
+        "StartReleaseID",
+        "EndReleaseID",
+    ),
+    "OperationScope": ("OperationScopeID", "OperationVID", "IsActive", "Severity"),
+    "OperationScopeComposition": ("OperationScopeID", "ModuleVID"),
+}
+"""The tables and columns of the DPM 2.0 database that an export reads."""
+
+
+DATA_TYPES: Mapping[str, str] = {"es": "s", "t": "b"}
+"""DPM data types written as another: ``es`` (text that may be empty) as
+``s`` text, since module files read ``es`` as an item set, and ``t`` (a
+Boolean that can only be true) as ``b``."""
+
+
+class DpmError(ValueError):
+    """A database that cannot be read, or a release or module it lacks."""
+
+
+@dataclass(frozen=True, slots=True)
+class ExpressionFix:
+    """A known error in the expression of an EBA rule, and its correction.
+
+    Attributes:
+        rule: The rule code, such as ``v7551_m``.
+        wrong: The text in the expression, such as ``trueendif``.
+        right: The text that replaces it, once, such as ``true endif``.
+        reason: What is wrong.
+    """
+
+    rule: str
+    wrong: str
+    right: str
+    reason: str
+
+
+KNOWN_ERRORS: tuple[ExpressionFix, ...] = (
+    ExpressionFix("v7551_m", "trueendif", "true endif", "no space before endif"),
+    ExpressionFix("v904909_m", "ornot", "or not", "no space between or and not"),
+)
+"""Typos in EBA rule expressions that the export corrects, so that they
+parse; an expression without the wrong text is left as it is."""
+
+
+@dataclass(frozen=True, slots=True)
+class Release:
+    """A release of the database.
+
+    Attributes:
+        id: The ``ReleaseID``; releases are ordered by it.
+        code: The release code, such as ``4.3`` or ``4.3.0.1``.
+        date: The release date, ``YYYY-MM-DD``, or ``None``.
+        type: ``module`` for a release of modules, ``deactivation`` for one
+            that only deactivates rules; ``None`` when the database does not
+            say.
+    """
+
+    id: int
+    code: str
+    date: str | None = None
+    type: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ModuleInfo:
+    """A module of a release.
+
+    Attributes:
+        code: The module code, such as ``COREP_OF``.
+        name: The module name, such as ``Own Funds - COREP``.
+        version: The module version, such as ``4.1.0``.
+        framework: The framework code, such as ``COREP``.
+        release: The code of the release that introduced this version.
+        from_date: The first reference date of the version, ``YYYY-MM-DD``.
+        to_date: The last reference date of the version, or ``None``.
+    """
+
+    code: str
+    name: str | None
+    version: str | None
+    framework: str | None
+    release: str | None
+    from_date: str | None
+    to_date: str | None
+
+
+def open_release(path: str | Path) -> DpmRelease:
+    """Open an EBA DPM 2.0 database.
+
+    Args:
+        path: A SQLite file with the tables and columns of the EBA's Access
+            database, such as one converted with mdbtools or downloaded from
+            dpm-toolkit; or the Access file (``.accdb``) itself, which needs
+            ``mdb-export`` of mdbtools on ``PATH`` and is read into memory,
+            taking a minute.
+
+    Returns:
+        DpmRelease: The database, open read-only; close it, or use it in a
+        ``with`` block.
+
+    Raises:
+        DpmError: If the file cannot be read or is not a DPM 2.0 database.
+    """
+    path = Path(path)
+    try:
+        with path.open("rb") as file:
+            header = file.read(32)
+    except FileNotFoundError as error:
+        raise DpmError(f"{path}: no such file") from error
+    except OSError as error:
+        raise DpmError(f"{path}: cannot read: {error.strerror or error}") from error
+    if header[4:19] in {b"Standard ACE DB", b"Standard Jet DB"}:
+        return DpmRelease(_from_access(path), path)
+    if not header.startswith(b"SQLite format 3\0"):
+        raise DpmError(f"{path}: not a SQLite or Access database")
+    connection = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+    try:
+        return DpmRelease(connection, path)
+    except BaseException:
+        connection.close()
+        raise
+
+
+def _from_access(path: Path) -> sqlite3.Connection:
+    """Read the tables an export needs from an Access file into memory.
+
+    Returns:
+        sqlite3.Connection: An in-memory database of those tables.
+
+    Raises:
+        DpmError: If ``mdb-export`` is not on ``PATH`` or fails.
+    """
+    program = shutil.which("mdb-export")
+    if program is None:
+        raise DpmError(
+            f"{path}: reading an Access database needs mdb-export (mdbtools) on "
+            "PATH; install mdbtools, or convert the database to SQLite first"
+        )
+    connection = sqlite3.connect(":memory:")
+    for table in TABLES:
+        result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed arguments, no shell
+            [program, "-D", "%Y-%m-%d", "-T", "%Y-%m-%d", "-b", "strip", path, table],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            message = result.stderr.decode("utf-8", "replace").strip()
+            connection.close()
+            raise DpmError(f"{path}: mdb-export {table} failed: {message}")
+        rows = csv.reader(io.StringIO(result.stdout.decode("utf-8"), newline=""))
+        columns = next(rows, None)
+        if not columns:
+            continue
+        integer = [_is_integer_column(column) for column in columns]
+        names = ", ".join(_quote(column) for column in columns)
+        connection.execute(f"CREATE TABLE {_quote(table)} ({names})")
+        marks = ", ".join("?" * len(columns))
+        connection.executemany(
+            f"INSERT INTO {_quote(table)} VALUES ({marks})",  # ruff: ignore[hardcoded-sql-expression] - table names are constants
+            (
+                [
+                    _access_value(value, number)
+                    for value, number in zip(row, integer, strict=False)
+                ]
+                for row in rows
+            ),
+        )
+    return connection
+
+
+def _is_integer_column(name: str) -> bool:
+    return name.endswith("ID") or name.startswith(("Is", "Has")) or name == "Order"
+
+
+def _access_value(value: str, integer: bool) -> object:
+    if value == "":
+        return None
+    if integer:
+        try:
+            return int(value)
+        except ValueError:
+            return value
+    return value
+
+
+def _quote(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _valid(start: int | None, end: int | None, release: int) -> bool:
+    """Tell whether a window holds a release; both ends are included.
+
+    Returns:
+        bool: Whether ``start <= release <= end``, a missing end being open.
+    """
+    return (start is None or start <= release) and (end is None or end >= release)
+
+
+def _latest(
+    rows: Iterable[Sequence[Any]],
+    key: Callable[[Sequence[Any]], object],
+    release: int,
+    *,
+    start: int,
+    end: int,
+    tie: int,
+) -> dict[Any, Sequence[Any]]:
+    """Pick the row of each key that is valid in a release.
+
+    Where two windows hold the release, as at a replacement boundary, the
+    later starting row wins, and on equal starts the higher ``tie`` column.
+
+    Returns:
+        dict: The row of each key that has a valid one.
+    """
+    chosen: dict[Any, Sequence[Any]] = {}
+    for row in rows:
+        if not _valid(row[start], row[end], release):
+            continue
+        found = chosen.get(key(row))
+        if found is None or (row[start] or 0, row[tie] or 0) > (
+            found[start] or 0,
+            found[tie] or 0,
+        ):
+            chosen[key(row)] = row
+    return chosen
+
+
+class DpmRelease:
+    """An open EBA DPM 2.0 database; see [`open_release`][dpmxl.dpm.open_release].
+
+    Attributes:
+        path: The file it was opened from, or ``None``.
+    """
+
+    def __init__(self, connection: sqlite3.Connection, path: Path | None = None):
+        """Wrap a connection to a DPM 2.0 database.
+
+        Args:
+            connection: An open connection; closed by
+                [`close`][dpmxl.dpm.DpmRelease.close].
+            path: The file it was opened from.
+
+        Raises:
+            DpmError: If a table or column that an export reads is missing.
+        """
+        self._connection = connection
+        self.path = path
+        self._cache: dict[str, Any] = {}
+        try:
+            names = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
+                )
+            }
+        except sqlite3.DatabaseError as error:
+            raise DpmError(f"not a SQLite database: {error}") from error
+        for table, columns in TABLES.items():
+            if table not in names:
+                raise DpmError(f"not an EBA DPM 2.0 database: it has no {table} table")
+            found = {
+                row[1]
+                for row in connection.execute(f"PRAGMA table_info({_quote(table)})")
+            }
+            missing = [column for column in columns if column not in found]
+            if missing:
+                raise DpmError(
+                    f"not an EBA DPM 2.0 database: table {table} has no column "
+                    + ", ".join(missing)
+                )
+
+    def __enter__(self) -> Self:
+        """Return the database, for a ``with`` block.
+
+        Returns:
+            Self: The database.
+        """
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        """Close the database at the end of a ``with`` block."""
+        self.close()
+
+    def close(self) -> None:
+        """Close the database."""
+        self._connection.close()
+
+    def _rows(self, table: str) -> list[tuple[Any, ...]]:
+        """Return a table's rows, with the columns of `TABLES`, cached.
+
+        Returns:
+            list: The rows.
+        """
+        cached = self._cache.get(table)
+        if cached is None:
+            columns = ", ".join(_quote(column) for column in TABLES[table])
+            cached = self._connection.execute(
+                f"SELECT {columns} FROM {_quote(table)}"  # ruff: ignore[hardcoded-sql-expression] - names are constants
+            ).fetchall()
+            self._cache[table] = cached
+        return cached
+
+    def _memo(self, key: str, build: Callable[[], Any]) -> Any:
+        if key not in self._cache:
+            self._cache[key] = build()
+        return self._cache[key]
+
+    def releases(self) -> tuple[Release, ...]:
+        """Return the releases the database holds, oldest first.
+
+        Returns:
+            tuple[Release, ...]: The releases, ordered by ``ReleaseID``.
+        """
+        return tuple(
+            Release(int(row[0]), str(row[1]), _date(row[2]), row[3] or None)
+            for row in sorted(self._rows("Release"), key=lambda row: row[0])
+            if row[0] is not None and row[1]
+        )
+
+    def release(self, code: str | None = None) -> Release:
+        """Return a release by its code, or the latest.
+
+        Args:
+            code: The release code, such as ``4.3``; ``None`` for the latest
+                release of the database.
+
+        Returns:
+            Release: The release.
+
+        Raises:
+            DpmError: If the database has no such release.
+        """
+        releases = self.releases()
+        if not releases:
+            raise DpmError("the database has no releases")
+        if code is None:
+            return releases[-1]
+        for release in releases:
+            if release.code == code:
+                return release
+        known = ", ".join(release.code for release in releases)
+        raise DpmError(f"no release {code!r} in the database; it has {known}")
+
+    def modules(self, release: str | None = None) -> tuple[ModuleInfo, ...]:
+        """Return the modules of a release, ordered by code.
+
+        Args:
+            release: The release code; ``None`` for the latest release.
+
+        Returns:
+            tuple[ModuleInfo, ...]: One per module with a version in the
+            release.
+
+        Raises:
+            DpmError: If the database has no such release.
+        """
+        chosen = self.release(release)
+        frameworks = dict(self._rows("Framework"))
+        module_frameworks = dict(self._rows("Module"))
+        codes = {row[0]: row[1] for row in self._rows("Release")}
+        return tuple(
+            sorted(
+                (
+                    ModuleInfo(
+                        code=row[2],
+                        name=row[3] or None,
+                        version=row[4] or None,
+                        framework=frameworks.get(module_frameworks.get(row[1])),
+                        release=codes.get(row[5]),
+                        from_date=_date(row[7]),
+                        to_date=_date(row[8]),
+                    )
+                    for row in self._module_versions(chosen.id).values()
+                    if row[2]
+                ),
+                key=lambda module: module.code,
+            )
+        )
+
+    def _module_versions(self, release: int) -> dict[Any, Sequence[Any]]:
+        return _latest(
+            self._rows("ModuleVersion"),
+            lambda row: row[1],
+            release,
+            start=5,
+            end=6,
+            tie=0,
+        )
+
+    def _variables(self) -> dict[int, Sequence[Any]]:
+        """Return the variable versions by ``VariableVID``.
+
+        Returns:
+            dict: The ``VariableVersion`` rows.
+        """
+        return self._memo(
+            "variables", lambda: {row[0]: row for row in self._rows("VariableVersion")}
+        )
+
+    def _bindings(self, release: int) -> dict[int, dict[int, str]]:
+        """Return the item codes of each category in a release.
+
+        Returns:
+            dict: ``CategoryID`` to ``ItemID`` to the item's code.
+        """
+
+        def build() -> dict[int, dict[int, str]]:
+            chosen = _latest(
+                self._rows("ItemCategory"),
+                lambda row: (row[1], row[0]),
+                release,
+                start=3,
+                end=4,
+                tie=0,
+            )
+            bindings: dict[int, dict[int, str]] = defaultdict(dict)
+            for (category, item), row in chosen.items():
+                if row[2]:
+                    bindings[category][item] = row[2]
+            return bindings
+
+        return self._memo(f"bindings:{release}", build)
+
+    def _ended_binding(self, category: int, item: int, release: int) -> str | None:
+        """Return an item's code in its latest binding to a category before a release.
+
+        Returns:
+            str | None: The code, or ``None`` if it was never bound there.
+        """
+        bindings = self._memo(
+            "all bindings",
+            lambda: _group(self._rows("ItemCategory"), lambda row: (row[1], row[0])),
+        )
+        rows = [
+            row
+            for row in bindings.get((category, item), ())
+            if row[2] and (row[3] is None or row[3] <= release)
+        ]
+        if not rows:
+            return None
+        return max(rows, key=lambda row: (row[3] or 0, row[4] or 0))[2]
+
+    def _categories(self) -> dict[int, Sequence[Any]]:
+        return self._memo(
+            "categories", lambda: {row[0]: row for row in self._rows("Category")}
+        )
+
+    def _prefix(self, category: int) -> str:
+        """Return the namespace prefix of a category's items, such as ``eba_GA``.
+
+        Returns:
+            str: The owner's acronym in lower case, ``_`` and the category code.
+        """
+        owners = self._memo(
+            "owners",
+            lambda: {
+                row[0]: (row[1] or "").lower() for row in self._rows("Organisation")
+            },
+        )
+        row = self._categories()[category]
+        return f"{owners.get(row[2]) or 'eba'}_{row[1]}"
+
+    def _category_items(self, category: int, release: int) -> dict[int, list[str]]:
+        """Return the item qnames of a category in a release.
+
+        Items of the categories composed into it (``SuperCategoryComposition``)
+        are included under their own category's prefix. An item that moves
+        from one composed category to another in the release has both
+        qnames, as the EBA's taxonomy of the release lists both.
+
+        Returns:
+            dict: ``ItemID`` to its qnames, such as ``eba_GA:LU``.
+        """
+
+        def build() -> dict[int, list[str]]:
+            compositions = _latest(
+                self._rows("SuperCategoryComposition"),
+                lambda row: (row[0], row[1]),
+                release,
+                start=2,
+                end=3,
+                tie=1,
+            )
+            children: dict[int, list[int]] = defaultdict(list)
+            for super_category, child in sorted(compositions):
+                children[super_category].append(child)
+            items: dict[int, list[str]] = defaultdict(list)
+            seen: set[int] = set()
+            pending = [category]
+            while pending:
+                current = pending.pop(0)
+                if current in seen or current not in self._categories():
+                    continue
+                seen.add(current)
+                prefix = self._prefix(current)
+                for item, code in self._bindings(release).get(current, {}).items():
+                    items[item].append(f"{prefix}:{code}")
+                pending.extend(children.get(current, ()))
+            return items
+
+        return self._memo(f"items:{category}:{release}", build)
+
+    def _active_items(self) -> set[int]:
+        return self._memo(
+            "active items",
+            lambda: {row[0] for row in self._rows("Item") if row[1] == 1},
+        )
+
+    def _property_category(self, prop: int, release: int) -> int | None:
+        chosen = self._memo(
+            f"property categories:{release}",
+            lambda: _latest(
+                self._rows("PropertyCategory"),
+                lambda row: row[0],
+                release,
+                start=2,
+                end=3,
+                tie=1,
+            ),
+        )
+        row = chosen.get(prop)
+        return row[1] if row else None
+
+    def _property_code(self, prop: int, release: int) -> str | None:
+        """Return a property's code: its item's code in the ``_PR`` category.
+
+        Returns:
+            str | None: The code, such as ``qEBB``.
+        """
+        properties = next(
+            (row[0] for row in self._rows("Category") if row[1] == "_PR"), None
+        )
+        if properties is None:
+            return None
+        return self._bindings(release).get(properties, {}).get(
+            prop
+        ) or self._ended_binding(properties, prop, release)
+
+    def _data_type(self, prop: int | None) -> str | None:
+        types = self._memo(
+            "data types",
+            lambda: {row[0]: row[1] or row[2] for row in self._rows("DataType")},
+        )
+        properties = self._memo("properties", lambda: dict(self._rows("Property")))
+        return types.get(properties.get(prop)) if prop is not None else None
+
+    def _items(
+        self, prop: int, restriction: int | None, release: int, where: str
+    ) -> list[str] | None:
+        """Return the items a property's value may take.
+
+        Args:
+            prop: The ``PropertyID``.
+            restriction: A ``SubCategoryVID`` that restricts the items, or
+                ``None`` for every active item of the property's category.
+            release: The ``ReleaseID``.
+            where: Names the property in a warning.
+
+        Returns:
+            list[str] | None: The item qnames; ``None`` for a property whose
+            category is not enumerated.
+        """
+        category = self._property_category(prop, release)
+        if category is None or category not in self._categories():
+            return None
+        if restriction is None:
+            if not self._categories()[category][3]:
+                return None
+            active = self._active_items()
+            return sorted(
+                qname
+                for item, qnames in self._category_items(category, release).items()
+                if item in active
+                for qname in qnames
+            )
+        return self._subcategory_items(restriction, category, release, where)
+
+    def _subcategory_items(
+        self, vid: int, category: int, release: int, where: str
+    ) -> list[str]:
+        """Return the item qnames of a subcategory, in its order.
+
+        Each item takes its code from the property's category; failing that,
+        from the subcategory's own category (stale at a rebinding); failing
+        that, from its latest binding before the release, which the EBA can
+        end before it moves the subcategory. The first use of a subcategory
+        reports such items.
+
+        Returns:
+            list[str]: The qnames.
+        """
+        key = f"subcategory:{vid}:{category}:{release}"
+        if key in self._cache:
+            return self._cache[key]
+        versions = self._memo(
+            "subcategory versions",
+            lambda: {row[0]: row for row in self._rows("SubCategoryVersion")},
+        )
+        referenced = versions.get(vid)
+        own = None
+        if referenced is not None:
+            own = dict(self._rows("SubCategory")).get(referenced[1])
+        members = self._memo(
+            "subcategory items",
+            lambda: _group(self._rows("SubCategoryItem"), lambda row: row[0]),
+        )
+        sources = [
+            source
+            for source in dict.fromkeys((category, own))
+            if source is not None and source in self._categories()
+        ]
+        items: list[str] = []
+        carried: list[str] = []
+        missing: list[str] = []
+        for row in sorted(members.get(vid, ()), key=lambda row: (row[2] or 0, row[1])):
+            item = row[1]
+            qnames = next(
+                (
+                    found
+                    for source in sources
+                    if (found := self._category_items(source, release).get(item))
+                ),
+                [],
+            )
+            if not qnames:
+                for source in sources:
+                    code = self._ended_binding(source, item, release)
+                    if code is not None:
+                        qnames = [f"{self._prefix(source)}:{code}"]
+                        carried.extend(qnames)
+                        break
+            if not qnames:
+                missing.append(str(item))
+            items.extend(qname for qname in qnames if qname not in items)
+        if carried:
+            logger.warning(
+                "%s: %s a binding that ended before the release, such as %s",
+                where,
+                _count(len(carried), "item keeps", "items keep"),
+                carried[0],
+            )
+        if missing:
+            logger.warning(
+                "%s: %s no code and left out: ItemID %s",
+                where,
+                _count(len(missing), "item has", "items have"),
+                ", ".join(missing),
+            )
+        self._cache[key] = items
+        return items
+
+
+def _group(
+    rows: Iterable[Sequence[Any]], key: Callable[[Sequence[Any]], Any]
+) -> dict[Any, list[Sequence[Any]]]:
+    grouped: dict[Any, list[Sequence[Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[key(row)].append(row)
+    return grouped
+
+
+def _count(count: int, one: str, many: str) -> str:
+    return f"{count} {one if count == 1 else many}"
+
+
+def _date(value: object) -> str | None:
+    """Return the ``YYYY-MM-DD`` part of a date value.
+
+    Returns:
+        str | None: The date, or ``None``.
+    """
+    if value is None or value == "":
+        return None
+    text = str(value)
+    match = re.match(r"\d{4}-\d{2}-\d{2}", text)
+    return match.group() if match else text
+
+
+_COORDINATE = re.compile(r"^\s*([rcs])(\S+)\s*$")
+
+
+def _coordinates(cell_code: str) -> dict[str, str | None]:
+    """Return the row, column and sheet of a cell code.
+
+    A cell code reads ``{C_01.00, r0010, c0010}``, with ``*`` for an open
+    axis.
+
+    Returns:
+        dict: ``row``, ``column`` and ``sheet``; ``None`` for a missing axis.
+    """
+    parts = cell_code.strip().strip("{}").split(",")[1:]
+    found: dict[str, str | None] = {"row": None, "column": None, "sheet": None}
+    names = {"r": "row", "c": "column", "s": "sheet"}
+    for part in parts:
+        match = _COORDINATE.match(part)
+        if match:
+            found[names[match[1]]] = match[2]
+    return found
+
+
+def entry_point(framework: str, release: str, module: str) -> str:
+    """Return the EBA's xBRL-CSV entry point of a module version.
+
+    Args:
+        framework: The framework code, such as ``COREP``.
+        release: The code of the release that introduced the version.
+        module: The module code.
+
+    Returns:
+        str: The entry point URL.
+
+    Examples:
+        >>> entry_point("COREP", "4.2", "COREP_OF")
+        'http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_of.json'
+    """
+    return ENTRY_POINT.format(
+        framework=framework.lower(), release=release, module=module.lower()
+    )
+
+
+def export_module(
+    db: DpmRelease,
+    module_code: str,
+    release: str | None = None,
+    *,
+    format: str = MODULE_FORMAT,
+) -> dict[str, Any]:
+    """Export one module of a release as a ``dpm-module/1`` document.
+
+    The document has the module's concrete tables (an abstract table gives
+    the filing indicator of the tables it groups), their open keys and
+    reportable cells, the module's filing indicators, its entry point and
+    first reference date, [`DEFAULT_DECIMALS`][dpmxl.dpm.DEFAULT_DECIMALS],
+    and the rules whose scope is this module alone, with their precondition,
+    severity and whether the EBA deactivated them. A rule whose scope spans
+    several modules is left out: one module's report cannot satisfy it.
+
+    Args:
+        db: The database, from [`open_release`][dpmxl.dpm.open_release].
+        module_code: The module code, such as ``COREP_OF``; case is ignored.
+        release: The release code, such as ``4.3``; ``None`` for the latest
+            release of the database.
+        format: The document's ``format``: ``dpm-module/1``, or
+            ``dpm-synth-template/1``, which dpm-synth 1.0 needs and dpm-xl
+            reads too.
+
+    Returns:
+        dict[str, Any]: The document; write it with ``json.dump``.
+
+    Raises:
+        DpmError: If the database has no such release, the module has no
+            version or no tables in it, or ``format`` is not one of
+            [`FORMATS`][dpmxl.module.FORMATS].
+    """
+    if format not in FORMATS:
+        raise DpmError(f"format: expected one of {', '.join(FORMATS)}, got {format!r}")
+    chosen = db.release(release)
+    versions = db._module_versions(chosen.id)
+    folded = module_code.casefold()
+    found = [row for row in versions.values() if (row[2] or "").casefold() == folded]
+    if not found:
+        known = [
+            module.code
+            for module in db.modules(chosen.code)
+            if module.code.casefold() != folded
+        ]
+        hint = f"; it has {', '.join(known)}" if len(known) <= 80 else ""
+        raise DpmError(f"no module {module_code!r} in release {chosen.code}{hint}")
+    version = found[0]
+    document = _Export(db, chosen, version, versions).document()
+    document["format"] = format
+    return document
+
+
+class _Export:
+    """The export of one module version in one release.
+
+    The release selects the module version and the rules. The version's
+    tables, headers, cells and variables are the versions its composition
+    names, and its items those bound in the release that introduced it:
+    the EBA builds the version's taxonomy from these, and does not change
+    it in later releases.
+    """
+
+    def __init__(
+        self,
+        db: DpmRelease,
+        release: Release,
+        version: Sequence[Any],
+        versions: Mapping[Any, Sequence[Any]],
+    ):
+        self.db = db
+        self.release = release
+        self.version = version
+        self.vid = version[0]
+        self.code = version[2]
+        self.module_codes = {row[0]: row[2] for row in versions.values()}
+        self.retyped: Counter[str] = Counter()
+        self.basis = version[5] if version[5] is not None else release.id
+
+    def document(self) -> dict[str, Any]:
+        db, version = self.db, self.version
+        frameworks = dict(db._rows("Framework"))
+        module_frameworks = dict(db._rows("Module"))
+        framework = frameworks.get(module_frameworks.get(version[1]))
+        introduced = {row[0]: row[1] for row in db._rows("Release")}.get(version[5])
+        tables, filing_indicators = self.tables()
+        if not tables:
+            raise DpmError(
+                f"module {self.code} has no tables with reportable cells in "
+                f"release {self.release.code}"
+            )
+        for code, count in sorted(self.retyped.items()):
+            logger.warning(
+                "%s: %s of data type %s written as %s",
+                self.code,
+                _count(count, "cell", "cells"),
+                code,
+                DATA_TYPES[code],
+            )
+        document: dict[str, Any] = {
+            "format": MODULE_FORMAT,
+            "release": self.release.code,
+            "module": self.code,
+            "entry_point": entry_point(framework, introduced, self.code)
+            if framework and introduced
+            else None,
+            "reference_date": _date(version[7]),
+            "decimals": dict(DEFAULT_DECIMALS),
+            "filing_indicators": filing_indicators,
+            "tables": tables,
+            "rules": self.rules(),
+        }
+        return document
+
+    def tables(self) -> tuple[list[dict[str, Any]], list[str]]:
+        db = self.db
+        abstract = {row[0] for row in db._rows("Table") if row[1] == 1}
+        by_vid = db._memo(
+            "table versions", lambda: {row[0]: row for row in db._rows("TableVersion")}
+        )
+        effective = _latest(
+            db._rows("TableVersion"),
+            lambda row: row[1],
+            self.basis,
+            start=4,
+            end=5,
+            tie=0,
+        )
+        composed: dict[int, Sequence[Any]] = {}
+        for row in db._rows("ModuleVersionComposition"):
+            if row[0] != self.vid:
+                continue
+            current = by_vid.get(row[2]) or effective.get(row[1])
+            if current is None:
+                logger.warning(
+                    "%s: table %s has no version; left out", self.code, row[1]
+                )
+                continue
+            composed[current[1]] = current
+        table_versions = {**effective, **composed}
+        by_code: dict[str, Sequence[Any]] = {}
+        for table_id, current in composed.items():
+            if table_id in abstract or not current[2]:
+                continue
+            other = by_code.get(current[2])
+            if other is None or (current[4] or 0) > (other[4] or 0):
+                by_code[current[2]] = current
+        declared = self.filing_indicators()
+        filing_indicators = list(declared)
+        tables = []
+        for code in sorted(by_code):
+            row = by_code[code]
+            indicator = self.filing_indicator(row, table_versions, abstract, declared)
+            if indicator not in filing_indicators:
+                logger.warning(
+                    "%s: filing indicator %s of table %s is not a module parameter; "
+                    "added",
+                    self.code,
+                    indicator,
+                    code,
+                )
+                filing_indicators.append(indicator)
+            table: dict[str, Any] = {"code": code}
+            if indicator != code:
+                table["filing_indicator"] = indicator
+            keys = self.open_keys(row[0], code)
+            if keys:
+                table["open_keys"] = keys
+            table["cells"] = self.cells(row[0], code)
+            if not table["cells"]:
+                logger.warning("%s: table %s has no cells; left out", self.code, code)
+                continue
+            tables.append(table)
+        return tables, sorted(filing_indicators)
+
+    def filing_indicators(self) -> list[str]:
+        """Return the module's filing indicators, from its parameters.
+
+        Returns:
+            list[str]: The codes, sorted.
+        """
+        by_vid = self.db._variables()
+        codes = {
+            by_vid[row[1]][4]
+            for row in self.db._rows("ModuleParameters")
+            if row[0] == self.vid and row[1] in by_vid and by_vid[row[1]][4]
+        }
+        return sorted(codes)
+
+    def filing_indicator(
+        self,
+        row: Sequence[Any],
+        table_versions: Mapping[Any, Sequence[Any]],
+        abstract: set[int],
+        declared: Sequence[str],
+    ) -> str:
+        """Return the filing indicator of a concrete table.
+
+        It is the code of the abstract table that groups the table
+        (``AbstractTableID``), when that table is abstract and has a
+        version, else the table's own code.
+
+        Returns:
+            str: The filing indicator.
+        """
+        parent = row[3]
+        if parent is not None and parent in abstract:
+            parent_version = table_versions.get(parent)
+            if parent_version is not None and parent_version[2]:
+                return parent_version[2]
+        elif parent is not None:
+            logger.warning(
+                "%s: table %s names %s as its abstract table, which is not "
+                "abstract; ungrouped",
+                self.code,
+                row[2],
+                parent,
+            )
+        return row[2]
+
+    def open_keys(self, table_vid: int, table: str) -> list[dict[str, Any]]:
+        db, basis = self.db, self.basis
+        keys_by_header = {row[0] for row in db._rows("Header") if row[1] == 1}
+        bound = db._memo(
+            "table headers",
+            lambda: _group(db._rows("TableVersionHeader"), lambda row: row[0]),
+        )
+        keys: list[dict[str, Any]] = []
+        for link in sorted(
+            bound.get(table_vid, ()), key=lambda row: (row[3] or 0, row[1])
+        ):
+            if link[1] not in keys_by_header:
+                continue
+            header = self.header(link[1], table_vid)
+            if header is None or header[4] is None:
+                continue
+            variable = db._variables().get(header[4])
+            prop = (variable[2] if variable else None) or header[2]
+            if prop is None:
+                continue
+            code = db._property_code(prop, basis)
+            where = f"{self.code}: open key {code or prop} of {table}"
+            if code is None:
+                logger.warning("%s has no property code; left out", where)
+                continue
+            if any(key["code"] == code for key in keys):
+                continue
+            restriction = header[3] or (variable[3] if variable else None)
+            items = db._items(prop, restriction, basis, where)
+            key: dict[str, Any] = {"code": code, "column": code}
+            if items is not None:
+                key["items"] = items
+            else:
+                data_type = db._data_type(prop)
+                key["data_type"] = (
+                    DATA_TYPES.get(data_type, data_type) if data_type else None
+                )
+            keys.append(key)
+        return keys
+
+    def cells(self, table_vid: int, table: str) -> list[dict[str, Any]]:
+        db = self.db
+        rows = db._memo(
+            "cells", lambda: _group(db._rows("TableVersionCell"), lambda row: row[0])
+        )
+        cells: list[dict[str, Any]] = []
+        ids: set[str] = set()
+        for row in sorted(rows.get(table_vid, ()), key=lambda row: row[3] or ""):
+            if row[4] == 1 or row[5] == 1 or row[2] is None:
+                continue
+            variable = db._variables().get(row[2])
+            if variable is None:
+                logger.warning(
+                    "%s: cell %s of %s names an unknown variable; left out",
+                    self.code,
+                    row[3],
+                    table,
+                )
+                continue
+            place = _coordinates(row[3] or "")
+            identity = "/".join(
+                [table]
+                + [
+                    f"{axis[0]}{value}"
+                    for axis, value in place.items()
+                    if value not in {None, "*"}
+                ]
+            )
+            if identity in ids:
+                identity = f"{identity}/{row[1]}"
+            ids.add(identity)
+            data_type = db._data_type(variable[2])
+            if data_type is not None and data_type in DATA_TYPES:
+                self.retyped[data_type] += 1
+                data_type = DATA_TYPES[data_type]
+            cell: dict[str, Any] = {"id": identity, **place}
+            cell["datapoint"] = f"dp{variable[1]}"
+            cell["data_type"] = data_type
+            if data_type == "e" and variable[2] is not None:
+                restriction = self.cell_restriction(row[1], variable[2], table_vid)
+                items = db._items(
+                    variable[2],
+                    restriction or variable[3],
+                    self.basis,
+                    f"{self.code}: cell {row[3]}",
+                )
+                if items:
+                    cell["items"] = items
+            cells.append(cell)
+        return cells
+
+    def cell_restriction(self, cell: int, prop: int, table_vid: int) -> int | None:
+        """Return the subcategory that a cell's header sets for its value.
+
+        A row, column or sheet header of the cell whose property is the
+        value's property can restrict its items with a subcategory.
+
+        Returns:
+            int | None: The ``SubCategoryVID``, or ``None``.
+        """
+        db = self.db
+        places = db._memo(
+            "cell headers", lambda: {row[0]: row[1:] for row in db._rows("Cell")}
+        )
+        for header in places.get(cell, ()):
+            if header is None:
+                continue
+            version = self.header(header, table_vid)
+            if version is not None and version[2] == prop and version[3] is not None:
+                return version[3]
+        return None
+
+    def header(self, header: int, table_vid: int) -> Sequence[Any] | None:
+        """Return the version of a header that a table version names.
+
+        Returns:
+            Sequence | None: The ``HeaderVersion`` row the table version binds
+            (``TableVersionHeader``), else the one valid in the release that
+            introduced the module version.
+        """
+        db = self.db
+        by_vid = db._memo(
+            "header versions by vid",
+            lambda: {row[0]: row for row in db._rows("HeaderVersion")},
+        )
+        bound = db._memo(
+            "bound headers",
+            lambda: {
+                (row[0], row[1]): row[2] for row in db._rows("TableVersionHeader")
+            },
+        )
+        found = by_vid.get(bound.get((table_vid, header)))
+        if found is not None:
+            return found
+        headers = db._memo(
+            "header versions",
+            lambda: _group(db._rows("HeaderVersion"), lambda row: row[1]),
+        )
+        return _latest(
+            headers.get(header, ()),
+            lambda row: row[1],
+            self.basis,
+            start=5,
+            end=6,
+            tie=0,
+        ).get(header)
+
+    def rules(self) -> list[dict[str, Any]]:
+        db, release = self.db, self.release.id
+        operations = _latest(
+            db._rows("OperationVersion"),
+            lambda row: row[1],
+            release,
+            start=4,
+            end=5,
+            tie=0,
+        )
+        current = {row[0] for row in operations.values()}
+        by_vid = db._memo(
+            "operation versions",
+            lambda: {row[0]: row for row in db._rows("OperationVersion")},
+        )
+        codes = dict(db._rows("Operation"))
+        members = _group(db._rows("OperationScopeComposition"), lambda row: row[0])
+        single: dict[int, list[Sequence[Any]]] = defaultdict(list)
+        modules: dict[int, set[str]] = defaultdict(set)
+        joint: set[int] = set()
+        for scope in db._rows("OperationScope"):
+            if scope[1] not in current:
+                continue
+            scoped = {row[1] for row in members.get(scope[0], ())}
+            if self.vid not in scoped:
+                if len(scoped) == 1:
+                    (other,) = scoped
+                    if other in self.module_codes:
+                        modules[scope[1]].add(self.module_codes[other])
+                continue
+            if len(scoped) == 1:
+                single[scope[1]].append(scope)
+            else:
+                joint.add(scope[1])
+        left_out = sorted(
+            codes.get(by_vid[vid][1], str(vid)) for vid in joint - set(single)
+        )
+        if left_out:
+            logger.warning(
+                "%s: left out %s whose scope spans several modules: %s",
+                self.code,
+                _count(len(left_out), "rule", "rules"),
+                ", ".join(left_out),
+            )
+        rules: dict[str, dict[str, Any]] = {}
+        for vid, scopes in single.items():
+            row = by_vid[vid]
+            code = codes.get(row[1])
+            expression = (row[3] or "").strip()
+            if not code or not expression:
+                logger.warning(
+                    "%s: rule %s has no code or expression; left out",
+                    self.code,
+                    code or vid,
+                )
+                continue
+            expression = self.fix(code, expression)
+            precondition = None
+            if row[2] is not None:
+                found = by_vid.get(row[2])
+                precondition = (found[3] or "").strip() or None if found else None
+                if precondition is None:
+                    logger.warning(
+                        "%s: precondition of rule %s not found; left out",
+                        self.code,
+                        code,
+                    )
+            active = any(scope[2] == 1 for scope in scopes)
+            chosen = next((scope for scope in scopes if scope[2] == 1), scopes[0])
+            severity = (chosen[3] or "error").lower()
+            rule: dict[str, Any] = {"code": code, "expression": expression}
+            if precondition is not None:
+                rule["precondition"] = precondition
+            rule["severity"] = severity if severity in {"error", "warning"} else "error"
+            rule["active"] = active
+            rule["modules"] = sorted(modules[vid] | {self.code})
+            if code in rules:
+                logger.warning(
+                    "%s: rule code %s repeats; the later version is kept",
+                    self.code,
+                    code,
+                )
+            rules[code] = rule
+        return [rules[code] for code in sorted(rules)]
+
+    def fix(self, code: str, expression: str) -> str:
+        for fix in KNOWN_ERRORS:
+            if fix.rule == code and fix.wrong in expression:
+                logger.warning(
+                    "%s: rule %s: corrected %r to %r (%s)",
+                    self.code,
+                    code,
+                    fix.wrong,
+                    fix.right,
+                    fix.reason,
+                )
+                return expression.replace(fix.wrong, fix.right, 1)
+        return expression
+
+
+__all__ = [
+    "DATA_TYPES",
+    "DEFAULT_DECIMALS",
+    "ENTRY_POINT",
+    "KNOWN_ERRORS",
+    "TABLES",
+    "DpmError",
+    "DpmRelease",
+    "ExpressionFix",
+    "ModuleInfo",
+    "Release",
+    "entry_point",
+    "export_module",
+    "open_release",
+]

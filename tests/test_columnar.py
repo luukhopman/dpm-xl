@@ -22,6 +22,7 @@ from dpmxl.columnar import (
 )
 from dpmxl.explain import explain
 from dpmxl.provider import CellKey
+from dpmxl.values import ValueSet
 
 
 def data() -> MemoryProvider:
@@ -540,6 +541,16 @@ def test_set_defaults_go_to_the_reference_engine() -> None:
     with pytest.raises(ColumnarUnsupported):
         evaluate_rule_columnar(expression, PointsFrameProvider(data()))
     assert evaluate_rule(expression, data()).status == "error"
+
+
+@pytest.mark.parametrize("expression", ["count({vS1}) = 2", "{vS1} = {vS2}"])
+def test_set_valued_variables_go_to_the_reference_engine(expression: str) -> None:
+    provider = data()
+    provider.parameters["S1"] = ValueSet.of([Number.of(1), Number.of(2)])
+    provider.parameters["S2"] = ValueSet.of([Number.of(2), Number.of(1)])
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    assert evaluate_rule(expression, provider).status == "passed"
 
 
 def parts(a_keys: tuple[str, ...], b_keys: tuple[str, ...]) -> MemoryProvider:

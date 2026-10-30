@@ -148,7 +148,7 @@ from .recordset import (
     _is_fact,
     resolve_key,
 )
-from .values import Number, Value, type_name
+from .values import Number, Value, ValueSet, type_name
 
 DEC = pl.Decimal(38, 12)
 """The polars type of the ``num`` and ``thr`` columns: ``Decimal(38, 12)``."""
@@ -302,7 +302,7 @@ def value_columns(value: Value) -> dict[str, Any]:
 
     Raises:
         ColumnarUnsupported: For a number or threshold that ``Decimal(38, 12)``
-            does not hold exactly.
+            does not hold exactly, or for a set.
     """
     row: dict[str, Any] = {NUM: None, THR: None, TXT: None, FLAG: None}
     match value:
@@ -317,6 +317,9 @@ def value_columns(value: Value) -> dict[str, Any]:
             row[TXT] = canonical_item(value)
         case date():
             row[TXT] = value.isoformat()
+        case ValueSet():
+            # A set is no scalar; the reference evaluator compares sets.
+            raise ColumnarUnsupported("set values")
         case _:
             row[TXT] = str(value)
     return row

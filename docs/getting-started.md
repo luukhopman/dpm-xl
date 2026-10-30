@@ -1,28 +1,30 @@
 ---
-description: Tutorial - install dpm-xl, parse a first rule, evaluate it against in-memory data, read the explanation and use the CLI.
+description: Tutorial - what modules, tables and rules are, install dpm-xl, parse a first rule, evaluate it, read the explanation, use the CLI and check an XBRL report.
 icon: lucide/graduation-cap
 ---
 
 # Getting started
 
 This tutorial takes you from installation to an explained rule failure, first
-in Python and then on the command line. It takes about ten minutes.
+in Python and then on the command line, and ends by checking an XBRL
+report. It takes about fifteen minutes and needs Python 3.11 or newer.
 
-!!! info "Before you start"
+## What you are looking at
 
-    You need Python 3.11 or newer and a terminal. No knowledge of DPM-XL is
-    assumed: each step says what the output means, and terms with a dotted
-    underline, such as datapoint, show a definition when you point at them.
-    The [glossary](reference/glossary.md) lists them all.
+- A **report** is what a bank files with its supervisor, such as the EBA:
+  tables of amounts and other facts.
+- A **module**, such as COREP_OF, is a set of tables reported together.
+- A **table**, such as `C_01.00`, is a grid: each cell has a row and a
+  column code (`r0010`, `c0010`). An open table has rows identified by a
+  key instead, such as a counterparty.
+- A **validation rule**, written in DPM-XL, checks cells: "row 0010 is the
+  sum of rows 0020 and 0030".
+- A **filing indicator** says whether a template (the EBA reporting form,
+  one or more tables) was reported; a rule's **precondition** usually
+  tests it, so the rule applies only when it was.
 
-You will:
-
-1. install dpm-xl;
-2. parse a rule;
-3. give it report data;
-4. evaluate it;
-5. explain the failure;
-6. do the same on the command line.
+The [glossary](reference/glossary.md) has the rest; underlined terms show
+their definition when you point at them.
 
 ## 1. Install
 
@@ -201,9 +203,19 @@ interface can highlight them by their `ref`.
 
 ## 6. Use the CLI
 
-The same evaluation runs from the command line against a JSON data file. The
-repository's [`examples/`](https://github.com/luukhopman/dpm-xl/tree/main/examples)
-folder has a rule file and a data file:
+The same evaluation runs from the command line against a JSON data file.
+The rest of the tutorial uses the files in the repository's
+[`examples/`](https://github.com/luukhopman/dpm-xl/tree/main/examples)
+folder, so get them first, with git or as a
+[zip file](https://github.com/luukhopman/dpm-xl/archive/refs/heads/main.zip):
+
+```bash
+git clone https://github.com/luukhopman/dpm-xl.git
+cd dpm-xl
+```
+
+`examples/rules.json` holds five rules and `examples/data.json` a report
+with tables `C_01.00` and `C_27.00`:
 
 ```console
 $ dpm-xl eval examples/rules.json examples/data.json --all
@@ -234,6 +246,49 @@ $ dpm-xl check examples/rules.json
 6/6 expressions parsed; 1 inactive rule skipped
 ```
 
+`check` counts expressions, not rules: four rules are active, and the
+precondition of two of them is an expression of its own, so six are
+checked.
+
+## 7. Check an XBRL report
+
+Real reports are filed as XBRL. With the `xbrl` extra, `dpm-xl
+check-report` reads one with [dpm-xbrl], checks the EBA filing rules for
+the file format and evaluates the validation rules of its
+[module file](reference/module-file.md):
+
+```bash
+pip install "dpm-xl[xbrl]"
+```
+
+```console
+$ dpm-xl check-report examples/xbrl-module.json examples/xbrl-report
+report: examples/xbrl-report (xbrl-csv); module COREP_LR, release 4.2
+warning: reports/report.json: 1 extended metadata document could not be resolved offline (http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_lr.json); tables without resolved metadata use the EBA datapoint/factValue convention
+filing rules broken: 0 errors, 0 warnings
+e0001: failed
+  records: 0 passed, 1 failed, 0 null
+  - scalar: 1,045,000 should equal 1,042,000 (812,000 + 190,000 + 40,000): difference 3,000, at least 1,000 given the reported precision
+e0003: failed
+  records: 1 passed, 1 failed, 0 null
+  - qRDT=QW4KNDKKV7QH2LA40639: -12,000 should be at least 0: difference 12,000
+e0004: failed (warning)
+  records: 1 passed, 1 failed, 0 null
+  - qRDT=QW4KNDKKV7QH2LA40639: "QW4KNDKKV7QH2LA4063" does not have the required format
+e0007: unsupported (warning)
+  message: time_shift needs the report 1 quarter(s) earlier (reference date 2025-12-31), which the provider does not have
+  records: 0 passed, 0 failed, 0 null
+7 rules: 3 failed, 2 passed, 1 not_applicable, 1 unsupported (3 not listed; --all lists every rule)
+```
+
+The warning means the EBA taxonomy was not available offline; the report
+is still read, and
+[`--taxonomy-package`](reference/cli.md#dpm-xl-check-report) resolves it.
+The report breaks no filing rule, and three validation rules fail. `e0007`
+compares with the previous quarter, which needs that report too
+(`--previous`). [Preconditions and results](concepts/results.md) explains
+each status.
+
 ## What you learned
 
 - A rule parses to a tree, and a syntax error says where it went wrong.
@@ -244,14 +299,14 @@ $ dpm-xl check examples/rules.json
   the cells involved.
 - `dpm-xl eval` does the same for a rule file, and `dpm-xl check` checks
   rules without data.
+- `dpm-xl check-report` checks an XBRL report against its module file.
 
 ## Next steps
 
 - [Connect your data](guides/provider.md): write a provider for your own
   storage.
-- [From an XBRL report to explained failures](guides/end-to-end.md): check
-  a real report against its [module file](reference/module-file.md), or
-  run `dpm-xl check-report`.
+- [From an XBRL report to explained failures](guides/end-to-end.md): the
+  same check in Python, with every failure explained.
 - [Start from an EBA DPM release](guides/from-a-dpm-release.md): export a
   real module, such as COREP_OF, as a module file with
   `dpm-xl export-module`.

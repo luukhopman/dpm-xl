@@ -185,7 +185,7 @@ and 213 inactive.
 | `filing_indicators` | The module's parameters, one per template. |
 | `tables` | The module version's concrete tables. An abstract table is not exported; its code is the `filing_indicator` of the tables it groups, such as `C_07.00` for `C_07.00.a`. |
 | `open_keys` | The key headers of an open table: the property code, and the items of an enumerated property (restricted by the header's subcategory, if it has one) or the data type of a typed one. |
-| `cells` | Every cell that is neither excluded nor void: its row, column and sheet codes (`*` on an open axis), `dp` and the variable ID as the datapoint, the data type of the variable's property, and the items of an enumerated (`e`) cell: those of the subcategory that its row, column or sheet header sets for the property, else of the variable, else every active item of the property's category. |
+| `cells` | Every cell that is neither excluded nor void: its row, column and sheet codes (`*` on an open axis), `dp` and the variable ID as the datapoint, the data type of the variable's property (its DPM code, such as `m` or `es`), and the items of an enumerated (`e`) cell: those of the subcategory that its row, column or sheet header sets for the property, else of the variable, else every active item of the property's category. |
 | `rules` | The rules whose scope is this module alone: expression, precondition, severity, `active: false` for a rule the EBA deactivated, and as `modules` every module with such a scope for the rule. |
 
 The cell `unit` field is not exported: the database does not say which
@@ -205,9 +205,6 @@ handles each one the same way every time, and reports it in a note
   satisfy them. The export leaves them out.
 - **Items whose binding ended** before the release while a subcategory
   still lists them keep their last code, as in the EBA's taxonomy.
-- **Data types the module file reads otherwise**: `es` (text that may be
-  empty) is written as `s`, since module files read `es` as an item set, and
-  `t` (a Boolean that can only be true) as `b`.
 - **Modules without tables**, such as the Pillar 3 document modules, cannot
   be exported; the command says so and exits with status 3.
 

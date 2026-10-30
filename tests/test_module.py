@@ -107,6 +107,7 @@ def test_layouts_give_coordinates_open_axes_templates_and_types() -> None:
     assert layout.template == "C_07.00"
     assert dict(layout.data_types) == {
         ("0010", "0010", None): "number",
+        ("0020", "0020", None): "string",
         ("0030", "0010", None): "string",
     }
     assert module.templates() == {"c_07.00.a", "c_07.00"}
@@ -120,10 +121,14 @@ def test_layouts_give_coordinates_open_axes_templates_and_types() -> None:
         ("r", "number"),
         ("i", "integer"),
         ("e", "item"),
-        ("es", None),
+        ("o", "integer"),
+        ("es", "string"),
         ("b", "boolean"),
+        ("t", "boolean"),
         ("d", "date"),
+        ("dt", None),
         ("s", "string"),
+        ("u", "string"),
         (None, None),
     ],
 )

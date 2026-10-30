@@ -40,7 +40,7 @@ from .module import NUMERIC_TYPES, Cell, Module, OpenKey, Table, load_module
 from .provider import CellQuery, DataPoint, axis_matcher
 from .recordset import EvaluationError
 from .rules import RuleRun, Severity, evaluate_rules
-from .values import Number, Value, ValueSet
+from .values import Number, Value
 
 DECIMALS_PARAMETERS: Mapping[str, str] = {
     "m": "decimalsMonetary",
@@ -66,11 +66,13 @@ class ReportProvider:
     Values are typed by the cell's data type: numbers (``m``, ``p``, ``i``,
     ``r``) carry the fact's decimals, else the report's ``decimals…``
     parameter for the type, else the module's ``decimals``, where ``INF``
-    is exact; ``e`` is an item, ``es`` a set of items, ``b`` a Boolean and
-    ``d`` a date; anything else is text. Text that does not read as its
-    type stays text, so a rule using it is an error. Open keys are typed
-    the same way: items for an enumerated key, numbers for ``i``, dates for
-    ``d``, text otherwise.
+    is exact; ``o`` (an ordinal) is an exact whole number, ``e`` an item,
+    ``b`` and ``t`` Booleans, and ``d`` a date, as is a ``dt`` value
+    without a time; anything else, ``es`` included, is text, where an empty
+    string is a value and not null. Text that does not read as its type
+    stays text, so a rule using it is an error. Open keys are typed the
+    same way: items for an enumerated key, numbers for ``i`` and ``o``,
+    dates for ``d`` and ``dt``, text otherwise.
 
     ``{vX}`` reads the report's filing indicator of template ``X``;
     without one, a template is reported when it has facts. Report
@@ -207,15 +209,15 @@ class ReportProvider:
         try:
             if kind in NUMERIC_TYPES:
                 return Number.of(Decimal(text.strip()), self._decimals(kind, fact))
+            if kind == "o":
+                return Number(Decimal(int(text.strip())))
             if kind == "e":
                 return Item.parse(text)
-            if kind == "es":
-                return ValueSet.of(Item.parse(part) for part in text.split())
-            if kind == "b":
+            if kind in {"b", "t"}:
                 return {"true": True, "1": True, "false": False, "0": False}[
                     text.strip()
                 ]
-            if kind == "d":
+            if kind in {"d", "dt"}:
                 return date.fromisoformat(text.strip())
         except (InvalidOperation, ValueError, KeyError):
             return text
@@ -374,9 +376,9 @@ def _key(key: OpenKey, text: str) -> Value:
     if key.items:
         return Item.parse(text)
     try:
-        if key.data_type == "i":
+        if key.data_type in {"i", "o"}:
             return Number(Decimal(text.strip()))
-        if key.data_type == "d":
+        if key.data_type in {"d", "dt"}:
             return date.fromisoformat(text.strip())
     except (InvalidOperation, ValueError):
         return text

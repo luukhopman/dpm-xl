@@ -20,6 +20,9 @@ All notable changes to this project are documented here. The project follows
 - Module files (`dpm-module/1`, or dpm-synth's `dpm-synth-template/1`):
   `dpmxl.module.load_module` reads one, and `dpm-xl check` and `eval` take
   one as their rule source.
+- Module file data types are the DPM's: `es` is text that may be empty,
+  `t` a Boolean that is true, `dt` a date or date and time, `u` a URI and
+  `o` an ordinal.
 - `dpmxl.xbrl.ReportProvider` evaluates a module's rules on a report read
   with dpm-xbrl (`pip install "dpm-xl[xbrl]"`).
 - `dpmxl.xbrl.check_report` returns a report's filing findings and its
@@ -45,6 +48,8 @@ All notable changes to this project are documented here. The project follows
   Access file with mdbtools) as a module file.
 - `dpm-xl export-module DATABASE MODULE` writes the module file, and
   `dpm-xl list-modules DATABASE` lists the releases and modules.
+- The export writes each data type as the DPM codes it, `es` and `t`
+  included.
 
 ### Changed
 

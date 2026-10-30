@@ -117,9 +117,10 @@ def test_cells_leave_out_excluded_and_void_ones(db: DpmRelease, caplog) -> None:
         "datapoint": "dp501",
         "data_type": "m",
     }
-    # es, text that may be empty, is written as s
-    assert cells[2]["data_type"] == "s"
-    assert "DEMO: 1 cell of data type es written as s" in caplog.messages
+    # es, text that may be empty, is written as it is, without items
+    assert cells[2]["data_type"] == "es"
+    assert "items" not in cells[2]
+    assert not any("written as" in message for message in caplog.messages)
 
 
 def test_a_header_restricts_the_items_of_a_cell(db: DpmRelease) -> None:

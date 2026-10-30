@@ -63,8 +63,10 @@ _CELL_TYPES = {
     "p": "number",
     "r": "number",
     "i": "integer",
+    "o": "integer",
     "e": "item",
     "b": "boolean",
+    "t": "boolean",
     "d": "date",
 }
 _MAX_DECIMALS = 20
@@ -109,10 +111,12 @@ class Cell:
         column: The column code, likewise.
         sheet: The sheet code, likewise.
         data_type: The DPM data type code: ``m`` monetary, ``p``
-            percentage, ``i`` integer, ``r`` decimal, ``e`` item, ``es``
-            item set, ``b`` Boolean, ``d`` date; anything else, or ``None``,
-            is text.
-        items: The allowed item qnames of an ``e`` or ``es`` cell.
+            percentage, ``i`` integer, ``r`` decimal, ``o`` ordinal (an
+            integer), ``e`` item, ``b`` Boolean, ``t`` a Boolean that can
+            only be true, ``d`` date, ``dt`` date or date and time; ``s``
+            text, ``es`` text that may be empty, ``u`` URI, and anything
+            else, or ``None``, is text.
+        items: The allowed item qnames of an ``e`` cell.
         unit: Whether a monetary value is reported in its currency of
             denomination, in the table's ``unit`` column.
     """
@@ -149,10 +153,7 @@ class Table:
 
         Row, column and sheet codes are those of the cells; ``*`` stands for
         an open axis. An axis whose every cell has ``*`` is open. Data types
-        map to the layout's: ``m``, ``p`` and ``r`` are ``number``, ``i``
-        ``integer``, ``e`` ``item``, ``b`` ``boolean``, ``d`` ``date``, a
-        text code ``string``; an ``es`` cell or one without a data type has
-        no known type.
+        map to the layout's as [`cell_type`][dpmxl.module.cell_type] does.
 
         Returns:
             TableLayout: The layout.
@@ -199,15 +200,20 @@ def _open(code: str | None) -> str | None:
 def cell_type(data_type: str | None) -> str | None:
     """Return the [`TableLayout`][dpmxl.provider.TableLayout] type of a DPM data type.
 
+    ``m``, ``p`` and ``r`` are ``number``; ``i`` and ``o`` ``integer``;
+    ``e`` ``item``; ``b`` and ``t`` ``boolean``; ``d`` ``date``; ``s``,
+    ``es``, ``u`` and other codes ``string``.
+
     Returns:
         str | None: ``number``, ``integer``, ``item``, ``boolean``, ``date``
-        or ``string``; ``None`` for an item set (``es``) or no data type.
+        or ``string``; ``None`` for ``dt``, whose value is a date or a date
+        and time, or no data type.
 
     Examples:
-        >>> cell_type("m"), cell_type("i"), cell_type("es"), cell_type("s")
-        ('number', 'integer', None, 'string')
+        >>> cell_type("m"), cell_type("o"), cell_type("es"), cell_type("dt")
+        ('number', 'integer', 'string', None)
     """
-    if data_type is None or data_type == "es":
+    if data_type is None or data_type == "dt":
         return None
     return _CELL_TYPES.get(data_type, "string")
 

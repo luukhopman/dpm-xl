@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from dpmxl import CellQuery, Item, Number, ValueSet, evaluate_rule
+from dpmxl import CellQuery, Item, Number, evaluate_rule
 from dpmxl.module import Module, load_module
 from dpmxl.provider import EarlierRef
 
@@ -46,12 +46,18 @@ MODULE = load_module(
                     cell("i", "dpi", "i", "0030"),
                     cell("r", "dpr", "r", "0040"),
                     cell("e", "dpe", "e", "0050", items=["eba_CU:EUR"]),
-                    cell("es", "dpes", "es", "0060", items=["eba_CU:EUR"]),
+                    cell("es", "dpes", "es", "0060"),
                     cell("b", "dpb", "b", "0070"),
                     cell("d", "dpd", "d", "0080"),
                     cell("s", "dps", "s", "0090"),
                     cell("x", "dpx", "m", "0100"),
                     cell("n", "dpn", "m", "0110"),
+                    cell("t", "dpt", "t", "0120"),
+                    cell("dt", "dpdt", "dt", "0130"),
+                    cell("dt2", "dpdt2", "dt", "0140"),
+                    cell("u", "dpu", "u", "0150"),
+                    cell("ord", "dpord", "o", "0160"),
+                    cell("es2", "dpes2", "es", "0170"),
                 ],
             },
             {
@@ -131,6 +137,12 @@ def test_values_are_typed_by_the_cells_data_type() -> None:
                 fact("dpr", "1.5"),
                 fact("dpe", "eba_CU:EUR"),
                 fact("dpes", "eba_CU:EUR eba_CU:USD"),
+                fact("dpt", "true"),
+                fact("dpdt", "2026-06-30"),
+                fact("dpdt2", "2026-06-30T12:00:00"),
+                fact("dpu", "https://example.com/a"),
+                fact("dpord", "3"),
+                fact("dpes2", ""),
                 fact("dpb", "true"),
                 fact("dpd", "2026-06-30"),
                 fact("dps", "text"),
@@ -145,12 +157,18 @@ def test_values_are_typed_by_the_cells_data_type() -> None:
     assert found["0030"] == Number(Decimal(12))  # decimalsInteger INF: exact
     assert found["0040"] == Number.of(Decimal("1.5"), 2)  # the module's decimals
     assert found["0050"] == Item("CU", "EUR")
-    assert found["0060"] == ValueSet((Item("CU", "EUR"), Item("CU", "USD")))
+    assert found["0060"] == "eba_CU:EUR eba_CU:USD"  # es is text
     assert found["0070"] is True
     assert found["0080"] == date(2026, 6, 30)
     assert found["0090"] == "text"
     assert found["0100"] == "not a number"
     assert found["0110"] is None
+    assert found["0120"] is True
+    assert found["0130"] == date(2026, 6, 30)
+    assert found["0140"] == "2026-06-30T12:00:00"
+    assert found["0150"] == "https://example.com/a"
+    assert found["0160"] == Number(Decimal(3))
+    assert found["0170"] == ""  # an empty string is a value, not null
 
 
 def test_a_facts_own_decimals_come_first() -> None:
@@ -164,7 +182,7 @@ def test_a_facts_own_decimals_come_first() -> None:
 
 def test_a_closed_table_gives_every_cell() -> None:
     provider = ReportProvider(MODULE, report([]))
-    assert set(values(provider)) == {f"{row:04}" for row in range(10, 120, 10)}
+    assert set(values(provider)) == {f"{row:04}" for row in range(10, 180, 10)}
     assert set(values(provider).values()) == {None}
     selected = provider.select(CellQuery("c_01.00", rows=None))
     assert selected[0].table == "C_01.00"

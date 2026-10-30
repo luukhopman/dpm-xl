@@ -37,7 +37,7 @@ import re
 import shutil
 import sqlite3
 import subprocess  # ruff: ignore[suspicious-subprocess-import] - runs mdb-export, found on PATH, without a shell
-from collections import Counter, defaultdict
+from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -144,12 +144,6 @@ TABLES: Mapping[str, tuple[str, ...]] = {
     "OperationScopeComposition": ("OperationScopeID", "ModuleVID"),
 }
 """The tables and columns of the DPM 2.0 database that an export reads."""
-
-
-DATA_TYPES: Mapping[str, str] = {"es": "s", "t": "b"}
-"""DPM data types written as another: ``es`` (text that may be empty) as
-``s`` text, since module files read ``es`` as an item set, and ``t`` (a
-Boolean that can only be true) as ``b``."""
 
 
 class DpmError(ValueError):
@@ -935,7 +929,6 @@ class _Export:
         self.vid = version[0]
         self.code = version[2]
         self.module_codes = {row[0]: row[2] for row in versions.values()}
-        self.retyped: Counter[str] = Counter()
         self.basis = version[5] if version[5] is not None else release.id
 
     def document(self) -> dict[str, Any]:
@@ -949,14 +942,6 @@ class _Export:
             raise DpmError(
                 f"module {self.code} has no tables with reportable cells in "
                 f"release {self.release.code}"
-            )
-        for code, count in sorted(self.retyped.items()):
-            logger.warning(
-                "%s: %s of data type %s written as %s",
-                self.code,
-                _count(count, "cell", "cells"),
-                code,
-                DATA_TYPES[code],
             )
         document: dict[str, Any] = {
             "format": MODULE_FORMAT,
@@ -1112,10 +1097,7 @@ class _Export:
             if items is not None:
                 key["items"] = items
             else:
-                data_type = db._data_type(prop)
-                key["data_type"] = (
-                    DATA_TYPES.get(data_type, data_type) if data_type else None
-                )
+                key["data_type"] = db._data_type(prop) or None
             keys.append(key)
         return keys
 
@@ -1151,9 +1133,6 @@ class _Export:
                 identity = f"{identity}/{row[1]}"
             ids.add(identity)
             data_type = db._data_type(variable[2])
-            if data_type is not None and data_type in DATA_TYPES:
-                self.retyped[data_type] += 1
-                data_type = DATA_TYPES[data_type]
             cell: dict[str, Any] = {"id": identity, **place}
             cell["datapoint"] = f"dp{variable[1]}"
             cell["data_type"] = data_type
@@ -1327,7 +1306,6 @@ class _Export:
 
 
 __all__ = [
-    "DATA_TYPES",
     "DEFAULT_DECIMALS",
     "ENTRY_POINT",
     "KNOWN_ERRORS",

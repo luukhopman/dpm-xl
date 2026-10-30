@@ -7,29 +7,68 @@ description: The semantics of DPM-XL as dpm-xl implements them, and the specific
 How DPM-XL rules are evaluated. These pages explain the semantics; the
 [language reference](../reference/language.md) lists every construct.
 
-- [Records and keys](records-and-keys.md): selections yield keyed records;
-  operators join them.
-- [Null logic](null.md): defaults, null propagation, three-valued logic and
-  errors confined to their record.
-- [Interval arithmetic](intervals.md): reported precision as intervals, and
-  the gap in explanations.
-- [Preconditions and results](results.md): the five statuses and what a
-  result holds.
-- [Statements and assignments](statements.md): scripts with `:=` and `<-`.
-- [Sets](sets.md): set literals, parameters, operators and `in`.
-- [Aggregates and analytic functions](analytics.md): `group by`, `rank` and
-  windows.
-- [Time](time.md): dates, `time_shift` and `annualise`.
-- [Parameters, operations and table groups](references.md): everything a
-  rule reads besides cells.
+<div class="grid cards" markdown>
+
+-   :lucide-key-round:{ .lg .middle } [**Records and keys**](records-and-keys.md)
+
+    ---
+
+    Selections yield keyed records; operators join them.
+
+-   :lucide-circle-slash:{ .lg .middle } [**Null logic**](null.md)
+
+    ---
+
+    Defaults, null propagation, three-valued logic and errors confined to
+    their record.
+
+-   :lucide-ruler:{ .lg .middle } [**Interval arithmetic**](intervals.md)
+
+    ---
+
+    Reported precision as intervals, and the gap in explanations.
+
+-   :lucide-flag:{ .lg .middle } [**Preconditions and results**](results.md)
+
+    ---
+
+    The rule statuses and what a result holds.
+
+-   :lucide-list-ordered:{ .lg .middle } [**Statements and assignments**](statements.md)
+
+    ---
+
+    Scripts with `:=` and `<-`.
+
+-   :lucide-braces:{ .lg .middle } [**Sets**](sets.md)
+
+    ---
+
+    Set literals, parameters, operators and `in`.
+
+-   :lucide-sigma:{ .lg .middle } [**Aggregates and analytic functions**](analytics.md)
+
+    ---
+
+    `group by`, `rank` and windows.
+
+-   :lucide-calendar:{ .lg .middle } [**Time**](time.md)
+
+    ---
+
+    Dates, `time_shift` and `annualise`.
+
+-   :lucide-link:{ .lg .middle } [**Parameters, operations and table groups**](references.md)
+
+    ---
+
+    Everything a rule reads besides cells.
+
+</div>
 
 ## Sources
 
-These semantics follow the
-[DPM-XL specification v0.11](https://dpm-alliance.github.io/dpm-xl-docs/)
-(2026-09-18; its operators and information model parts and its ANTLR
-grammar) and the interval arithmetic rule of the EBA XBRL Filing Rules
-(v5.9, rule 2.18). Where dpm-xl reads a rule differently, so that EBA rules
-keep their meaning, the
-[language reference](../reference/language.md#where-dpm-xl-differs) lists
-it with the section concerned.
+These semantics follow the DPM-XL specification and the interval
+arithmetic rule of the EBA Filing Rules; the versions, and where dpm-xl
+reads a rule differently so that EBA rules keep their meaning, are on
+[standards and conformance](../reference/standards.md).

@@ -52,6 +52,9 @@ All notable changes to this project are documented here. The project follows
 - `refPeriod` given as a date and time takes its date, and the
   `decimals…` components read numeric text, such as `"-3"`; `"INF"` is
   null.
+- A data file's fact with `"type"` `m`, `p`, `i` or `r` reads its text as
+  a number with its decimals, and `o` as a whole number; other text is an
+  error.
 - The tests parse all 14,174 distinct EBA expressions of DPM releases 3.4
   to 4.4, committed as test data.
 - The language reference lists every place where dpm-xl differs from the

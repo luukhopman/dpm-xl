@@ -146,7 +146,6 @@ def test_values_are_typed_by_the_cells_data_type() -> None:
                 fact("dpb", "true"),
                 fact("dpd", "2026-06-30"),
                 fact("dps", "text"),
-                fact("dpx", "not a number"),
                 fact("dpn", None),
             ]
         ),
@@ -161,11 +160,10 @@ def test_values_are_typed_by_the_cells_data_type() -> None:
     assert found["0070"] is True
     assert found["0080"] == date(2026, 6, 30)
     assert found["0090"] == "text"
-    assert found["0100"] == "not a number"
     assert found["0110"] is None
     assert found["0120"] is True
     assert found["0130"] == date(2026, 6, 30)
-    assert found["0140"] == "2026-06-30T12:00:00"
+    assert found["0140"] == date(2026, 6, 30)  # a date and time: its date
     assert found["0150"] == "https://example.com/a"
     assert found["0160"] == Number(Decimal(3))
     assert found["0170"] == ""  # an empty string is a value, not null
@@ -232,15 +230,219 @@ def test_is_template_reads_the_module_templates_once(monkeypatch) -> None:
 
 
 def test_facts_outside_the_module_are_unplaced() -> None:
-    placed = fact("dp10", "1", template=None)  # XML: placed by its datapoint
+    placed = fact("dp10", "1", template="C_10.00")
     others = [
-        fact("dp404", "1"),
+        fact("dp404", "1", location="reports/c_01.00.csv:2"),
         fact("dpm", "1", template="C_99.00"),
-        fact("dp404", "1", template=None),
+        fact("dp10", "1", template=None),
     ]
     provider = ReportProvider(MODULE, report([placed, *others]))
     assert provider.unplaced == tuple(others)
     assert values(provider, "C_10.00") == {"0010": Number.of(1, -3)}
+    (finding,) = provider.findings
+    assert (finding.code, finding.severity, finding.count) == (
+        "unplacedFact",
+        "error",
+        3,
+    )
+    assert finding.message == (
+        "3 facts of the report are in no table of module TEST, or lack an open "
+        "key of their table, so no rule reads them."
+    )
+    assert finding.examples == (
+        "reports/c_01.00.csv:2: table c_01.00 has no datapoint dp404",
+        "dpm: module TEST has no table C_99.00",
+        "dp10: it has no template and datapoint",
+    )
+
+
+@pytest.mark.parametrize(
+    ("datapoint", "value", "reason"),
+    [
+        ("dpm", "NaN", "'NaN' is not a number"),
+        ("dpm", "not a number", "'not a number' is not a number"),
+        ("dpi", "Infinity", "'Infinity' is not a number"),
+        ("dpord", "1.5", "'1.5' is not a whole number"),
+        ("dpt", "false", "'false' is not true"),
+        ("dpb", "yes", "'yes' is not a Boolean"),
+        ("dpe", "", "'' is not one item"),
+        ("dpe", "eba_CU:EUR eba_CU:USD", "'eba_CU:EUR eba_CU:USD' is not one item"),
+        ("dpe", "EUR", "'EUR' is not one item"),
+        ("dpd", "2026-02-30", "'2026-02-30' is not a date"),
+        ("dpd", "2026-06-30T12:00:00", "'2026-06-30T12:00:00' is not a date"),
+        ("dpdt", "30/06/2026", "'30/06/2026' is not a date"),
+    ],
+)
+def test_invalid_values_are_findings_not_values(datapoint, value, reason) -> None:
+    bad = fact(datapoint, value, location="reports/c_01.00.csv:2")
+    provider = ReportProvider(MODULE, report([bad]))
+    assert set(values(provider).values()) == {None}
+    assert provider.invalid == (bad,)
+    assert provider.unplaced == ()
+    (finding,) = provider.findings
+    assert (finding.code, finding.severity) == ("invalidValue", "error")
+    assert finding.message == (
+        "1 fact of the report has a value that does not read as its cell's "
+        "data type, so no rule reads it."
+    )
+    assert finding.examples == (f"reports/c_01.00.csv:2: {reason}",)
+    rule = "{tC_01.00, r0010, c0010} > 0"
+    assert check_report(MODULE, report([bad])).failed()
+    assert evaluate_rule(rule, provider).status == "not_applicable"
+
+
+def test_dates_drop_their_time_and_time_zone() -> None:
+    provider = ReportProvider(
+        MODULE,
+        report(
+            [
+                fact("dpd", "2026-06-30Z"),
+                fact("dpdt", "2026-06-30+02:00"),
+                fact("dpdt2", "2026-06-30T23:30:00.5-01:00"),
+            ]
+        ),
+    )
+    found = values(provider)
+    assert found["0080"] == found["0130"] == found["0140"] == date(2026, 6, 30)
+    assert provider.invalid == ()
+
+
+def test_items_take_the_eba_prefix_of_their_namespace() -> None:
+    namespaces = {
+        "cu": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CU",
+        "eba_CU": "http://www.eba.europa.eu/xbrl/crr/dict/dom/CU",
+    }
+    keys = {"CC": "cu:EUR", "qNUM": "1", "qDAT": "2026-01-31", "qTXT": "a"}
+    provider = ReportProvider(
+        MODULE,
+        report(
+            [fact("dpe", "cu:EUR"), fact("dpo", "7", template="c_07.00.a", keys=keys)],
+            namespaces=namespaces,
+        ),
+    )
+    assert values(provider)["0050"] == Item.parse("eba_CU:EUR")
+    for expression in (
+        "{tC_01.00, r0050, c0010} = [eba_CU:EUR]",
+        "{tC_07.00.a, c0010} [where qCC = [eba_CU:EUR]] = 7",
+    ):
+        assert evaluate_rule(expression, provider).status == "passed", expression
+
+
+@pytest.mark.parametrize(
+    ("keys", "reason"),
+    [
+        (
+            {"qNUM": "1", "qDAT": "2026-01-31", "qTXT": "a"},
+            "it has no column CC for open key qCC",
+        ),
+        (
+            {"CC": "", "qNUM": "1", "qDAT": "2026-01-31", "qTXT": "a"},
+            "open key qCC is empty",
+        ),
+        (
+            {"CC": "eba_CU:EUR", "qNUM": "1", "qDAT": "2026-01-31", "qTXT": "  "},
+            "open key qTXT is empty",
+        ),
+        (
+            {"CC": "eba_CU:EUR", "qNUM": "x", "qDAT": "2026-01-31", "qTXT": "a"},
+            "open key qNUM: 'x' is not a whole number",
+        ),
+    ],
+)
+def test_facts_without_their_open_keys_are_unplaced(keys, reason) -> None:
+    stray = fact("dpo", "7", template="C_07.00.a", keys=keys)
+    provider = ReportProvider(MODULE, report([stray]))
+    assert provider.unplaced == (stray,)
+    assert provider.select(CellQuery("C_07.00.a")) == []
+    assert provider.findings[0].examples == (f"dpo: {reason}",)
+
+
+def test_text_keys_are_stripped() -> None:
+    def row(text, value):
+        keys = {"CC": " eba_CU:EUR ", "qNUM": " 1", "qDAT": "2026-01-31 ", "qTXT": text}
+        return fact("dpo", value, template="C_07.00.a", keys=keys)
+
+    provider = ReportProvider(MODULE, report([row(" LEI ", "7"), row("LEI", "8")]))
+    (point,) = provider.select(CellQuery("C_07.00.a"))
+    assert point.keys["qTXT"] == "LEI"
+    assert point.value == Number.of(7, -3)  # the duplicate: the first counts
+
+
+def test_a_duplicate_fact_keeps_the_first_value() -> None:
+    first = fact("dpm", "1000", location="reports/c_01.00.csv:2")
+    provider = ReportProvider(MODULE, report([first, fact("dpm", "2000")]))
+    point = provider.select(CellQuery("C_01.00"))[0]
+    assert point.value == Number.of(1000, -3)
+    assert provider.fact(point) is first
+    assert provider.findings == ()
+
+
+FILED = load_module(
+    {
+        "format": "dpm-module/1",
+        "release": "4.2",
+        "module": "FILED",
+        "tables": [
+            {
+                "code": "F_19.00.a.dp",
+                "filing_indicator": "F_19.00.dp",
+                "cells": [cell("a", "dpa", "m"), cell("s", "dpshared", "m", "0020")],
+            },
+            {
+                "code": "F_19.00.d.dp",
+                "filing_indicator": "F_19.00.dp",
+                "cells": [cell("d", "dpd", "m"), cell("s2", "dpshared", "m", "0020")],
+            },
+        ],
+    }
+)
+
+
+def test_a_file_named_by_its_filing_indicator_places_facts_by_datapoint() -> None:
+    facts = [
+        fact("dpa", "1", template="f_19.00.dp"),
+        fact("dpd", "2", template="f_19.00.dp"),
+        fact("dpshared", "3", template="f_19.00.dp"),
+        fact("dp404", "4", template="f_19.00.dp"),
+    ]
+    provider = ReportProvider(
+        FILED, report(facts, filing_indicators={"F_19.00.dp": True})
+    )
+    assert values(provider, "F_19.00.a.dp") == {
+        "0010": Number.of(1, -3),
+        "0020": Number.of(3, -3),
+    }
+    assert values(provider, "F_19.00.d.dp") == {
+        "0010": Number.of(2, -3),
+        "0020": Number.of(3, -3),
+    }
+    assert provider.unplaced == (facts[3],)
+    assert provider.findings[0].examples == (
+        "dp404: table f_19.00.dp has no datapoint dp404",
+    )
+
+
+def test_template_ids_of_the_eba_metadata_name_their_table() -> None:
+    provider = ReportProvider(MODULE, report([fact("dp9", "1", template="C_09-00")]))
+    assert values(provider, "C_09.00") == {"0010": Number.of(1, -3)}
+
+
+def test_the_report_must_be_of_the_modules_entry_point() -> None:
+    import dataclasses
+
+    entry = "http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_of.json"
+    module = dataclasses.replace(MODULE, entry_point=entry)
+    for same in (entry, entry.replace(".json", ".xsd")):
+        ReportProvider(module, report([], entry_point=same))
+    ReportProvider(module, report([]))  # a report without one is not checked
+    other = entry.replace("corep_of", "corep_lr")
+    with pytest.raises(
+        ValueError,
+        match=r"entry point .*corep_lr\.json, but module TEST of .*corep_of\.json",
+    ):
+        ReportProvider(module, report([], entry_point=other))
+    with pytest.raises(ValueError, match="corep_lr"):
+        check_report(module, report([], entry_point=other))
 
 
 def test_filing_indicators_and_variables() -> None:
@@ -254,14 +456,21 @@ def test_filing_indicators_and_variables() -> None:
     assert provider.table_reported("C_01.00") is True
     assert provider.table_reported("C_07.00.a") is True  # by its filing indicator
     assert provider.table_reported("C_09.00") is False
-    assert provider.table_reported("C_10.00") is True  # no indicator, but facts
+    assert provider.table_reported("C_10.00") is False  # facts, but no indicator
     assert provider.table_reported("C_11.00") is False
+    unfiled = ReportProvider(
+        MODULE,
+        report([fact("dp10", "1", template="C_10.00")], filing_indicators={}),
+    )
+    assert unfiled.table_reported("C_10.00") is True  # no indicators: by facts
+    assert unfiled.table_reported("C_09.00") is False
     assert provider.is_template("c_07.00.A") and provider.is_template("c_07.00")
     assert not provider.is_template("ReportingLevel")
     for expression in (
         "{v_C_07.00}",
         "{vC_07.00.a}",
         "not {v_C_09.00}",
+        "not {vC_10.00}",
         '{vReportingLevel} = "con"',
     ):
         assert evaluate_rule(expression, provider).status == "passed", expression
@@ -280,7 +489,7 @@ def test_parameters_and_contextual_components() -> None:
     for expression in (
         "{tC_01.00, r0010, c0010} [where refPeriod = #2026-12-31#] > 0",
         "{tC_01.00, r0010, c0010} [where decimalsMonetary = -3] > 0",
-        "{tC_01.00, r0010, c0010} [where baseCurrency = [iso4217:EUR]] > 0",
+        "{tC_01.00, r0010, c0010} [where baseCurrency = [eba_CU:EUR]] > 0",
     ):
         assert evaluate_rule(expression, provider).status == "passed", expression
     individual = ReportProvider(
@@ -339,6 +548,91 @@ def test_check_report_reads_bytes_with_a_name(tmp_path) -> None:
     write_xbrl_csv(report([fact("dpm", "1000")]), path)
     check = check_report(MODULE, path.read_bytes(), name="report.zip")
     assert [run.status for run in check.rules][:2] == ["passed", "failed"]
+
+
+# XBRL-XML through the taxonomy ----------------------------------------------
+
+DATA = Path(__file__).parent / "data" / "xbrl"
+PACKAGE = DATA / "taxonomy.zip"
+OF_DOCUMENT: dict[str, Any] = {
+    "format": "dpm-module/1",
+    "release": "4.0",
+    "module": "COREP_OF",
+    "entry_point": (
+        "http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.0/mod/corep_of.json"
+    ),
+    "tables": [
+        {
+            "code": "C_01.00",
+            "cells": [
+                cell("a", "dp84817", "m", "0010"),
+                cell("b", "dp84818", "p", "0020"),
+                cell("c", "dp84820", "s", "0030"),
+            ],
+        },
+        {
+            "code": "C_27.00",
+            "open_keys": [
+                {"code": "qINC", "column": "c0010"},
+                {
+                    "code": "qCO",
+                    "column": "c0020",
+                    "items": ["eba_qCO:qx2000", "eba_qCO:qx2001"],
+                },
+            ],
+            "cells": [
+                cell("n", "dp100", "s", "*", "0030"),
+                cell("m", "dp101", "m", "*", "0040"),
+            ],
+        },
+    ],
+    "rules": [
+        {"code": "r1", "expression": "{tC_01.00, r0010, c0010} = 1000"},
+        {"code": "r2", "expression": "{tC_01.00, r0020, c0010} < 0.1"},
+        {
+            "code": "r3",
+            "expression": "{tC_27.00, c0040} [where qCO = [eba_qCO:qx2000]] > 0",
+        },
+        {"code": "r4", "expression": "count({tC_27.00, c0030}) = 2"},
+        {"code": "r5", "expression": "{vC_27.00} and not {vC_00.01}"},
+    ],
+}
+OF_MODULE = load_module(OF_DOCUMENT)
+
+
+def test_xml_facts_are_placed_through_the_taxonomy() -> None:
+    xml = dpmxbrl.read_report(DATA / "report.xbrl", taxonomy_packages=[PACKAGE])
+    assert xml.format == "xbrl-xml"
+    provider = ReportProvider(OF_MODULE, xml, taxonomy_packages=[PACKAGE])
+    stray = next(fact for fact in xml.facts if fact.concept == "eba_met:mi999")
+    assert provider.unplaced == (stray,)
+    assert provider.findings[0].examples[0].startswith("report.xbrl#fact7: no data")
+    point = provider.select(CellQuery("C_01.00"))[0]
+    assert point.value == Number.of(1000, -3)
+    source = provider.fact(point)
+    assert source is not None
+    assert source.location == "report.xbrl#fact1"
+    keyed = provider.select(CellQuery("C_27.00"))
+    assert [point.keys for point in keyed if point.column == "0040"] == [
+        {"qINC": "cp1", "qCO": Item.parse("eba_qCO:qx2000")},  # declared as co:
+        {"qINC": "cp2", "qCO": Item.parse("eba_qCO:qx2001")},
+    ]
+
+    check = check_report(OF_MODULE, DATA / "report.xbrl", taxonomy_packages=PACKAGE)
+    csv = check_report(OF_MODULE, DATA / "report.zip", taxonomy_packages=PACKAGE)
+    statuses = [run.status for run in check.rules]
+    assert statuses == ["passed", "failed", "passed", "passed", "passed"]
+    assert statuses == [run.status for run in csv.rules]
+    assert len(check.unplaced) == 1
+    assert csv.unplaced == csv.findings == ()
+
+
+def test_xml_reports_need_their_taxonomy_packages() -> None:
+    xml = dpmxbrl.read_report(DATA / "report.xbrl")
+    with pytest.raises(ValueError, match="--taxonomy-package"):
+        ReportProvider(OF_MODULE, xml)
+    with pytest.raises(ValueError, match="taxonomy packages"):
+        check_report(OF_MODULE, DATA / "report.xbrl")
 
 
 # time_shift on previous reports --------------------------------------------
@@ -434,6 +728,49 @@ def test_previous_reports_need_distinct_reference_dates(
         ReportProvider(MODULE, current, previous=previous)
 
 
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        (
+            {"entity_id": "OTHER.CON"},
+            "previous report for 2026-09-30 is of entity OTHER.CON, "
+            "not LEI00000000000000000.CON",
+        ),
+        (
+            {"entry_point": "http://example.com/b.json"},
+            "previous report for 2026-09-30 is of entry point "
+            "http://example.com/b.json, not http://example.com/a.json",
+        ),
+    ],
+)
+def test_previous_reports_are_of_the_same_entity_and_entry_point(
+    changes, message
+) -> None:
+    import dataclasses
+
+    current = report([], entry_point="http://example.com/a.json")
+    earlier = dataclasses.replace(
+        dated(date(2026, 9, 30), []),
+        **{"entry_point": current.entry_point, **changes},
+    )
+    with pytest.raises(ValueError, match=message):
+        ReportProvider(MODULE, current, previous=[earlier])
+
+
+def test_unplaced_facts_of_previous_reports_are_warnings() -> None:
+    earlier = dated(date(2026, 9, 30), [fact("dpm", "1"), fact("dp404", "1")])
+    provider = ReportProvider(MODULE, report([fact("dpm", "1")]), previous=[earlier])
+    (finding,) = provider.findings
+    assert (finding.code, finding.severity) == ("unplacedFact", "warning")
+    assert finding.message.startswith(
+        "1 fact of the previous report for 2026-09-30 is in no table"
+    )
+    check = check_report(MODULE, report([fact("dpm", "1")]), previous=[earlier])
+    assert check.findings == (finding,)
+    assert not check.failed()
+    assert check.failed("warning")
+
+
 def test_check_report_reads_previous_reports() -> None:
     check = check_report(
         EXAMPLES / "xbrl-module.json",
@@ -521,6 +858,7 @@ def test_check_report_json(capsys) -> None:
         "unsupported": 1,
         "skipped": 0,
         "unplaced_facts": 0,
+        "invalid_facts": 0,
     }
     assert document["module"] == {"module": "COREP_LR", "release": "4.2"}
     assert document["report"]["reference_date"] == "2026-03-31"
@@ -579,15 +917,73 @@ def test_check_report_fails_on_findings(
     assert ("<failure" in junit) == bool(status)
 
 
-def test_check_report_lists_facts_outside_the_module(monkeypatch, capsys) -> None:
+def test_check_report_fails_on_facts_outside_the_module(monkeypatch, capsys) -> None:
+    import json
+
     from dpmxl.cli import main
 
     stray = fact("dp404", "1", location="reports/c_01.00.csv:2")
     monkeypatch.setattr(dpmxbrl, "read_report", lambda path, **_: report([stray]))
-    main(["check-report", MODULE_FILE, REPORT_DIR])
+    module = EXAMPLES / "xbrl-module.json"
+    document = json.loads(module.read_text(encoding="utf-8"))
+    document["rules"] = []
+    monkeypatch.setattr("dpmxl.cli.load_module", lambda path: load_module(document))
+    assert main(["check-report", MODULE_FILE, REPORT_DIR]) == 1
     assert (
-        "1 fact in no table of module COREP_LR, such as reports/c_01.00.csv:2"
-        in capsys.readouterr().out
+        "[error] unplacedFact: 1 fact of the report is in no table of module "
+        "COREP_LR, or lacks an open key of its table, so no rule reads it.\n"
+        "  - reports/c_01.00.csv:2: module COREP_LR has no table c_01.00\n"
+    ) in capsys.readouterr().out
+    main(["check-report", MODULE_FILE, REPORT_DIR, "--json"])
+    output = json.loads(capsys.readouterr().out)
+    assert output["summary"]["unplaced_facts"] == 1
+    assert output["fact_findings"][0]["code"] == "unplacedFact"
+    assert output["fact_findings"][0]["severity"] == "error"
+    main(["check-report", MODULE_FILE, REPORT_DIR, "--format", "junit"])
+    junit = capsys.readouterr().out
+    assert '<testcase classname="dpm-xl.facts" name="unplacedFact">' in junit
+    assert '<failure message="1 fact of the report' in junit
+
+
+def test_check_report_reads_xml_with_its_taxonomy_packages(tmp_path, capsys) -> None:
+    import json
+
+    from dpmxl.cli import main
+
+    module = tmp_path / "module.json"
+    module.write_text(json.dumps(OF_DOCUMENT), encoding="utf-8")
+    xml = str(DATA / "report.xbrl")
+    assert main(["check-report", str(module), xml]) == 3
+    assert capsys.readouterr().err == (
+        f"error: {xml}: an XBRL-XML report needs its taxonomy packages "
+        "(--taxonomy-package) to place its facts in the module\n"
+    )
+    command = ["check-report", str(module), xml, "--taxonomy-package", str(PACKAGE)]
+    assert main([*command, "--json"]) == 1
+    document = json.loads(capsys.readouterr().out)
+    assert document["summary"]["unplaced_facts"] == 1
+    assert [result["status"] for result in document["results"]] == [
+        "passed",
+        "failed",
+        "passed",
+        "passed",
+        "passed",
+    ]
+
+
+def test_check_report_rejects_a_report_of_another_module(tmp_path, capsys) -> None:
+    import json
+
+    from dpmxl.cli import main
+
+    module = tmp_path / "module.json"
+    module.write_text(json.dumps(OF_DOCUMENT), encoding="utf-8")
+    assert main(["check-report", str(module), REPORT_DIR]) == 3
+    assert capsys.readouterr().err == (
+        "error: the report is of entry point "
+        "http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_lr.json, "
+        "but module COREP_OF of "
+        "http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.0/mod/corep_of.json\n"
     )
 
 

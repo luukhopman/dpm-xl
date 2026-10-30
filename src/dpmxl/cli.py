@@ -125,8 +125,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=[],
         type=Path,
         metavar="ZIP",
-        help="local taxonomy package: resolves xBRL-CSV metadata and adds the "
-        "filing rules that need the taxonomy (repeatable)",
+        help="local taxonomy package: resolves xBRL-CSV metadata, places "
+        "XBRL-XML facts and adds the filing rules that need the taxonomy "
+        "(repeatable)",
     )
     report.add_argument(
         "--previous",
@@ -761,6 +762,13 @@ def _check_report(
         return EXIT_INPUT
     try:
         report = read_report(report_path, taxonomy_packages=taxonomy_packages)
+        if report.format == "xbrl-xml" and not taxonomy_packages:
+            print(
+                f"error: {report_path}: an XBRL-XML report needs its taxonomy "
+                "packages (--taxonomy-package) to place its facts in the module",
+                file=sys.stderr,
+            )
+            return EXIT_INPUT
         earlier = [
             read_report(path, taxonomy_packages=taxonomy_packages) for path in previous
         ]
@@ -768,13 +776,16 @@ def _check_report(
         print(f"error: {error}", file=sys.stderr)
         return EXIT_INPUT
     try:
-        provider = ReportProvider(module, report, previous=earlier)
-    except ValueError as error:
+        provider = ReportProvider(
+            module, report, previous=earlier, taxonomy_packages=taxonomy_packages
+        )
+    except (ReportError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return EXIT_INPUT
     runs = _run_rules(module.rules, provider, module.module)
     failing = _failing(fail_on)
     findings = [_finding_json(finding) for finding in report.filing]
+    facts = [_finding_json(finding) for finding in provider.findings]
     unplaced = provider.unplaced
     if output_format == "json":
         errors = sum(1 for finding in report.filing if finding.severity == "error")
@@ -784,6 +795,7 @@ def _check_report(
                 "filing_warnings": len(report.filing) - errors,
                 **_rules_summary(runs),
                 "unplaced_facts": len(unplaced),
+                "invalid_facts": len(provider.invalid),
             },
             "report": {
                 "path": str(report_path),
@@ -802,6 +814,7 @@ def _check_report(
             "module": {"module": module.module, "release": module.release},
             "warnings": list(report.warnings),
             "filing_rules": findings,
+            "fact_findings": facts,
             "results": [_run_json(run) for run in runs],
             "unplaced": [
                 {
@@ -816,6 +829,7 @@ def _check_report(
     elif output_format == "junit":
         suite = _junit_suite(report_path.name)
         _junit_findings(suite, findings, failing)
+        _junit_findings(suite, facts, failing, classname="dpm-xl.facts")
         _junit_rules(suite, runs, failing)
         print(_junit_text(suite))
     else:
@@ -838,14 +852,12 @@ def _check_report(
                 f"  - [{finding['severity']}] {finding['rule']} "
                 f"{finding['message']}{times}"
             )
+        for finding in facts:
+            print(f"[{finding['severity']}] {finding['code']}: {finding['message']}")
+            for example in finding["examples"]:
+                print(f"  - {example}")
         _print_runs(runs, show_all=show_all)
-        if unplaced:
-            example = unplaced[0].location or unplaced[0].datapoint
-            print(
-                f"{_plural(len(unplaced), 'fact')} in no table of module "
-                f"{module.module}, such as {example}"
-            )
-    broken = any(finding["severity"] in failing for finding in findings)
+    broken = any(finding["severity"] in failing for finding in [*findings, *facts])
     status = _exit_status(runs, failing)
     return EXIT_FAILED if broken and status == EXIT_OK else status
 
@@ -933,9 +945,9 @@ def _iso(moment: date | None) -> str | None:
 
 
 def _finding_json(finding: Any) -> dict[str, Any]:
+    rule = getattr(finding, "rule", None)  # None for dpm-xl's fact findings
     return {
-        "rule": finding.rule,
-        "title": getattr(finding, "title", finding.rule),
+        **({"rule": rule, "title": getattr(finding, "title", rule)} if rule else {}),
         "code": finding.code,
         "severity": finding.severity,
         "message": finding.message,
@@ -945,23 +957,23 @@ def _finding_json(finding: Any) -> dict[str, Any]:
 
 
 def _junit_findings(
-    suite: ET.Element, findings: Sequence[dict[str, Any]], failing: frozenset[str]
+    suite: ET.Element,
+    findings: Sequence[dict[str, Any]],
+    failing: frozenset[str],
+    *,
+    classname: str = "dpm-xbrl.filing-rules",
 ) -> None:
-    """Add one test case per broken filing rule to a JUnit test suite.
+    """Add one test case per broken filing rule, or fact finding, to a suite.
 
     A finding at a ``failing`` severity is a failure; others are listed in
     the test case's ``system-out``.
     """
     by_rule: dict[str, list[dict[str, Any]]] = {}
     for finding in findings:
-        by_rule.setdefault(finding["rule"], []).append(finding)
-    for rule, found in by_rule.items():
-        case = ET.SubElement(
-            suite,
-            "testcase",
-            classname="dpm-xbrl.filing-rules",
-            name=f"{rule} {found[0]['title']}",
-        )
+        name = f"{finding['rule']} {finding['title']}" if "rule" in finding else None
+        by_rule.setdefault(name or finding["code"], []).append(finding)
+    for name, found in by_rule.items():
+        case = ET.SubElement(suite, "testcase", classname=classname, name=name)
         _count(suite, "tests")
         lines = "\n".join(
             f"[{finding['severity']}] {finding['code']}: {finding['message']}"

@@ -1,6 +1,6 @@
 """Behaviour required by the DPM-XL specification v0.11; § is the operators part."""
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
@@ -526,6 +526,43 @@ def test_base_currency_is_a_dpm_currency_item(currency: Value) -> None:
     )
     assert status("baseCurrency = [iso4217:EUR]", data) == "failed"
     assert status("baseCurrency = [eba_CU:USD]", data) == "failed"
+
+
+@pytest.mark.parametrize(
+    ("parameters", "rule"),
+    [
+        ({"refPeriod": "2025-12-31T00:00:00"}, "refPeriod = #2025-12-31#"),
+        ({"refPeriod": datetime(2025, 12, 31, 12)}, "refPeriod = #2025-12-31#"),
+        ({"decimalsMonetary": "-3"}, "decimalsMonetary = -3"),
+        ({"decimalsMonetary": " 2 "}, "decimalsMonetary = 2"),
+        ({"decimalsMonetary": -3}, "decimalsMonetary = -3"),
+        ({"decimalsPercentage": "INF"}, "isnull(decimalsPercentage)"),
+        ({"decimalsInteger": "inf"}, "isnull(decimalsInteger)"),
+    ],
+)
+def test_contextual_components_read_text_and_date_times(
+    parameters: dict[str, Value], rule: str
+) -> None:
+    result = evaluate_rule(rule, contextual(**parameters))
+    assert result.status == "passed", result.message
+
+
+@pytest.mark.parametrize(
+    ("parameters", "rule", "message"),
+    [
+        ({"refPeriod": "31/12/2025"}, "refPeriod = #2025-12-31#", "a date"),
+        ({"decimalsMonetary": "-3.5"}, "decimalsMonetary = -3", "an integer"),
+        ({"decimalsMonetary": "x"}, "decimalsMonetary = -3", "an integer"),
+        ({"decimalsMonetary": True}, "decimalsMonetary = -3", "an integer"),
+    ],
+)
+def test_invalid_contextual_components_are_an_error(
+    parameters: dict[str, Value], rule: str, message: str
+) -> None:
+    result = evaluate_rule(rule, contextual(**parameters))
+    assert result.status == "error"
+    name = next(iter(parameters))
+    assert result.message == f"parameter {name} is not {message}"
 
 
 def test_if_without_else_leaves_out_records_of_any_type() -> None:

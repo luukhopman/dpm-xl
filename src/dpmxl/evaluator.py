@@ -528,7 +528,12 @@ class Evaluator:
         if value is None:
             self._notes[f"report parameter {canonical!r} is not available"] = None
             return None
-        found = _parameter_value(canonical, CONTEXTUAL_COMPONENTS[canonical], value)
+        kind = CONTEXTUAL_COMPONENTS[canonical]
+        value = _contextual_text(kind, value)
+        if value is None:
+            # XBRL decimals INF: exact, no decimals to give.
+            return None
+        found = _parameter_value(canonical, kind, value)
         if canonical == "baseCurrency":
             return _dpm_currency(cast(Item, found))
         return found
@@ -1456,6 +1461,45 @@ def _parameter_value(name: str, kind: str, value: Value) -> Value:
     if not isinstance(found, expected):
         raise EvaluationError(f"parameter {name} is not {_ARTICLES[kind]}")
     return found
+
+
+def _contextual_text(kind: str, value: Value) -> Value:
+    """Read a contextual component given as text or a date and time.
+
+    A ``date`` takes the date of a date and time, such as
+    ``2025-12-31T00:00:00``; an ``integer`` reads numeric text, such as
+    ``-3``, and ``INF`` (XBRL's exact decimals) is null. Other values are
+    returned as they are, for `_parameter_value` to check.
+
+    Returns:
+        Value: The value.
+
+    Examples:
+        >>> _contextual_text("date", "2025-12-31T00:00:00")
+        datetime.date(2025, 12, 31)
+        >>> _contextual_text("integer", " -3 ")
+        Number(value=Decimal('-3'), tolerance=Decimal('0'))
+        >>> print(_contextual_text("integer", "INF"))
+        None
+    """
+    if kind == "date":
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, str):
+            with suppress(ValueError):
+                return date.fromisoformat(value.strip())
+            with suppress(ValueError):
+                return datetime.fromisoformat(value.strip()).date()
+    if kind == "integer" and isinstance(value, str):
+        text = value.strip()
+        if text.casefold() in {"inf", "+inf"}:
+            return None
+        if _INTEGER_TEXT.fullmatch(text):
+            return Number(Decimal(text))
+    return value
+
+
+_INTEGER_TEXT = re.compile(r"[+-]?[0-9]+")
 
 
 def _dpm_currency(currency: Item) -> Item:

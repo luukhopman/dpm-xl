@@ -302,7 +302,8 @@ class Evaluator:
         self.only_keys = only_keys
         self.trace_enabled = trace
         self._trace: dict[int, Recordset] = {}
-        self._notes: list[str] = []
+        # An ordered set: a where clause may raise a note once per record.
+        self._notes: dict[str, None] = {}
         self._selection_cache: dict[tuple[object, ...], list[DataPoint]] = {}
         self._context_conditions: list[Node] = []
         self._members: dict[int, list[Value]] = {}
@@ -322,12 +323,12 @@ class Evaluator:
                 provider cannot resolve a reference.
         """
         self._trace = {}
-        self._notes = []
+        self._notes = {}
         self._temporaries = {}
         self._assignments = {}
         result = self.evaluate(node, SelectionSpec(), None)
         return Evaluation(
-            node, result, self._trace, self._notes, assignments=self._assignments
+            node, result, self._trace, list(self._notes), assignments=self._assignments
         )
 
     def evaluate(
@@ -375,7 +376,7 @@ class Evaluator:
             case Variable(name=name):
                 value = read_variable(self.provider, name)
                 if value is None and not is_template_code(name):
-                    self._notes.append(f"variable {name!r} is not available")
+                    self._notes[f"variable {name!r} is not available"] = None
                 return Recordset.scalar(value)
             case Name(name=name):
                 if bindings is not None:
@@ -517,7 +518,7 @@ class Evaluator:
         canonical = cast(str, _contextual(name))
         value = self.provider.parameter(canonical)
         if value is None:
-            self._notes.append(f"report parameter {canonical!r} is not available")
+            self._notes[f"report parameter {canonical!r} is not available"] = None
             return None
         return _parameter_value(canonical, CONTEXTUAL_COMPONENTS[canonical], value)
 
@@ -699,7 +700,7 @@ class Evaluator:
             elif isinstance(default, SetLiteral):
                 value = self.evaluate(default, SelectionSpec(), None).records[()].value
             else:
-                self._notes.append(f"report parameter {node.name!r} is not available")
+                self._notes[f"report parameter {node.name!r} is not available"] = None
                 return None
         return _parameter_value(node.name, node.type, value)
 
@@ -799,7 +800,7 @@ class Evaluator:
         inner._operations = list(self._operations)
         result = inner.evaluate(operand, context, bindings)
         self._trace.update(inner._trace)
-        self._notes.extend(inner._notes)
+        self._notes.update(inner._notes)
         return result
 
     def _annualise(

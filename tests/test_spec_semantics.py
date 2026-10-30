@@ -496,6 +496,11 @@ def test_missing_contextual_components_are_null() -> None:
         "not_applicable"
     )
     assert status('{tT, r*, c0010} [where qX = "a"] > 0', data) == "error"
+    # One note, not one per record the where clause tests.
+    rule = '{tT, r*, c0010} [where baseCurrency = [CU:EUR] and r != "x"] > 0'
+    evaluation = evaluate_rule(rule, data).evaluation
+    assert evaluation is not None
+    assert evaluation.notes == ["report parameter 'baseCurrency' is not available"]
 
 
 def test_if_without_else_leaves_out_records_of_any_type() -> None:

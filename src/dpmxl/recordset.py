@@ -201,21 +201,21 @@ def combine(
         >>> values(combine([left, right], total))
         {('a',): 1, ('b',): 5, ('c',): 4}
     """
-    check_structure(operands)
     if any(
         operand.keys and not operand.records and operand.default is not None
         for operand in operands
     ) and any(_has_data(operand) for operand in operands):
         # A keyed operand with no record at all (such as a selection a where
-        # filters to nothing) stands for its default at every record the
-        # other operands have, as a fact variable falls back when it binds
-        # to no fact.
+        # filters to nothing, or of a template filed without rows) stands for
+        # its default at every record the other operands have, whatever
+        # their keys, as a fact variable falls back when it binds to no fact.
         operands = [
             Recordset((), default=operand.default)
             if operand.keys and not operand.records and operand.default is not None
             else operand
             for operand in operands
         ]
+    check_structure(operands)
     keyed = [operand for operand in operands if operand.keys]
     if any(
         not operand.keys and not operand.records and operand.default is not None

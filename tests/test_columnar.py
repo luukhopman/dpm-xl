@@ -618,6 +618,28 @@ def test_defaults_in_if_conditions_apply_as_in_and(
             evaluate_rule_columnar(expression, PointsFrameProvider(provider))
 
 
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ("{tE, r0010, c0010, default: 0} < {tT, r*, c0010}", ("passed", 3, 0)),
+        ("{tE, r0010, c0010, default: 50} < {tT, r*, c0010}", ("failed", 2, 1)),
+        ("{tT, r*, c*} - {tE, r0010, c0010, default: 0} > 0", ("passed", 6, 0)),
+        ("with {tO, c0010}: {r0010} + {tE, r0010, default: 1} > 0", ("passed", 3, 0)),
+    ],
+)
+def test_defaults_of_unreported_operands_apply_to_any_keys(
+    expression: str, expected: tuple[str, int, int]
+) -> None:
+    # E is filed without rows: its default stands for each record of the
+    # other operand, whatever that operand's keys, as an XBRL fallback.
+    provider = data()
+    result = evaluate_rule(expression, provider)
+    counts = (result.status, result.counts["passed"], result.counts["failed"])
+    assert counts == expected, result.message
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+
+
 def parts(a_keys: tuple[str, ...], b_keys: tuple[str, ...]) -> MemoryProvider:
     # Two parts of one open-keyed template.
     tables = [

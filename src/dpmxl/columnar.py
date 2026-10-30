@@ -1131,7 +1131,6 @@ def _joined(frames: Sequence[Frame]) -> tuple[tuple[str, ...], pl.DataFrame]:
         EvaluationError: On operands with unrelated keys.
         ColumnarUnsupported: Where a default would stand in for a record.
     """
-    _check_structure(frames)
     if any(
         not frame.keys and not frame.df.height and frame.has_default for frame in frames
     ):
@@ -1143,6 +1142,7 @@ def _joined(frames: Sequence[Frame]) -> tuple[tuple[str, ...], pl.DataFrame]:
         # The reference evaluator takes the default of an operand with no
         # record at every record the others have.
         raise ColumnarUnsupported("a default for an operand with no records")
+    _check_structure(frames)
     aligned = _aligned(frames)
     if aligned is not None:
         return aligned

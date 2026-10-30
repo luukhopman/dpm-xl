@@ -72,6 +72,8 @@ All notable changes to this project are documented here. The project follows
   included.
 - A module file's `items: []` allows no item, and an export writes it for
   an empty subcategory; a missing `items` leaves the items open.
+- The export leaves out a subcategory's items that are not in the
+  property's category, with a note, instead of writing invalid qnames.
 
 ### Changed
 
@@ -158,6 +160,9 @@ All notable changes to this project are documented here. The project follows
   instead of an error.
 - An operand with a `default` and no records in an `if` condition takes
   its default, as it does in `and`; such rules were not applicable.
+- An operand with a `default` and no records, such as a selection of a
+  template filed without rows, combines with an operand of other keys; it
+  was an `incompatible keys` error.
 - The columnar engine leaves a `where` on a report parameter, such as
   `[where Level = "con"]`, to the reference engine instead of failing.
 

@@ -9,6 +9,7 @@ import pytest
 
 from dpmxl import CellQuery, Item, Number, ValueSet, evaluate_rule
 from dpmxl.module import Module, load_module
+from dpmxl.provider import EarlierRef
 
 dpmxbrl = pytest.importorskip("dpmxbrl")
 
@@ -310,6 +311,7 @@ def test_check_report_reads_files() -> None:
         "failed",
         "not_applicable",
         "passed",
+        "unsupported",
     ]
     assert check.failed()
 
@@ -319,6 +321,125 @@ def test_check_report_reads_bytes_with_a_name(tmp_path) -> None:
     write_xbrl_csv(report([fact("dpm", "1000")]), path)
     check = check_report(MODULE, path.read_bytes(), name="report.zip")
     assert [run.status for run in check.rules][:2] == ["passed", "failed"]
+
+
+# time_shift on previous reports --------------------------------------------
+
+GROWTH = "{tC_01.00, r0010, c0010} >= time_shift({tC_01.00, r0010, c0010}, Q, 1)"
+
+
+def dated(day: date, facts) -> Report:
+    return report(
+        facts,
+        reference_date=day,
+        parameters={"refPeriod": day.isoformat()},
+    )
+
+
+SEPTEMBER = dated(date(2026, 9, 30), [fact("dpm", "900000")])
+JUNE = dated(date(2026, 6, 30), [fact("dpm", "1100000")])
+
+
+def test_time_shift_reads_the_previous_report_by_reference_date() -> None:
+    provider = ReportProvider(
+        MODULE, report([fact("dpm", "1000000")]), previous=[JUNE, SEPTEMBER]
+    )
+    assert list(provider.previous) == [date(2026, 6, 30), date(2026, 9, 30)]
+    assert evaluate_rule(GROWTH, provider).status == "passed"
+    half_year = GROWTH.replace("Q, 1", "S, 1")
+    result = evaluate_rule(half_year, provider)
+    assert result.status == "failed"
+    earlier = result.failures[0].points[1]
+    assert earlier.ref == EarlierRef("S", 1, ("C_01.00", "m", ()))
+    assert isinstance(earlier.value, Number)
+    assert earlier.value == Number.of(1100000, -3)
+    assert earlier.value.tolerance == Decimal(500)
+
+
+def test_previous_reports_shift_among_themselves() -> None:
+    current = report([fact("dpm", "1000000")])
+    provider = ReportProvider(MODULE, current, previous=[SEPTEMBER, JUNE])
+    september = provider.earlier_report("Q", 1)
+    assert september is provider.previous[date(2026, 9, 30)]
+    assert september.earlier_report("Q", 1) is provider.previous[date(2026, 6, 30)]
+    assert september.earlier_report("Q", -1) is provider
+    assert provider.earlier_report("M", 1) is None
+    nested = "time_shift(time_shift({tC_01.00, r0010, c0010}, Q, 1), Q, 1) = 1100000"
+    assert evaluate_rule(nested, provider).status == "passed"
+
+
+def test_time_shift_names_the_missing_reference_date() -> None:
+    for previous in ([], [JUNE]):
+        provider = ReportProvider(MODULE, report([fact("dpm", "1")]), previous=previous)
+        result = evaluate_rule(GROWTH, provider)
+        assert result.status == "unsupported"
+        assert result.message == (
+            "time_shift needs the report 1 quarter(s) earlier "
+            "(reference date 2026-09-30), which the provider does not have"
+        )
+
+
+def test_open_keys_of_previous_reports_are_typed_alike() -> None:
+    def row(value):
+        keys = {"CC": "eba_CU:EUR", "qNUM": "1", "qDAT": "2026-01-31", "qTXT": "a"}
+        return fact("dpo", value, template="C_07.00.a", keys=keys)
+
+    provider = ReportProvider(
+        MODULE, report([row("10")]), previous=[dated(date(2025, 12, 31), [row("8")])]
+    )
+    rule = "{tC_07.00.a, c0010} - time_shift({tC_07.00.a, c0010}, A, 1, refPeriod) = 2"
+    result = evaluate_rule(rule, provider)
+    assert result.status == "passed"
+    assert [outcome.key for outcome in result.outcomes] == [
+        {
+            "qCC": Item.parse("eba_CU:EUR"),
+            "qNUM": Decimal(1),
+            "qDAT": date(2026, 1, 31),
+            "qTXT": "a",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("current", "previous", "message"),
+    [
+        (report([]), [dated(date(2026, 12, 31), [])], "reference date 2026-12-31"),
+        (report([]), [JUNE, JUNE], "reference date 2026-06-30"),
+        (report([]), [report([], reference_date=None)], "previous report has no"),
+        (report([], reference_date=None), [JUNE], "report has no reference date"),
+    ],
+)
+def test_previous_reports_need_distinct_reference_dates(
+    current, previous, message
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        ReportProvider(MODULE, current, previous=previous)
+
+
+def test_check_report_reads_previous_reports() -> None:
+    check = check_report(
+        EXAMPLES / "xbrl-module.json",
+        EXAMPLES / "xbrl-report",
+        previous=[EXAMPLES / "xbrl-report-previous"],
+    )
+    shift = check.rules[-1]
+    assert (shift.rule.code, shift.status) == ("e0007", "failed")
+    with_report = check_report(
+        EXAMPLES / "xbrl-module.json",
+        EXAMPLES / "xbrl-report",
+        previous=[dpmxbrl.read_report(EXAMPLES / "xbrl-report-previous")],
+    )
+    assert with_report.rules[-1].status == "failed"
+
+
+def test_columnar_hands_time_shift_on_reports_to_the_reference_engine() -> None:
+    columnar = pytest.importorskip("dpmxl.columnar")
+    provider = ReportProvider(
+        MODULE, report([fact("dpm", "1000000")]), previous=[SEPTEMBER]
+    )
+    with pytest.raises(columnar.ColumnarUnsupported):
+        columnar.evaluate_rule_columnar(GROWTH, columnar.PointsFrameProvider(provider))
+    assert evaluate_rule(GROWTH, provider).status == "passed"
 
 
 def test_the_extra_is_named_when_dpm_xbrl_is_missing(monkeypatch) -> None:
@@ -350,7 +471,7 @@ def test_check_report_prints_findings_and_rules(capsys) -> None:
     assert "filing rules broken: 0 errors, 0 warnings\n" in output
     assert "e0004: failed (warning)\n" in output
     assert output.endswith(
-        "6 rules: 3 failed, 2 passed, 1 not_applicable "
+        "7 rules: 3 failed, 2 passed, 1 not_applicable, 1 unsupported "
         "(3 not listed; --all lists every rule)\n"
     )
     assert ": passed" not in output
@@ -358,7 +479,9 @@ def test_check_report_prints_findings_and_rules(capsys) -> None:
     main(["check-report", MODULE_FILE, REPORT_DIR, "--all"])
     output = capsys.readouterr().out
     assert ": passed" in output
-    assert output.endswith("6 rules: 3 failed, 2 passed, 1 not_applicable\n")
+    assert output.endswith(
+        "7 rules: 3 failed, 2 passed, 1 not_applicable, 1 unsupported\n"
+    )
 
 
 def test_check_report_json(capsys) -> None:
@@ -372,17 +495,18 @@ def test_check_report_json(capsys) -> None:
     assert document["summary"] == {
         "filing_errors": 0,
         "filing_warnings": 0,
-        "rules": 6,
+        "rules": 7,
         "passed": 2,
         "failed": 3,
         "not_applicable": 1,
         "error": 0,
-        "unsupported": 0,
+        "unsupported": 1,
         "skipped": 0,
         "unplaced_facts": 0,
     }
     assert document["module"] == {"module": "COREP_LR", "release": "4.2"}
     assert document["report"]["reference_date"] == "2026-03-31"
+    assert document["report"]["previous"] == []
     assert document["results"][3]["severity"] == "warning"
 
 
@@ -460,3 +584,66 @@ def test_check_report_rejects_unreadable_input(tmp_path, capsys) -> None:
     error = capsys.readouterr().err
     assert error.startswith(f"error: {tmp_path / 'missing.zip'}: ")
     assert error.count("missing.zip") == 1
+
+
+PREVIOUS_DIR = str(EXAMPLES / "xbrl-report-previous")
+
+
+def test_check_report_compares_with_previous_reports(capsys) -> None:
+    import json
+
+    from dpmxl.cli import main
+
+    assert (
+        main(["check-report", MODULE_FILE, REPORT_DIR, "--previous", PREVIOUS_DIR]) == 1
+    )
+    output = capsys.readouterr().out
+    assert f"previous: {PREVIOUS_DIR} (2025-12-31)\n" in output
+    assert "e0007: failed (warning)\n" in output
+    assert "time_shift(1,180,000, Q, 1, refPeriod)" in output
+    main(
+        ["check-report", MODULE_FILE, REPORT_DIR, "--previous", PREVIOUS_DIR, "--json"]
+    )
+    document = json.loads(capsys.readouterr().out)
+    assert document["report"]["previous"] == [
+        {"path": PREVIOUS_DIR, "reference_date": "2025-12-31"}
+    ]
+    assert document["results"][-1]["status"] == "failed"
+
+
+def test_check_report_names_the_period_no_previous_report_covers(
+    tmp_path, capsys
+) -> None:
+    import shutil
+
+    from dpmxl.cli import main
+
+    older = tmp_path / "older"
+    shutil.copytree(PREVIOUS_DIR, older)
+    parameters = older / "reports" / "parameters.csv"
+    parameters.write_text(
+        parameters.read_text(encoding="utf-8").replace("2025-12-31", "2025-09-30"),
+        encoding="utf-8",
+    )
+    main(["check-report", MODULE_FILE, REPORT_DIR, "--previous", str(older)])
+    assert (
+        "e0007: unsupported (warning)\n"
+        "  message: time_shift needs the report 1 quarter(s) earlier "
+        "(reference date 2025-12-31), which the provider does not have\n"
+    ) in capsys.readouterr().out
+
+
+def test_check_report_rejects_bad_previous_reports(tmp_path, capsys) -> None:
+    from dpmxl.cli import main
+
+    missing = tmp_path / "missing.zip"
+    assert (
+        main(["check-report", MODULE_FILE, REPORT_DIR, "--previous", str(missing)]) == 3
+    )
+    assert capsys.readouterr().err.startswith(f"error: {missing}: ")
+    assert (
+        main(["check-report", MODULE_FILE, REPORT_DIR, "--previous", REPORT_DIR]) == 3
+    )
+    assert capsys.readouterr().err == (
+        "error: two reports have the reference date 2026-03-31\n"
+    )

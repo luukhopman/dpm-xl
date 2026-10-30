@@ -1346,7 +1346,7 @@ See [Time](../concepts/time.md#time_shift) and
 | `time_shift({tO, c0010}, W, 1, qDAT)` | `qKEY=a, qDAT=2026-04-07: 10; qKEY=b, qDAT=2026-07-07: 20; qKEY=c, qDAT=2026-10-07: 30` |
 | `time_shift({tO, c0010}, D, -1, qDAT)` | `qKEY=a, qDAT=2026-03-30: 10; qKEY=b, qDAT=2026-06-29: 20; qKEY=c, qDAT=2026-09-29: 30` |
 | `time_shift({tO, c0010}, M, -1, qDAT)` | `qKEY=a, qDAT=2026-02-28: 10; qKEY=b, qDAT=2026-05-31: 20; qKEY=c, qDAT=2026-08-31: 30` |
-| `time_shift({tT, r0010, c0010}, Q, 1)` | `unsupported: time_shift needs the report 1 quarter(s) earlier, which the provider does not have` |
+| `time_shift({tT, r0010, c0010}, Q, 1)` | `unsupported: time_shift needs the report 1 quarter(s) earlier (reference date 2026-09-30), which the provider does not have` |
 | `time_shift({tT, r0010, c0010}, a, 1)` | `error: time_shift needs a period of A, S, Q, M, W or D` |
 | `time_shift({tO, c0010}, A, 1, qKEY)` | `error: time_shift needs dates in key qKEY, found string` |
 

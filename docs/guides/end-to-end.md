@@ -134,10 +134,13 @@ e0003: failed          (columnar, error)
 e0004: failed          (columnar, warning)
 e0005: not_applicable  (columnar, error)
 e0006: passed          (reference, error)
+e0007: unsupported     (reference, warning)
 ```
 
 `e0006` is a script with a temporary assignment (`total := …`), which the
-columnar engine leaves to the reference evaluator. `e0005` does not apply:
+columnar engine leaves to the reference evaluator, like `e0007`'s
+`time_shift`; `e0007` compares with the previous quarter's report, which
+this provider does not have (see [All at once](#all-at-once)). `e0005` does not apply:
 its precondition tests `C_43.00`, which the report's filing indicators mark
 as not reported. `e0004` is a `warning`: it is reported, but would not fail
 a [`check-report`](../reference/cli.md#dpm-xl-check-report) run on its own.
@@ -196,9 +199,13 @@ print(check.failed(), check.failed("warning"))
 
 ```text
 ()
-[('e0001', 'failed'), ('e0002', 'passed'), ('e0003', 'failed'), ('e0004', 'failed'), ('e0005', 'not_applicable'), ('e0006', 'passed')]
+[('e0001', 'failed'), ('e0002', 'passed'), ('e0003', 'failed'), ('e0004', 'failed'), ('e0005', 'not_applicable'), ('e0006', 'passed'), ('e0007', 'unsupported')]
 True True
 ```
+
+`e0007` compares with the previous quarter through `time_shift`, which one
+report cannot answer. Pass the earlier reports as `previous`
+([Compare with earlier reports](time-shift.md#against-earlier-xbrl-reports)).
 
 On the command line, [`dpm-xl check-report`](../reference/cli.md#dpm-xl-check-report)
 prints the same as text, JSON or JUnit XML for CI.

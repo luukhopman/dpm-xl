@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET  # ruff: ignore[suspicious-xml-etree-import] 
 from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, replace
+from datetime import date
 from importlib.metadata import PackageNotFoundError, version
 from importlib.util import find_spec
 from pathlib import Path
@@ -114,6 +115,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="local taxonomy package: resolves xBRL-CSV metadata and adds the "
         "filing rules that need the taxonomy (repeatable)",
     )
+    report.add_argument(
+        "--previous",
+        action="append",
+        default=[],
+        type=Path,
+        metavar="REPORT",
+        help="report of the same module for an earlier period, which time_shift "
+        "rules compare with (repeatable)",
+    )
     arguments = parser.parse_args(argv)
     if arguments.command == "check-report":
         if find_spec("dpmxbrl") is None:
@@ -124,6 +134,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             arguments.module,
             arguments.report,
             taxonomy_packages=arguments.taxonomy_package,
+            previous=arguments.previous,
             output_format=arguments.format,
             fail_on=arguments.fail_on,
             show_all=arguments.show_all,
@@ -671,6 +682,7 @@ def _check_report(
     report_path: Path,
     *,
     taxonomy_packages: Sequence[Path] = (),
+    previous: Sequence[Path] = (),
     output_format: str = "text",
     fail_on: str = "error",
     show_all: bool = False,
@@ -687,10 +699,17 @@ def _check_report(
         return EXIT_INPUT
     try:
         report = read_report(report_path, taxonomy_packages=taxonomy_packages)
+        earlier = [
+            read_report(path, taxonomy_packages=taxonomy_packages) for path in previous
+        ]
     except ReportError as error:  # its message names the file
         print(f"error: {error}", file=sys.stderr)
         return EXIT_INPUT
-    provider = ReportProvider(module, report)
+    try:
+        provider = ReportProvider(module, report, previous=earlier)
+    except ValueError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return EXIT_INPUT
     runs = _run_rules(module.rules, provider, module.module)
     failing = _failing(fail_on)
     findings = [_finding_json(finding) for finding in report.filing]
@@ -709,9 +728,14 @@ def _check_report(
                 "format": report.format,
                 "entry_point": report.entry_point,
                 "entity_id": report.entity_id,
-                "reference_date": (
-                    report.reference_date.isoformat() if report.reference_date else None
-                ),
+                "reference_date": _iso(report.reference_date),
+                "previous": [
+                    {
+                        "path": str(path),
+                        "reference_date": _iso(found.reference_date),
+                    }
+                    for path, found in zip(previous, earlier, strict=True)
+                ],
             },
             "module": {"module": module.module, "release": module.release},
             "warnings": list(report.warnings),
@@ -737,6 +761,8 @@ def _check_report(
             f"report: {report_path} ({report.format}); module {module.module}, "
             f"release {module.release}"
         )
+        for path, found in zip(previous, earlier, strict=True):
+            print(f"previous: {path} ({_iso(found.reference_date)})")
         for warning in report.warnings:
             print(f"warning: {warning}")
         errors = sum(1 for finding in findings if finding["severity"] == "error")
@@ -760,6 +786,10 @@ def _check_report(
     broken = any(finding["severity"] in failing for finding in findings)
     status = _exit_status(runs, failing)
     return EXIT_FAILED if broken and status == EXIT_OK else status
+
+
+def _iso(moment: date | None) -> str | None:
+    return moment.isoformat() if moment else None
 
 
 def _finding_json(finding: Any) -> dict[str, Any]:

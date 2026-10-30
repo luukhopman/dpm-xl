@@ -34,7 +34,8 @@ earlier (later when negative), as in the EBA introduction to DPM-XL.
 - When `key` is not a key component of `x` (`refPeriod`, or no key), `x` is
   evaluated on the report the provider's `earlier_report(period, count)`
   returns. Without that method, or when it returns `None`, the rule is
-  `unsupported`.
+  `unsupported`. A `ReportProvider` picks it from its `previous` reports by
+  reference date.
 - When `key` is a date key component of `x`, its values move `count` periods
   later instead, within the same report.
 

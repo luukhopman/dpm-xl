@@ -9,7 +9,8 @@ dpm-xl check [--layouts DATA] [--strict] [--references] [--json] SOURCE
 dpm-xl eval [--precondition EXPRESSION] [--format text|json|junit] [--json]
             [--fail-on error|warning] [--all] RULES DATA
 dpm-xl check-report [--format text|json|junit] [--json] [--fail-on error|warning]
-                    [--all] [--taxonomy-package ZIP] MODULE REPORT
+                    [--all] [--taxonomy-package ZIP] [--previous REPORT]
+                    MODULE REPORT
 dpm-xl --version
 dpm-xl [COMMAND] --help
 ```
@@ -265,6 +266,7 @@ exits with status 2.
 | `--fail-on error\|warning` | Exit with status 1 when a filing finding or a failing rule of this severity or worse is found. Default `error`. |
 | `--all` | In text output, list every rule, not only those that failed, are an error or are unsupported. |
 | `--taxonomy-package ZIP` | A local taxonomy package, repeatable: it resolves xBRL-CSV metadata and adds the filing rules that need the taxonomy. |
+| `--previous REPORT` | A report of the same module for an earlier period, repeatable, read with the same taxonomy packages: `time_shift` rules compare with the one whose reference date they need ([Compare with earlier reports](../guides/time-shift.md#against-earlier-xbrl-reports)). Only `REPORT` is checked against the filing rules. |
 
 ```console
 $ dpm-xl check-report examples/xbrl-module.json examples/xbrl-report
@@ -280,7 +282,35 @@ e0003: failed
 e0004: failed (warning)
   records: 1 passed, 1 failed, 0 null
   - qRDT=QW4KNDKKV7QH2LA40639: "QW4KNDKKV7QH2LA4063" does not have the required format
-6 rules: 3 failed, 2 passed, 1 not_applicable (3 not listed; --all lists every rule)
+e0007: unsupported (warning)
+  message: time_shift needs the report 1 quarter(s) earlier (reference date 2025-12-31), which the provider does not have
+  records: 0 passed, 0 failed, 0 null
+7 rules: 3 failed, 2 passed, 1 not_applicable, 1 unsupported (3 not listed; --all lists every rule)
+```
+
+`e0007` compares with the previous quarter, which one report does not hold;
+the message names the reference date of the report it needs. With that
+report as `--previous`, the rule is evaluated:
+
+```console
+$ dpm-xl check-report examples/xbrl-module.json examples/xbrl-report --previous examples/xbrl-report-previous
+report: examples/xbrl-report (xbrl-csv); module COREP_LR, release 4.2
+previous: examples/xbrl-report-previous (2025-12-31)
+warning: reports/report.json: 1 extended metadata document could not be resolved offline (http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_lr.json); tables without resolved metadata use the EBA datapoint/factValue convention
+filing rules broken: 0 errors, 0 warnings
+e0001: failed
+  records: 0 passed, 1 failed, 0 null
+  - scalar: 1,045,000 should equal 1,042,000 (812,000 + 190,000 + 40,000): difference 3,000, at least 1,000 given the reported precision
+e0003: failed
+  records: 1 passed, 1 failed, 0 null
+  - qRDT=QW4KNDKKV7QH2LA40639: -12,000 should be at least 0: difference 12,000
+e0004: failed (warning)
+  records: 1 passed, 1 failed, 0 null
+  - qRDT=QW4KNDKKV7QH2LA40639: "QW4KNDKKV7QH2LA4063" does not have the required format
+e0007: failed (warning)
+  records: 0 passed, 1 failed, 0 null
+  - scalar: 1,045,000 should be at least 1,062,000 (0.9 × time_shift(1,180,000, Q, 1, refPeriod)): difference 17,000
+7 rules: 4 failed, 2 passed, 1 not_applicable (3 not listed; --all lists every rule)
 ```
 
 
@@ -290,7 +320,7 @@ table of the module) and these fields:
 
 | Field | Type | Content |
 | --- | --- | --- |
-| `report` | object | `path`, `format`, `entry_point`, `entity_id` and `reference_date` of the report. |
+| `report` | object | `path`, `format`, `entry_point`, `entity_id` and `reference_date` of the report, and `previous`: the `path` and `reference_date` of each `--previous` report. |
 | `module` | object | `module` and `release` of the module file. |
 | `warnings` | list | dpm-xbrl's warnings about the report, as text. |
 | `filing_rules` | list | One object per filing rule broken: `rule`, `title`, `code`, `severity`, `message`, `count` and `examples`, as dpm-xbrl gives them. |

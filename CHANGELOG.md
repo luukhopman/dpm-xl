@@ -26,6 +26,9 @@ All notable changes to this project are documented here. The project follows
   module's rule results together.
 - `dpm-xl check-report MODULE REPORT` prints both as text, JSON or JUnit
   XML.
+- `ReportProvider` and `check_report` take earlier reports as `previous`,
+  for `time_shift` across periods.
+- `dpm-xl check-report --previous REPORT` passes an earlier report.
 - The contextual components `entityID`, `baseCurrency` and the
   `decimals…` names read the report parameters of those names, with their
   type; a missing one is null.
@@ -50,6 +53,7 @@ All notable changes to this project are documented here. The project follows
 - **Breaking:** `dpmxl.cli.INVALID_INPUT` is now `EXIT_INPUT`.
 - An expression given on the command line is labelled `expression`, not
   `argument`.
+- A `time_shift` without the earlier report names its reference date.
 - The text output of `dpm-xl eval` counts null records as `null`.
 - A malformed rule file names the field by its JSON path, such as
   `[0].severity`.

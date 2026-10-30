@@ -1,5 +1,5 @@
 ---
-description: Evaluate time_shift against earlier reports through earlier_report, shift date keys within a report, and annualise year-to-date amounts.
+description: Evaluate time_shift against earlier reports through earlier_report or earlier XBRL reports, shift date keys within a report, and annualise year-to-date amounts.
 ---
 
 # Compare with earlier reports
@@ -10,7 +10,9 @@ some periods earlier. It works in one of two ways, depending on `key`:
 - **Another report.** When `key` is not a key component of `x` (usually
   `refPeriod`, or no key at all), `x` is evaluated on the report `count`
   periods earlier, which the provider's `earlier_report(period, count)`
-  returns. This is how EBA rules compare with the previous reporting period.
+  returns. This is how EBA rules compare with the previous reporting period;
+  for XBRL reports, pass the earlier ones as `previous`
+  ([below](#against-earlier-xbrl-reports)).
 - **Within the report.** When `key` is a date key component of `x`, the
   values of that key move `count` periods later, so each record lines up
   with the one `count` periods before it.
@@ -73,13 +75,88 @@ print(result.status, "|", result.message)
 ```
 
 ```text
-unsupported | time_shift needs the report 1 year(s) earlier, which the provider does not have
+unsupported | time_shift needs the report 1 year(s) earlier (reference date 2025-12-31), which the provider does not have
 ```
 
 Without an `earlier_report` method at all, the message says that the rule
 compares with the previous reporting period, which a single report does not
 include. Evaluating with a shared `SelectionCache` keeps a separate cache for
 each earlier report.
+
+## Against earlier XBRL reports
+
+A report read with dpm-xbrl holds one period, so on real EBA modules
+`time_shift` rules are `unsupported` until you supply the earlier reports.
+[`ReportProvider`][dpmxl.xbrl.ReportProvider] takes them as `previous`, in
+any order, and picks by reference date: `time_shift(x, Q, 1)` on the report
+for 2026-03-31 reads the one for 2025-12-31, placed and typed by the same
+module.
+
+```python
+from dpmxbrl import read_report
+
+from dpmxl import evaluate_rule, explain
+from dpmxl.module import load_module
+from dpmxl.xbrl import ReportProvider
+
+module = load_module("examples/xbrl-module.json")
+provider = ReportProvider(
+    module,
+    read_report("examples/xbrl-report"),
+    previous=[read_report("examples/xbrl-report-previous")],
+)
+print(list(provider.previous))
+rule = module.rules[-1]
+result = evaluate_rule(rule.expression, provider)
+print(rule.code, result.status)
+print(explain(result.evaluation, rule.expression, result.failures[0].key).summary)
+```
+
+```text
+[datetime.date(2025, 12, 31)]
+e0007 failed
+1,045,000 should be at least 1,062,000 (0.9 × time_shift(1,180,000, Q, 1, refPeriod)): difference 17,000
+```
+
+The previous reports can shift among themselves too, so a nested
+`time_shift` or a negative `count` reaches any of them. A shift to a period
+none of them covers leaves the rule `unsupported`, and the message names the
+reference date it needs:
+
+```python
+provider = ReportProvider(module, read_report("examples/xbrl-report"))
+print(evaluate_rule(rule.expression, provider).message)
+```
+
+```text
+time_shift needs the report 1 quarter(s) earlier (reference date 2025-12-31), which the provider does not have
+```
+
+[`check_report`][dpmxl.xbrl.check_report] takes the same `previous` (reports
+or paths, read with the same taxonomy packages), and so does the command
+line, as `--previous`:
+
+```console
+$ dpm-xl check-report examples/xbrl-module.json examples/xbrl-report --previous examples/xbrl-report-previous
+
+report: examples/xbrl-report (xbrl-csv); module COREP_LR, release 4.2
+previous: examples/xbrl-report-previous (2025-12-31)
+warning: reports/report.json: 1 extended metadata document could not be resolved offline (http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_lr.json); tables without resolved metadata use the EBA datapoint/factValue convention
+filing rules broken: 0 errors, 0 warnings
+e0001: failed
+  records: 0 passed, 1 failed, 0 null
+  - scalar: 1,045,000 should equal 1,042,000 (812,000 + 190,000 + 40,000): difference 3,000, at least 1,000 given the reported precision
+e0003: failed
+  records: 1 passed, 1 failed, 0 null
+  - qRDT=QW4KNDKKV7QH2LA40639: -12,000 should be at least 0: difference 12,000
+e0004: failed (warning)
+  records: 1 passed, 1 failed, 0 null
+  - qRDT=QW4KNDKKV7QH2LA40639: "QW4KNDKKV7QH2LA4063" does not have the required format
+e0007: failed (warning)
+  records: 0 passed, 1 failed, 0 null
+  - scalar: 1,045,000 should be at least 1,062,000 (0.9 × time_shift(1,180,000, Q, 1, refPeriod)): difference 17,000
+7 rules: 4 failed, 2 passed, 1 not_applicable (3 not listed; --all lists every rule)
+```
 
 ## Within one report, on a date key
 

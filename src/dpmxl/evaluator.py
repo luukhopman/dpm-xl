@@ -784,7 +784,8 @@ class Evaluator:
         if earlier is None:
             raise UnsupportedError(
                 f"time_shift needs the report {count} {_PERIOD_NAMES[period]} "
-                "earlier, which the provider does not have"
+                f"earlier{_earlier_date(self.provider, period, count)}, "
+                "which the provider does not have"
             )
         cache = None
         if self.cache is not None:
@@ -1039,6 +1040,22 @@ def _period(node: Node) -> str:
     if isinstance(node, Name) and node.name in _PERIOD_NAMES:
         return node.name
     raise EvaluationError("time_shift needs a period of A, S, Q, M, W or D")
+
+
+def _earlier_date(provider: DataProvider, period: str, count: int) -> str:
+    """Name the reference date ``time_shift`` needs, for its message.
+
+    Returns:
+        str: `` (reference date …)``, or empty when ``refPeriod`` is not a
+        date or the shifted date does not exist.
+    """
+    reference = provider.parameter("refPeriod")
+    if not isinstance(reference, date):
+        return ""
+    try:
+        return f" (reference date {_shift_date(reference, period, -count).isoformat()})"
+    except EvaluationError:
+        return ""
 
 
 def _shift_date(value: date, period: str, count: int) -> date:

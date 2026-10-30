@@ -19,7 +19,7 @@ Examples:
 from __future__ import annotations
 
 import os
-from collections.abc import Hashable, Mapping, Sequence
+from collections.abc import Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -35,8 +35,10 @@ except ModuleNotFoundError as error:  # pragma: no cover - depends on the instal
     ) from None
 
 from .ast import Item
+from .evaluator import _shift_date
 from .module import NUMERIC_TYPES, Cell, Module, OpenKey, Table, load_module
 from .provider import CellQuery, DataPoint, axis_matcher
+from .recordset import EvaluationError
 from .rules import RuleRun, Severity, evaluate_rules
 from .values import Number, Value, ValueSet
 
@@ -78,26 +80,46 @@ class ReportProvider:
     (``INF`` is null), ``ReportingLevel`` (``con`` or ``ind``, from the
     entity identifier's suffix) and every other parameter of the report.
 
+    ``time_shift`` on another period reads the ``previous`` report whose
+    reference date is ``count`` periods before this report's (``refPeriod``
+    2026-12-31 and ``time_shift(x, Q, 1)`` read the report for 2026-09-30),
+    placed and typed by the same module. Without such a report the rule is
+    ``unsupported``, and its message names the reference date it needs.
+
     Every optional method of a [`DataProvider`][dpmxl.provider.DataProvider]
-    but ``table_group``, ``operation`` and ``earlier_report`` is
-    implemented. A ``ReportProvider`` is safe to read from several threads.
+    but ``table_group`` and ``operation`` is implemented. A
+    ``ReportProvider`` is safe to read from several threads.
 
     Attributes:
         module: The module.
         report: The report.
+        previous: Providers over the earlier reports, by reference date.
         unplaced: The facts that are in no table of the module.
     """
 
-    def __init__(self, module: Module, report: Report) -> None:
+    def __init__(
+        self, module: Module, report: Report, *, previous: Iterable[Report] = ()
+    ) -> None:
         """Place the report's facts in the module's tables.
 
         Args:
             module: The module, such as [`load_module`][dpmxl.module.load_module]
                 returns.
             report: The report, such as ``dpmxbrl.read_report`` returns.
+            previous: Reports of the same module for other periods, which
+                ``time_shift`` picks from by reference date.
+
+        Raises:
+            ValueError: If a previous report has no reference date, or the
+                same one as this report or another previous report.
         """
         self.module = module
         self.report = report
+        self.previous: Mapping[date, ReportProvider] = {}
+        self._periods: Mapping[date, ReportProvider] = {}
+        previous = tuple(previous)
+        if previous:
+            self._link(previous)
         self._tables = {table.code.casefold(): table for table in module.tables}
         self._indicators = {
             code.casefold(): filed for code, filed in report.filing_indicators.items()
@@ -132,6 +154,44 @@ class ReportProvider:
             for cell in found:
                 self._facts[table.code, cell.id, keys] = fact
         self.unplaced: tuple[Fact, ...] = tuple(unplaced)
+
+    def _link(self, previous: Sequence[Report]) -> None:
+        current = self.report.reference_date
+        if current is None:
+            raise ValueError("the report has no reference date to shift from")
+        found: dict[date, ReportProvider] = {}
+        for report in previous:
+            moment = report.reference_date
+            if moment is None:
+                raise ValueError("a previous report has no reference date")
+            if moment == current or moment in found:
+                raise ValueError(
+                    f"two reports have the reference date {moment.isoformat()}"
+                )
+            found[moment] = ReportProvider(self.module, report)
+        self.previous = dict(sorted(found.items()))
+        periods = {current: self, **found}
+        for provider in (self, *found.values()):
+            provider._periods = periods
+
+    def earlier_report(self, period: str, count: int) -> ReportProvider | None:
+        """Return the report ``count`` periods earlier (later when negative).
+
+        It is the report among ``previous`` (or this one) whose reference
+        date is this report's moved by ``count`` periods back, the way
+        ``time_shift`` moves dates.
+
+        Returns:
+            ReportProvider | None: That report, or ``None`` when there is
+            none or this report has no reference date.
+        """
+        current = self.report.reference_date
+        if current is None:
+            return None
+        try:
+            return self._periods.get(_shift_date(current, period, -count))
+        except EvaluationError:
+            return None
 
     def _place(self, fact: Fact, owners: Mapping[str, set[str]]) -> Table | None:
         if fact.template is not None:
@@ -367,6 +427,7 @@ def check_report(
     *,
     taxonomy_packages: str | os.PathLike[str] | Sequence[str | os.PathLike[str]] = (),
     name: str | None = None,
+    previous: Sequence[Report | str | os.PathLike[str]] = (),
 ) -> ReportCheck:
     """Check a report's filing rules and its module's validation rules.
 
@@ -380,20 +441,31 @@ def check_report(
             taxonomy.
         name: The report's file name, for bytes; the EBA file naming rule
             checks it.
+        previous: Reports of the same module for earlier periods, or paths
+            to read them from with the same taxonomy packages, for
+            ``time_shift`` (see [`ReportProvider`][dpmxl.xbrl.ReportProvider]).
+            Only the report itself is checked against the filing rules.
 
     Returns:
         ReportCheck: The filing findings and one rule run per rule; rules
         that are inactive or for other modules are skipped.
 
     Raises:
-        dpmxbrl.ReportError: If the report cannot be read.
+        dpmxbrl.ReportError: If a report cannot be read.
         ModuleError: If the module file is not valid.
+        ValueError: If the reports' reference dates are missing or repeat.
     """
     if not isinstance(module, Module):
         module = load_module(module)
     if not isinstance(report, Report):
         report = read_report(report, name=name, taxonomy_packages=taxonomy_packages)
-    provider = ReportProvider(module, report)
+    earlier = [
+        found
+        if isinstance(found, Report)
+        else read_report(found, taxonomy_packages=taxonomy_packages)
+        for found in previous
+    ]
+    provider = ReportProvider(module, report, previous=earlier)
     runs = evaluate_rules(module.rules, provider, module=module.module)
     return ReportCheck(module, report, tuple(runs), provider.unplaced)
 

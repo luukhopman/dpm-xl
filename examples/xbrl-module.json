@@ -45,6 +45,12 @@
       "severity": "warning"
     },
     {"code": "e0005", "expression": "{tC_43.00, r0010, c0010} > 0", "precondition": "{v_C_43.00}"},
-    {"code": "e0006", "expression": "total := sum({tC_48.02, c0010}); total <= {tC_47.00, r0040, c0010}"}
+    {"code": "e0006", "expression": "total := sum({tC_48.02, c0010}); total <= {tC_47.00, r0040, c0010}"},
+    {
+      "code": "e0007",
+      "expression": "{tC_47.00, r0040, c0010} >= 0.9 * time_shift({tC_47.00, r0040, c0010}, Q, 1, refPeriod)",
+      "precondition": "{v_C_47.00}",
+      "severity": "warning"
+    }
   ]
 }

@@ -1,0 +1,6 @@
+name,value
+entityID,rs:SYNTHETICDPMXL000002.CON
+refPeriod,2025-12-31
+baseCurrency,iso4217:EUR
+decimalsMonetary,-3
+decimalsPercentage,4

@@ -130,7 +130,8 @@ dpm-xl export-module DATABASE MODULE [--release R] [-o FILE]
 
 - **Providers** implement `select(query) -> Sequence[DataPoint]`,
   `table_reported(table) -> bool | None` and `parameter(name) -> Value`;
-  optionally `open_keys`, `table_group`, `operation`, `earlier_report`
+  optionally `open_keys`, `is_template`, `table_group`, `operation`,
+  `earlier_report`
   ([Connect your data](guides/provider.md)).
 - **`select` returns every defined cell of a closed selection**, with
   `value=None` for unreported ones, and one point per reported key

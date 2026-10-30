@@ -1,11 +1,11 @@
 ---
-description: Write a DataProvider for your own storage, including the optional open_keys, table_group, operation and earlier_report hooks.
+description: Write a DataProvider for your own storage, including the optional open_keys, is_template, table_group, operation and earlier_report methods.
 ---
 
 # Connect your data
 
 The evaluator never reads report files. Everything it knows about a report
-comes from a *provider*: an object with three methods, plus up to four
+comes from a *provider*: an object with three methods, plus up to five
 optional ones. This guide builds a provider over plain Python data, one
 method at a time; replace the dictionaries with queries against your database,
 a report loader or test fixtures.
@@ -86,7 +86,7 @@ from collections.abc import Sequence
 from dpmxl import CellQuery, DataPoint, Value, axis_matcher
 
 
-class ReportProvider:
+class DictProvider:
     """A DataProvider over CLOSED, FACTS, OPEN and ROWS."""
 
     def __init__(self, rows=ROWS, reported=("C_02.00", "C_27.00")):
@@ -140,7 +140,7 @@ interface can highlight the cell. It must be hashable.
 ```python
 from dpmxl import DataProvider, evaluate_rule, explain
 
-provider = ReportProvider()
+provider = DictProvider()
 print(isinstance(provider, DataProvider))
 
 for expression in (
@@ -192,7 +192,7 @@ evaluator cannot know that the selection is keyed by `qCPI`. A rule that
 groups by that key is then an error:
 
 ```python
-empty = ReportProvider(rows={})
+empty = DictProvider(rows={})
 expression = "sum({tC_27.00, c0010} group by qCPI) > 0"
 result = evaluate_rule(expression, empty)
 print(result.status, result.message)
@@ -206,7 +206,7 @@ error group by 'qCPI' is not a key of the operand (no keys)
 table's key structure, as the specification requires:
 
 ```python
-class KeyedProvider(ReportProvider):
+class KeyedProvider(DictProvider):
     def open_keys(self, table: str) -> Sequence[str]:
         return OPEN.get(table, {}).get("keys", ())
 

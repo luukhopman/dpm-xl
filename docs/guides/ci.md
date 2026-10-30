@@ -75,11 +75,10 @@ $ dpm-xl check "if {tC_01.00, r0010} > 0 then true" --json
 }
 ```
 
-!!! note "A missing rule file is an error"
-    An argument that reads as a path (it ends in `.json` or `.txt`, or
-    holds a `/` without any brackets, operators or spaces) but names no
-    file fails with `error: no such rule file: ...` and exit status 3, so a
-    mistyped path cannot pass as an expression.
+An argument that reads as a path (it ends in `.json` or `.txt`, or holds a
+`/` without any brackets, operators or spaces) but names no file fails with
+`error: no such rule file: ...` and exit status 3, so a mistyped path cannot
+pass as an expression.
 
 ## A GitHub Actions job
 

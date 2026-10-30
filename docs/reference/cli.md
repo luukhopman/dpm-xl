@@ -225,9 +225,9 @@ statuses and keys may not.
 
 `--format junit` writes one test case per rule, for CI systems that show
 test reports. A failing rule at or above `--fail-on` is a failure, a rule
-that is `error` or `unsupported` an error, and a skipped or not applicable
-rule is skipped; a failing rule below `--fail-on` passes, with its failures
-in `system-out`.
+that is `error` an error, and a skipped, not applicable or `unsupported`
+rule is skipped, with the reason as its message; a failing rule below
+`--fail-on` passes, with its failures in `system-out`.
 
 ```console
 $ dpm-xl eval examples/rules.json examples/data.json --format junit

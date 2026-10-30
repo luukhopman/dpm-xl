@@ -363,15 +363,20 @@ def test_eval_writes_junit(tmp_path, capsys) -> None:
     import xml.etree.ElementTree as ET
 
     data = _write(tmp_path, [_fact("0010", 1), _fact("0020", 2)])
-    rules = [*SEVERITIES, {"code": "x", "expression": "1 / 0 > 1"}]
+    shifted = "{tA, r0010, c0010} = time_shift({tA, r0020, c0010}, A, 1, refPeriod)"
+    rules = [
+        *SEVERITIES,
+        {"code": "x", "expression": "1 / 0 > 1"},
+        {"code": "u", "expression": shifted},
+    ]
     assert main(["eval", _rule_file(tmp_path, rules), data, "--format", "junit"]) == 1
     suite = ET.fromstring(capsys.readouterr().out)
     assert suite.attrib == {
         "name": "rules.json",
-        "tests": "6",
+        "tests": "7",
         "failures": "1",
         "errors": "1",
-        "skipped": "2",
+        "skipped": "3",
     }
     cases = {case.get("name"): case for case in suite.iter("testcase")}
 
@@ -390,6 +395,9 @@ def test_eval_writes_junit(tmp_path, capsys) -> None:
     assert child("na", "skipped").get("message") == "precondition not met"
     assert child("off", "skipped").get("message") == "inactive rule"
     assert child("x", "error").get("message") == "division by zero"
+    # An unsupported rule was not checked, as for the exit status.
+    assert cases["u"].find("error") is None
+    assert "time_shift" in (child("u", "skipped").get("message") or "")
     assert (
         main(
             [

@@ -592,9 +592,9 @@ def _junit_rules(
     """Add one test case per rule to a JUnit test suite.
 
     A failed rule of a ``failing`` severity is a failure, a rule that is
-    ``error`` or ``unsupported`` an error, and a skipped or not applicable
-    rule is skipped; a failed rule below the threshold passes with its
-    failures in ``system-out``.
+    ``error`` an error, and a skipped, not applicable or ``unsupported``
+    rule, which was not checked, is skipped; a failed rule below the
+    threshold passes with its failures in ``system-out``.
     """
     for run in runs:
         case = ET.SubElement(
@@ -606,7 +606,7 @@ def _junit_rules(
             f"{failure['summary']}"
             for failure in run.failures
         )
-        if run.status in {"error", "unsupported"}:
+        if run.status == "error":
             _count(suite, "errors")
             ET.SubElement(
                 case, "error", message=run.message or run.status, type=run.status
@@ -625,7 +625,7 @@ def _junit_rules(
                 f"{_plural(len(run.failures), 'failing record')} "
                 f"[{run.rule.severity}]\n{lines}"
             )
-        elif run.status in {"skipped", "not_applicable"}:
+        elif run.status in {"skipped", "not_applicable", "unsupported"}:
             _count(suite, "skipped")
             ET.SubElement(
                 case, "skipped", message=run.message or run.status.replace("_", " ")

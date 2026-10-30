@@ -1,5 +1,5 @@
 ---
-description: What dpm-xl is, a 30-second example in Python and on the command line, installation, the standards it implements and where to go next.
+description: What dpm-xl is, a 30-second example in Python and on the command line, installation, the standards it implements, four commands from an EBA DPM release to explained failures, and where to go next.
 ---
 
 # dpm-xl
@@ -106,6 +106,60 @@ than the rounding of three whole-unit amounts (±1.5) can explain.
 
 The import name is `dpmxl`; the command is `dpm-xl`.
 
+## From an EBA release to explained failures
+
+Four commands take a module of an EBA DPM release to the explained rule
+failures of a report:
+
+```bash
+dpm-xl list-modules dpm-4.4.sqlite --release 4.3   # the releases and modules
+dpm-xl export-module dpm-4.4.sqlite COREP_OF --release 4.3 -o corep_of.json
+dpm-synth generate corep_of.json -o report.zip     # or use your own report
+dpm-xl check-report corep_of.json report.zip       # filing rules and module rules
+```
+
+`dpm-4.4.sqlite` is the EBA's DPM 2.0 database as SQLite;
+[Start from an EBA DPM release](guides/from-a-dpm-release.md) says how to
+get it and what the export writes. `corep_of.json` is a
+[module file](reference/module-file.md) (`dpm-module/1`) with the
+module's tables, cells and rules, which dpm-xl and [dpm-synth] both read
+(dpm-synth 1.0 needs `--format dpm-synth-template/1` on the export).
+`check-report` needs the `xbrl` extra.
+
+On the example module and report in the repository's
+[`examples/`](https://github.com/luukhopman/dpm-xl/tree/main/examples),
+with the previous quarter's report for the `time_shift` rule `e0007`, the
+last step prints:
+
+```console
+$ dpm-xl check-report examples/xbrl-module.json examples/xbrl-report --previous examples/xbrl-report-previous
+report: examples/xbrl-report (xbrl-csv); module COREP_LR, release 4.2
+previous: examples/xbrl-report-previous (2025-12-31)
+warning: reports/report.json: 1 extended metadata document could not be resolved offline (http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_lr.json); tables without resolved metadata use the EBA datapoint/factValue convention
+filing rules broken: 0 errors, 0 warnings
+e0001: failed
+  records: 0 passed, 1 failed, 0 null
+  - scalar: 1,045,000 should equal 1,042,000 (812,000 + 190,000 + 40,000): difference 3,000, at least 1,000 given the reported precision
+e0003: failed
+  records: 1 passed, 1 failed, 0 null
+  - qRDT=QW4KNDKKV7QH2LA40639: -12,000 should be at least 0: difference 12,000
+e0004: failed (warning)
+  records: 1 passed, 1 failed, 0 null
+  - qRDT=QW4KNDKKV7QH2LA40639: "QW4KNDKKV7QH2LA4063" does not have the required format
+e0007: failed (warning)
+  records: 0 passed, 1 failed, 0 null
+  - scalar: 1,045,000 should be at least 1,062,000 (0.9 × time_shift(1,180,000, Q, 1, refPeriod)): difference 17,000
+7 rules: 4 failed, 2 passed, 1 not_applicable (3 not listed; --all lists every rule)
+$ echo $?
+1
+```
+
+Only rules that failed, are an error or are unsupported are listed;
+`--all` lists every rule. The exit status is 1 because rules of severity
+`error` failed; failing `warning` rules, such as `e0004`, fail the run only
+with `--fail-on warning`. `--format junit` writes the same results as a
+JUnit XML report for CI ([CLI](reference/cli.md#dpm-xl-check-report)).
+
 ## Find your way
 
 <div class="grid cards" markdown>
@@ -123,8 +177,9 @@ The import name is `dpmxl`; the command is `dpm-xl`.
 
     ---
 
-    Recipes for one task each: connect your data, check an XBRL report,
-    explain failures in a UI, evaluate large reports, check rules in CI.
+    Recipes for one task each: export a module from an EBA DPM release,
+    connect your data, check an XBRL report, explain failures in a UI,
+    evaluate large reports, check rules in CI.
 
     [:lucide-arrow-right: Guides](guides/index.md)
 
@@ -161,14 +216,28 @@ The import name is `dpmxl`; the command is `dpm-xl`.
 - **Problems before evaluation.** Every syntax error, unknown functions and
   tables, coordinates a table lacks, keys and operand types, each with its
   position and, where one fits, a suggested fix, for
-  [editors](guides/editor.md) and [CI](guides/ci.md).
+  [editors](guides/editor.md) and [CI](guides/ci.md). `non-portable`
+  warnings mark syntax other DPM-XL engines may reject, and
+  `dpm-xl check --strict` fails on them
+  ([where dpm-xl differs](reference/language.md#where-dpm-xl-differs)).
 - **Any data source.** A three-method [provider](guides/provider.md), so
   the same evaluator runs against a report upload, a database or test
   fixtures.
+- **Modules from the EBA's DPM.** `dpm-xl export-module` and
+  `list-modules` (or `dpmxl.dpm` in Python) write a module of an EBA DPM
+  2.0 database as a [module file](reference/module-file.md); see
+  [start from an EBA DPM release](guides/from-a-dpm-release.md).
 - **XBRL reports.** With the `xbrl` extra, `dpm-xl check-report` checks a
-  report against a [module file](reference/module-file.md): the filing
-  rules [dpm-xbrl] checks, and the module's rules; see
+  report against a module file: the filing rules [dpm-xbrl] checks, and
+  the module's rules, with earlier reports as `--previous` for
+  `time_shift`; see
   [from an XBRL report to explained failures](guides/end-to-end.md).
+- **Rule metadata.** Rules carry a `severity` (`error` or `warning`) and
+  `active`; inactive rules are skipped and `--fail-on` sets which failures
+  fail a run ([rule files](reference/data-formats.md#rule-files)).
+- **Output for people and CI.** Text that lists only what needs attention
+  (`--all` for every rule), [JSON](reference/cli.md#json-output_1) and
+  [JUnit XML](reference/cli.md#junit-xml).
 - **Millions of rows.** The `columnar` extra adds a polars evaluator for
   large open tables; see [evaluate large reports](guides/columnar.md).
 - **For AI agents too.** The essentials on [one page](agents.md), and

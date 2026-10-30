@@ -58,6 +58,20 @@ dpm-xl eval rules.json data.json              # evaluate and explain every rule
 dpm-xl check-report module.json report.zip    # filing rules and module rules (xbrl extra)
 ```
 
+From an EBA DPM release to explained failures in four commands:
+
+```bash
+dpm-xl list-modules dpm-4.4.sqlite --release 4.3   # the releases and modules
+dpm-xl export-module dpm-4.4.sqlite COREP_OF --release 4.3 -o corep_of.json
+dpm-synth generate corep_of.json -o report.zip     # or use your own report
+dpm-xl check-report corep_of.json report.zip       # filing rules and module rules
+```
+
+`dpm-4.4.sqlite` is the EBA's DPM 2.0 database as SQLite and
+`corep_of.json` a module file (`dpm-module/1`; dpm-synth 1.0 needs
+`--format dpm-synth-template/1` on the export); see
+[Start from an EBA DPM release](https://luukhopman.github.io/dpm-xl/guides/from-a-dpm-release/).
+
 ## Features
 
 - Parses every construct of the DPM-XL grammar and all 14,174 distinct EBA
@@ -70,13 +84,22 @@ dpm-xl check-report module.json report.zip    # filing rules and module rules (x
 - Finds problems before evaluation, for editors and CI: every syntax error,
   unknown functions and tables, coordinates a table lacks, keys and operand
   types, each with its position and, where one fits, a suggested fix.
+  `non-portable` warnings mark syntax other DPM-XL engines may reject;
+  `dpm-xl check --strict` fails on them.
+- Exports a module of an EBA DPM 2.0 database as a
+  [module file](https://luukhopman.github.io/dpm-xl/reference/module-file/)
+  with `dpm-xl export-module` (`list-modules` lists them), read by dpm-xl
+  and dpm-synth.
+- Rules carry a `severity` and `active`; `--fail-on` sets which failures
+  fail a run, and results come as text, JSON or JUnit XML.
 - Has no dependencies. The optional `columnar` extra adds a polars evaluator
   for reports with millions of open-table rows.
-- Reads no files and knows no DPM release: data comes through a three-method
-  provider, so the same evaluator runs against a report upload, a database or
+- The evaluator reads no files and knows no DPM release: data comes through
+  a three-method provider, so it runs against a report upload, a database or
   test fixtures. With the `xbrl` extra it evaluates a module file's rules on
   xBRL-CSV and XBRL-XML reports read by
-  [dpm-xbrl](https://pypi.org/project/dpm-xbrl/).
+  [dpm-xbrl](https://pypi.org/project/dpm-xbrl/), with earlier reports for
+  `time_shift`.
 
 ## Toolkit
 
@@ -98,8 +121,8 @@ dpm-xbrl, then evaluated and explained with dpm-xl.
 
 - [Getting started](https://luukhopman.github.io/dpm-xl/getting-started/):
   a first rule, end to end.
-- [How-to guides](https://luukhopman.github.io/dpm-xl/guides/): connect your
-  data, evaluate rule files, explain failures in a UI, evaluate large
+- [How-to guides](https://luukhopman.github.io/dpm-xl/guides/): start from
+  an EBA DPM release, connect your data, evaluate rule files, explain failures in a UI, evaluate large
   reports, run rules in threads, check rules in CI, build editor support, and
   [read an XBRL report and evaluate it](https://luukhopman.github.io/dpm-xl/guides/end-to-end/)
   with dpm-xbrl.

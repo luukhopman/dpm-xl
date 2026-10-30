@@ -23,7 +23,8 @@ shown (the test suite executes them).
 
     ---
 
-    Run a rule set against a report, in Python or with `dpm-xl eval`.
+    Run a rule set against a report, in Python or with `dpm-xl eval`,
+    with rule severities, inactive rules and JUnit output.
 
 -   :lucide-message-square-text:{ .lg .middle } [**Explain failures in a UI**](explain.md)
 
@@ -36,7 +37,8 @@ shown (the test suite executes them).
     ---
 
     Read a report with dpm-xbrl, place its facts with a module file,
-    evaluate and explain, or run `dpm-xl check-report`.
+    evaluate and explain, or run `dpm-xl check-report`, with `--previous`
+    for `time_shift`.
 
 -   :lucide-workflow:{ .lg .middle } [**Toolkit tour**](toolkit-tour.md)
 
@@ -75,7 +77,8 @@ shown (the test suite executes them).
 
     ---
 
-    `time_shift` and `annualise`.
+    `time_shift` and `annualise`, also across XBRL reports with
+    `dpm-xl check-report --previous`.
 
 </div>
 
@@ -87,7 +90,7 @@ shown (the test suite executes them).
 
     ---
 
-    `dpm-xl check` and a pytest test.
+    `dpm-xl check`, `--strict` for portable syntax, and a pytest test.
 
 -   :lucide-code:{ .lg .middle } [**Build editor support**](editor.md)
 

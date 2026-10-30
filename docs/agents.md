@@ -49,10 +49,14 @@ from dpmxl import (
 | `parse(expression)` / `parse_program(source)` | Expression tree / `Program` | `DpmXlSyntaxError` (`message`, `position`, `end`, `pointer()`) |
 | `references(tree)`, `tables(tree, provider=None)` | Selections with context applied; table codes | |
 | `dpmxl.columnar.evaluate_rule_columnar(expression, frame_provider, *, precondition=None, cache=None)` | `ColumnarResult` with `status`, `passed`, `failed`, `null`, `failing_keys`, `failing_frame` | `ColumnarUnsupported`: evaluate with `evaluate_rule` instead |
-| `dpmxl.module.load_module(path)` | `Module` with `tables`, `rules` (`Rule`: `code`, `expression`, `precondition`, `severity`, `active`), `layouts()` | `ModuleError` naming the JSON path |
-| `dpmxl.xbrl.ReportProvider(module, report)` / `check_report(module, report)` | A provider over a dpm-xbrl `Report` / `ReportCheck` with `filing`, `rules`, `failed(fail_on)` | `dpmxbrl.ReportError` for an unreadable report; needs the `xbrl` extra |
+| `dpmxl.diagnostics.diagnose(expression, layout=None, *, tables=None, parameters=None, program=False)` | `Diagnostic`s with `severity`, `code` (such as `syntax`, `unknown-table`, `non-portable`), `message`, `start`, `end`, `suggestion` | |
+| `dpmxl.rules.load_rules(path)` / `evaluate_rules(rules, provider, *, module=None, cache=None)` | `Rule`s (`code`, `expression`, `precondition`, `severity`, `active`, `modules`) / one `RuleRun` per rule with `status` (`skipped` for an inactive rule), `message`, `result` | `RuleFileError` naming the JSON path |
+| `dpmxl.module.load_module(path)` | `Module` with `tables`, `rules` (`Rule`s), `layouts()`; reads `dpm-module/1` and `dpm-synth-template/1` | `ModuleError` naming the JSON path |
+| `dpmxl.dpm.open_release(path)` / `export_module(db, module_code, release=None, *, format="dpm-module/1")` | An open EBA DPM 2.0 database (`releases()`, `modules(release)`) / the module file as a `dict` | `DpmError` |
+| `dpmxl.xbrl.ReportProvider(module, report, *, previous=())` / `check_report(module, report, *, previous=())` | A provider over a dpm-xbrl `Report` / `ReportCheck` with `filing`, `rules`, `unplaced`, `failed(fail_on)` | `dpmxbrl.ReportError` for an unreadable report; needs the `xbrl` extra |
 
-Statuses: `passed`, `failed`, `not_applicable`, `error`, `unsupported`.
+Statuses: `passed`, `failed`, `not_applicable`, `error`, `unsupported`;
+rule files and modules add `skipped` for an inactive rule.
 
 ## A complete, correct example
 
@@ -94,6 +98,34 @@ v1 failed
   1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision
 ```
 
+## Commands
+
+```text
+dpm-xl check SOURCE [--strict] [--json]          # diagnose every expression; exit 1 if one does not parse
+dpm-xl eval RULES DATA [--format text|json|junit] [--fail-on error|warning] [--all]
+dpm-xl check-report MODULE REPORT [--previous REPORT] [--format text|json|junit] [--fail-on error|warning]
+dpm-xl list-modules DATABASE [--release R] [--json]
+dpm-xl export-module DATABASE MODULE [--release R] [-o FILE]
+```
+
+- `SOURCE` and `RULES` are a JSON rule file, a module file, a text file of
+  expressions or one expression; `MODULE` is a
+  [module file](reference/module-file.md); `DATABASE` an EBA DPM 2.0
+  database as SQLite ([how to get one](guides/from-a-dpm-release.md)).
+- Exit statuses: 0 nothing at or above `--fail-on` failed, 1 something did
+  (or a rule is `error`; `unsupported` never counts), 2 usage error or
+  `check-report` without the `xbrl` extra, 3 unreadable or malformed
+  input. `check --strict` also exits 1 for any error or `non-portable`
+  warning.
+- `--json` (`--format json`) prints `{"schema_version": 2, "tool":
+  "dpm-xl", "version", "summary": {...}, "results": [...]}`; each result
+  has `rule`, `expression`, `severity`, `active`, `modules`, `status`,
+  `message`, `counts` and `failures` (`key`, `summary`, `cells`).
+  `check-report` adds `report`, `module`, `warnings`, `filing_rules` and
+  `unplaced`; `check` has `errors` and `diagnostics` instead of `results`
+  ([CLI](reference/cli.md)). Field names and statuses are stable;
+  summaries and messages may be reworded.
+
 ## Contracts
 
 - **Providers** implement `select(query) -> Sequence[DataPoint]`,
@@ -129,9 +161,13 @@ v1 failed
 | A filing indicator of a table not shaped like `C_01.00`, such as `{v_T}`, in a custom provider | Reads parameter `T` | Implement `is_template(code)` on the provider |
 | Keywords run together, such as `ornot` | One unknown name: a syntax error | Separate words: `or not` |
 | A new `SelectionCache` per rule | Every selection is read again | One cache per report |
+| Evaluating a `time_shift` rule on one report | `unsupported`, naming the reference date needed | Pass the earlier report as `previous` (`--previous`) |
+| Counting a failing `warning` rule as a failed run | Runs fail that the rule file means to pass | Use `ReportCheck.failed(fail_on)` or `--fail-on` |
 
 ## Where to look next
 
+- [Start from an EBA DPM release](guides/from-a-dpm-release.md): export a
+  real module as a module file.
 - [Quick reference](reference/quick-reference.md): the language and its
   grammar on one page.
 - [Language](reference/language.md): every construct with its syntax,

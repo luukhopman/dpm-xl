@@ -252,6 +252,9 @@ $ dpm-xl check examples/rules.json
 - [From an XBRL report to explained failures](guides/end-to-end.md): check
   a real report against its [module file](reference/module-file.md), or
   run `dpm-xl check-report`.
+- [Start from an EBA DPM release](guides/from-a-dpm-release.md): export a
+  real module, such as COREP_OF, as a module file with
+  `dpm-xl export-module`.
 - [Explain failures in a UI](guides/explain.md): everything an
   [`Explanation`][dpmxl.explain.Explanation] holds.
 - [Records and keys](concepts/records-and-keys.md): how selections become

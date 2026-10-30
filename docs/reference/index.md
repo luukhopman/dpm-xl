@@ -34,21 +34,22 @@ Exact, complete descriptions. For explanations, see the
 
     ---
 
-    `dpm-xl check`, `eval` and `check-report`: every option, the exit
-    statuses and the JSON output.
+    `dpm-xl check`, `eval`, `check-report`, `list-modules` and
+    `export-module`: every option, the exit statuses, the JSON and JUnit
+    output.
 
 -   :lucide-file-json:{ .lg .middle } [**Data formats**](data-formats.md)
 
     ---
 
-    Rule files and data files.
+    Rule files, with each rule's severity and `active`, and data files.
 
 -   :lucide-boxes:{ .lg .middle } [**Module file**](module-file.md)
 
     ---
 
-    The `dpm-module/1` format: one module's tables, cells and rules,
-    shared with dpm-synth.
+    The `dpm-module/1` format: one module's tables, cells and rules, as
+    `dpm-xl export-module` writes it, shared with dpm-synth.
 
 -   :lucide-book-a:{ .lg .middle } [**Glossary**](glossary.md)
 

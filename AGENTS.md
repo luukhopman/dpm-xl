@@ -67,6 +67,19 @@ uv run python -c "import json; from dpmxl.grammar import textmate_grammar; print
   `examples/language_report.py` and must show the actual result. A change
   to `dpmxl.grammar` needs its entry and index row in
   `docs/reference/language.md` (the tests check both directions).
+- Code annotations (`# (1)!` comments with a numbered list right after
+  the block) may stand between a `python` block and its `text` output;
+  the docs tests check that each annotation has its list item.
+- Shared link targets for the docs (such as the dpm-xbrl site and the
+  specifications) are in `docs/.snippets/links.md`; the glossary tooltips,
+  auto-appended to every page, in `docs/.snippets/glossary.md`, with each
+  term also on `docs/reference/glossary.md`.
+- Versions of the standards implemented, and how they are tested, belong
+  on `docs/reference/standards.md`; other pages link there. The deviations
+  from DPM-XL stay in `docs/reference/language.md#where-dpm-xl-differs`.
+- The toolkit cards, the toolkit page, the glossary and
+  `docs/stylesheets/toolkit.css` are the same in dpm-xl, dpm-xbrl and
+  dpm-synth; `tests/test_toolkit.py` pins their hashes.
 - `evaluate_rule` never raises for bad rules or data; it returns a status.
   Keep it that way.
 - Statuses, record keys, field names and the CLI JSON layout

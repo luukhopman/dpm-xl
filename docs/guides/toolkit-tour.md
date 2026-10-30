@@ -9,7 +9,8 @@ Each package of the dpm toolkit does one job:
 [dpm-xbrl](https://luukhopman.github.io/dpm-xbrl/) reads and writes them,
 and dpm-xl evaluates their validation rules. This tour takes one report
 through all three: generate it, plant an error, read it back, then evaluate
-the rules and explain the failure.
+the rules and explain the failure. The [toolkit page](../toolkit.md) shows how the
+packages and the module file fit together.
 
 ```bash
 pip install dpm-synth "dpm-xl[xbrl]"   # dpm-synth, dpm-xl and dpm-xbrl

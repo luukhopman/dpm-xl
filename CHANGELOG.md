@@ -41,6 +41,10 @@ All notable changes to this project are documented here. The project follows
   --strict` fails on it.
 - The language reference lists the syntax dpm-xl accepts beyond the v0.11
   grammar, with the evidence for each.
+- `dpmxl.dpm` exports a module of an EBA DPM 2.0 database (SQLite, or the
+  Access file with mdbtools) as a module file.
+- `dpm-xl export-module DATABASE MODULE` writes the module file, and
+  `dpm-xl list-modules DATABASE` lists the releases and modules.
 
 ### Changed
 

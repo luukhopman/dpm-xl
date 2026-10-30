@@ -82,7 +82,7 @@ Every field is optional.
 | `keys` | object, optional | Open key components by name, for open tables. |
 | `value` | any | The value; `null` for a nil fact. |
 | `decimals` | integer or `"INF"`, optional | XBRL decimals of a number; `"INF"` or absent means exact. |
-| `type` | string, optional | `number`, `item` or `date`, to read a string value as that type. |
+| `type` | string, optional | `number`, `item` or `date`, to read a string value as that type; the DPM's `m`, `p`, `i` and `r` read it as a number with its `decimals`, and `o` as a whole number. |
 
 Values are typed as follows: JSON numbers (and strings with `"type":
 "number"`) become `Number` with the given `decimals`; strings starting with

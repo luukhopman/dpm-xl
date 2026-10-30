@@ -704,11 +704,12 @@ class MemoryProvider:
             bool | None: Filing-indicator state.
         """
         folded = table.casefold()
-        if any(code.casefold() == folded for code in self.reported):
+        reported = {code.casefold() for code in self.reported}
+        if folded in reported:
             return True
         return any(
             (layout.template or "").casefold() == folded
-            and layout.code in self.reported
+            and layout.code.casefold() in reported
             for layout in self.tables.values()
         )
 

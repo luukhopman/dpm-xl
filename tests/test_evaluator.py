@@ -615,3 +615,15 @@ def test_open_axes_and_data_types_do_not_change_evaluation() -> None:
     for layout in (plain, described):
         result = evaluate_rule("{tC, c0010} > 0", MemoryProvider([layout], values))
         assert result.status == "passed"
+
+
+def test_memory_provider_filing_indicators_ignore_case() -> None:
+    layout = TableLayout("C_07.00.a", template="C_07.00")
+    for reported in ["C_07.00.a", "c_07.00.A"]:
+        provider = MemoryProvider([layout], {}, reported=[reported])
+        assert provider.table_reported("C_07.00") is True, reported
+        assert provider.table_reported("c_07.00.a") is True, reported
+        assert provider.is_template("c_07.00") and provider.is_template("C_07.00.A")
+    provider = MemoryProvider([layout], {}, reported=["C_08.00"])
+    assert provider.table_reported("C_07.00") is False
+    assert provider.is_template("c_08.00") and not provider.is_template("C_09.00")

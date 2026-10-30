@@ -260,12 +260,32 @@ package (`AllowedValue` in each table's xBRL-CSV metadata):
 | 4.3 | 1,173 of 1,176 | 214 of 214 |
 | 4.4 | 1,187 of 1,190 | 234 of 234 |
 
+With the taxonomy packages (below), all of them are equal.
+
 The three cells that differ are on boundaries where the database and the
 taxonomy disagree: an item whose category binding ends in the module's
 release, which the taxonomy no longer lists, and items that move to another
 category, which the taxonomy lists under both codes although the property's
 category is only the new one. DORA (with its own taxonomy package) and
 FINREP9DP 1.1.0 (release 4.2.1) were not compared.
+
+## Items from the taxonomy
+
+For items exactly as reports are validated against them, give the export
+the EBA's taxonomy packages that hold the module version's entry point
+(the release that introduced it, and for older versions its packages too):
+
+```bash
+dpm-xl export-module dpm-4.4.sqlite COREP_OF --release 4.3 -o corep_of.json \
+  --taxonomy-package EBA_XBRL_4.2_Reporting_Frameworks_4.2.0.0.zip \
+  --taxonomy-package EBA_XBRL_4.3_Reporting_Frameworks_4.3.0.0.zip
+```
+
+Each enumerated cell and key then takes its items, in the taxonomy's order,
+from the allowed values of its table's xBRL-CSV metadata, and from the
+database where the taxonomy lists none. A module whose entry point no
+package has is exported from the database alone, with a note. In Python,
+pass `taxonomy_packages` to [`export_module`][dpmxl.dpm.export_module].
 
 ## In Python
 

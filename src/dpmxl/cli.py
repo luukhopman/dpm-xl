@@ -175,6 +175,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="the file's format (default: %(default)s); dpm-synth 1.0 reads "
         "only dpm-synth-template/1, which dpm-xl reads too",
     )
+    export.add_argument(
+        "--taxonomy-package",
+        action="append",
+        default=[],
+        type=Path,
+        metavar="ZIP",
+        help="the EBA taxonomy package with the module's entry point: the "
+        "allowed items of enumerated cells and keys come from it (repeatable)",
+    )
     arguments = parser.parse_args(argv)
     if arguments.command == "list-modules":
         return _list_modules(
@@ -187,6 +196,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             arguments.release,
             output=arguments.output,
             document_format=arguments.format,
+            taxonomy_packages=arguments.taxonomy_package,
         )
     if arguments.command == "check-report":
         if find_spec("dpmxbrl") is None:
@@ -904,6 +914,7 @@ def _export_module(
     *,
     output: Path | None,
     document_format: str,
+    taxonomy_packages: Sequence[Path] = (),
 ) -> int:
     from .dpm import DpmError, export_module, open_release
 
@@ -913,7 +924,13 @@ def _export_module(
     propagate, logger.propagate = logger.propagate, False
     try:
         with open_release(database) as db:
-            document = export_module(db, module, release, format=document_format)
+            document = export_module(
+                db,
+                module,
+                release,
+                format=document_format,
+                taxonomy_packages=taxonomy_packages,
+            )
     except DpmError as error:
         print(f"error: {error}", file=sys.stderr)
         return EXIT_INPUT

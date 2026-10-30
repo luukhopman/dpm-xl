@@ -30,16 +30,22 @@ Examples:
 
 from __future__ import annotations
 
+import contextlib
 import csv
+import html
 import io
+import json
 import logging
+import posixpath
 import re
 import shutil
 import sqlite3
 import subprocess  # ruff: ignore[suspicious-subprocess-import] - runs mdb-export, found on PATH, without a shell
+import urllib.parse
+import zipfile
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Self
 
@@ -874,6 +880,7 @@ def export_module(
     release: str | None = None,
     *,
     format: str = MODULE_FORMAT,
+    taxonomy_packages: Sequence[str | Path] = (),
 ) -> dict[str, Any]:
     """Export one module of a release as a ``dpm-module/1`` document.
 
@@ -893,6 +900,11 @@ def export_module(
         format: The document's ``format``: ``dpm-module/1``, or
             ``dpm-synth-template/1``, which dpm-synth 1.0 needs and dpm-xl
             reads too.
+        taxonomy_packages: The EBA's taxonomy packages (ZIP files) that hold
+            the module version's entry point. Each enumerated cell and key
+            then takes its items from the taxonomy's allowed values, which
+            reports are validated against, and from the database where the
+            taxonomy lists none.
 
     Returns:
         dict[str, Any]: The document; write it with ``json.dump``.
@@ -917,9 +929,144 @@ def export_module(
         hint = f"; it has {', '.join(known)}" if len(known) <= 80 else ""
         raise DpmError(f"no module {module_code!r} in release {chosen.code}{hint}")
     version = found[0]
-    document = _Export(db, chosen, version, versions).document()
+    taxonomy = _Taxonomy(taxonomy_packages) if taxonomy_packages else None
+    try:
+        document = _Export(db, chosen, version, versions, taxonomy).document()
+    finally:
+        if taxonomy is not None:
+            taxonomy.close()
     document["format"] = format
     return document
+
+
+_PACKAGE_MEMBER_BYTES = 256 * 1024**2
+"""The largest metadata file read from a taxonomy package."""
+
+_REWRITE = re.compile(r"<(?:\w+:)?rewriteURI\b[^>]*>")
+_ATTRIBUTE = re.compile(r"""(\w+)\s*=\s*["']([^"']*)["']""")
+
+
+@dataclass(slots=True)
+class _Allowed:
+    """The allowed items a taxonomy lists for one module.
+
+    Attributes:
+        cells: Datapoint code, such as ``dp12345``, to item qnames.
+        keys: Table code and ``PropertyID`` of an open key to item qnames.
+    """
+
+    cells: dict[str, list[str]] = field(default_factory=dict)
+    keys: dict[tuple[str, int], list[str]] = field(default_factory=dict)
+
+
+class _Taxonomy:
+    """The xBRL-CSV metadata of EBA taxonomy packages, read with ``zipfile``.
+
+    A package maps URLs to its files in ``META-INF/catalog.xml``; each
+    table's JSON metadata lists the allowed values of its enumerated
+    datapoints and open keys (``AllowedValue`` in ``eba:documentation``).
+    """
+
+    def __init__(self, paths: Sequence[str | Path]):
+        self.archives: dict[Path, zipfile.ZipFile] = {}
+        self.prefixes: list[tuple[str, Path, str]] = []
+        try:
+            for path in map(Path, paths):
+                try:
+                    archive = zipfile.ZipFile(path)
+                except FileNotFoundError as error:
+                    raise DpmError(f"{path}: no such file") from error
+                except (OSError, zipfile.BadZipFile) as error:
+                    raise DpmError(
+                        f"{path}: not a taxonomy package: {error}"
+                    ) from error
+                self.archives[path] = archive
+                for name in archive.namelist():
+                    if name.casefold().endswith("meta-inf/catalog.xml"):
+                        self._catalog(path, name, archive.read(name))
+        except BaseException:
+            self.close()
+            raise
+        self.prefixes.sort(key=lambda prefix: len(prefix[0]), reverse=True)
+
+    def close(self) -> None:
+        """Close the packages."""
+        for archive in self.archives.values():
+            archive.close()
+
+    def _catalog(self, path: Path, catalog: str, text: bytes) -> None:
+        base = posixpath.dirname(catalog)
+        for element in _REWRITE.finditer(text.decode("utf-8", "replace")):
+            attributes = dict(_ATTRIBUTE.findall(element[0]))
+            start = html.unescape(attributes.get("uriStartString", ""))
+            prefix = html.unescape(attributes.get("rewritePrefix", ""))
+            if start:
+                member = posixpath.normpath(posixpath.join(base, prefix))
+                self.prefixes.append((start, path, member))
+
+    def read(self, url: str) -> Any:
+        """Return the JSON document at a URL, or ``None`` if no package has it.
+
+        Returns:
+            Any: The parsed document, or ``None``.
+
+        Raises:
+            DpmError: If the file is too large or not JSON.
+        """
+        for start, path, member in self.prefixes:
+            if not url.startswith(start):
+                continue
+            name = posixpath.join(member, url[len(start) :])
+            archive = self.archives[path]
+            try:
+                info = archive.getinfo(name)
+            except KeyError:
+                continue
+            if info.file_size > _PACKAGE_MEMBER_BYTES:
+                raise DpmError(f"{path}: {name} is too large")
+            try:
+                return json.loads(archive.read(info))
+            except (ValueError, zipfile.BadZipFile) as error:
+                raise DpmError(f"{path}: {name}: not JSON: {error}") from error
+        return None
+
+    def allowed(self, url: str | None, module: str) -> _Allowed:
+        """Return the allowed items of a module's tables.
+
+        Returns:
+            _Allowed: Those the taxonomy lists; empty, with a warning, when
+            no package has the entry point.
+        """
+        found = _Allowed()
+        document = self.read(url) if url else None
+        if url is None or not isinstance(document, dict):
+            logger.warning(
+                "%s: no taxonomy package has entry point %s; items from the database",
+                module,
+                url,
+            )
+            return found
+        extends = (document.get("documentInfo") or {}).get("extends") or []
+        for reference in extends:
+            table = self.read(urllib.parse.urljoin(url, reference))
+            if not isinstance(table, dict):
+                continue
+            for name, template in (table.get("tableTemplates") or {}).items():
+                code = name.replace("-", ".")
+                for column in (template.get("columns") or {}).values():
+                    documentation = column.get("eba:documentation") or {}
+                    values = documentation.get("AllowedValue")
+                    prop = documentation.get("PropertyID")
+                    if isinstance(values, dict) and prop is not None:
+                        with contextlib.suppress(ValueError):
+                            found.keys[code, int(prop)] = list(values)
+                    for point, group in (column.get("propertyGroups") or {}).items():
+                        values = (group.get("eba:documentation") or {}).get(
+                            "AllowedValue"
+                        )
+                        if isinstance(values, dict):
+                            found.cells[point] = list(values)
+        return found
 
 
 class _Export:
@@ -938,8 +1085,11 @@ class _Export:
         release: Release,
         version: Sequence[Any],
         versions: Mapping[Any, Sequence[Any]],
+        taxonomy: _Taxonomy | None = None,
     ):
         self.db = db
+        self.taxonomy = taxonomy
+        self.allowed = _Allowed()
         self.release = release
         self.version = version
         self.vid = version[0]
@@ -953,6 +1103,13 @@ class _Export:
         module_frameworks = dict(db._rows("Module"))
         framework = frameworks.get(module_frameworks.get(version[1]))
         introduced = {row[0]: row[1] for row in db._rows("Release")}.get(version[5])
+        point = (
+            entry_point(framework, introduced, self.code)
+            if framework and introduced
+            else None
+        )
+        if self.taxonomy is not None:
+            self.allowed = self.taxonomy.allowed(point, self.code)
         tables, filing_indicators = self.tables()
         if not tables:
             raise DpmError(
@@ -963,9 +1120,7 @@ class _Export:
             "format": MODULE_FORMAT,
             "release": self.release.code,
             "module": self.code,
-            "entry_point": entry_point(framework, introduced, self.code)
-            if framework and introduced
-            else None,
+            "entry_point": point,
             "reference_date": _date(version[7]),
             "decimals": dict(DEFAULT_DECIMALS),
             "filing_indicators": filing_indicators,
@@ -1111,6 +1266,8 @@ class _Export:
             if restriction is None and variable is not None:
                 restriction = variable[3]
             items = db._items(prop, restriction, basis, where)
+            if items is not None:
+                items = self.allowed.keys.get((table, prop), items)
             key: dict[str, Any] = {"code": code, "column": code}
             if items is not None:
                 key["items"] = items
@@ -1162,6 +1319,7 @@ class _Export:
                     self.basis,
                     f"{self.code}: cell {row[3]}",
                 )
+                items = self.allowed.cells.get(cell["datapoint"], items)
                 if items is not None:
                     cell["items"] = items
             cells.append(cell)

@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 import sqlite3
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -218,6 +219,63 @@ def test_the_release_selects_the_module_version_and_rules(db: DpmRelease) -> Non
     new = export_module(db, "DEMO", "2.0")
     assert new["release"] == "2.0"
     assert _rule(new, "v1")["expression"].endswith(">= 0")
+
+
+def _taxonomy_package(path: Path) -> Path:
+    # a small taxonomy package with the entry point of DEMO 2.0.0
+    root = "demo/www.eba.europa.eu/eu/fr/xbrl/crr/fws/demo/2.0"
+    module = {"documentInfo": {"extends": ["../tab/t_01.00.a.json", "../tab/x.json"]}}
+    cells = {
+        "datapoint": {
+            "propertyGroups": {
+                "dp502": {"eba:documentation": {"AllowedValue": {"eba_CA:x2": 2002}}},
+            }
+        }
+    }
+    key = {
+        "eba:documentation": {"AllowedValue": {"eba_CA:x1": 2001}, "PropertyID": "1003"}
+    }
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(
+            "demo/META-INF/catalog.xml",
+            '<catalog xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog">'
+            '<rewriteURI uriStartString="http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/demo/2.0/" '
+            'rewritePrefix="../www.eba.europa.eu/eu/fr/xbrl/crr/fws/demo/2.0/"/></catalog>',
+        )
+        archive.writestr(f"{root}/mod/demo.json", json.dumps(module))
+        archive.writestr(
+            f"{root}/tab/t_01.00.a.json",
+            json.dumps({"tableTemplates": {"T_01-00-a": {"columns": cells}}}),
+        )
+        archive.writestr(
+            f"{root}/tab/x.json",
+            json.dumps({"tableTemplates": {"T_02-00": {"columns": {"KEY": key}}}}),
+        )
+    return path
+
+
+def test_taxonomy_packages_give_the_allowed_items(
+    db: DpmRelease, tmp_path: Path, caplog, capsys
+) -> None:
+    package = _taxonomy_package(tmp_path / "taxonomy.zip")
+    document = export_module(db, "DEMO", taxonomy_packages=[package])
+    cells = _table(document, "T_01.00.a")["cells"]
+    assert cells[1]["items"] == ["eba_CA:x2"]  # the database says x1
+    assert cells[4]["items"] == ["eba_CA:x1"]  # not in the taxonomy: the database's
+    key = _table(document, "T_02.00")["open_keys"][0]
+    assert key["items"] == ["eba_CA:x1"]
+    with caplog.at_level(logging.WARNING, "dpmxl.dpm"):
+        other = export_module(db, "OTHER", taxonomy_packages=[package])
+    assert other == export_module(db, "OTHER")
+    assert any("no taxonomy package has entry point" in m for m in caplog.messages)
+    arguments = ["export-module", str(db.path), "DEMO"]
+    assert main([*arguments, "--taxonomy-package", str(package)]) == 0
+    assert json.loads(capsys.readouterr().out) == document
+    with pytest.raises(DpmError, match="no such file"):
+        export_module(db, "DEMO", taxonomy_packages=[tmp_path / "missing.zip"])
+    (tmp_path / "bad.zip").write_bytes(b"not a zip")
+    with pytest.raises(DpmError, match="not a taxonomy package"):
+        export_module(db, "DEMO", taxonomy_packages=[tmp_path / "bad.zip"])
 
 
 def test_open_release_rejects_what_it_cannot_read(tmp_path: Path) -> None:

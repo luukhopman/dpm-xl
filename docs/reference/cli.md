@@ -392,6 +392,7 @@ The module code ignores case.
 | `--release R` | The release, such as `4.3`. Default: the latest release of the database. |
 | `-o FILE`, `--output FILE` | Write the module file to `FILE`, and a summary to standard error. Default: standard output. |
 | `--format dpm-module/1\|dpm-synth-template/1` | The file's `format`. Default `dpm-module/1`. dpm-xl and dpm-synth read both. |
+| `--taxonomy-package ZIP` | An EBA taxonomy package with the module's entry point; the items of enumerated cells and keys come from its allowed values ([items from the taxonomy](../guides/from-a-dpm-release.md#items-from-the-taxonomy)). Repeatable. |
 
 ```console
 $ dpm-xl export-module examples/dpm-demo.sqlite OTHER

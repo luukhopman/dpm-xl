@@ -76,6 +76,8 @@ All notable changes to this project are documented here. The project follows
   property's category, with a note, instead of writing invalid qnames.
 - An item bound in two categories of a property lists its later binding's
   qname first.
+- `export_module(..., taxonomy_packages=...)` and `dpm-xl export-module
+  --taxonomy-package ZIP` take enumerated items from the EBA taxonomy.
 
 ### Changed
 

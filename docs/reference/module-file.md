@@ -62,7 +62,7 @@ describes the tables of the [example data file](data-formats.md#data-files):
 | `format` | string | yes | `"dpm-module/1"`, or `"dpm-synth-template/1"`. |
 | `release` | string | yes | The DPM release, such as `"4.2"`. |
 | `module` | string | yes | The module code, such as `"COREP_OF"`. A rule naming `modules` applies only to those. |
-| `entry_point` | string or null | no | The module's xBRL-CSV entry point. |
+| `entry_point` | string or null | no | The module's xBRL-CSV entry point; `ReportProvider` rejects a report of another one. |
 | `reference_date` | string or null | no | The reference date, `YYYY-MM-DD`. |
 | `currency` | string or null | no | The reporting currency, an ISO 4217 code such as `"EUR"`. |
 | `decimals` | object | no | Reporting decimals by data type code, such as `{"m": -3}`; whole numbers from -20 to 20. A report's own `decimals…` parameters take precedence. |
@@ -76,7 +76,7 @@ describes the tables of the [example data file](data-formats.md#data-files):
 | --- | --- | --- | --- |
 | `code` | string | yes | The table code, such as `"C_07.00.a"`, as rules name it. Unique, ignoring case. |
 | `filing_indicator` | string or null | no | The filing indicator the table is reported under, such as `"C_07.00"`. Default: the code. |
-| `open_keys` | array | no | The keys of an open table: `code` (as rules name it, such as `"qCPI"`), `column` (its column in the xBRL-CSV file; default the code, unique in the table), `data_type` (of a typed key: `i` and `o` integers, `d` and `dt` dates, other codes text) and `items` (the item qnames of an enumerated key). |
+| `open_keys` | array | no | The keys of an open table: `code` (as rules name it, such as `"qCPI"`), `column` (its column in the xBRL-CSV file; default the code, unique in the table), `data_type` (of a typed key: `i` and `o` integers, `d` and `dt` dates, other codes text) and `items` (the item qnames of an enumerated key; `[]` allows none). |
 | `cells` | array | yes | At least one [cell](#cells). |
 
 ## Cells
@@ -87,16 +87,18 @@ describes the tables of the [example data file](data-formats.md#data-files):
 | `datapoint` | string | yes | The datapoint code, such as `"dp12345"`, that places a reported fact in the cell. |
 | `row`, `column`, `sheet` | string or null | no | The cell's codes, such as `"0010"`, without the `r`, `c` or `s`; null for a table without that axis, `"*"` for every row (or sheet) of an open table. |
 | `data_type` | string or null | no | The DPM data type, as in the `DataType` table of the EBA's DPM database: `m` monetary, `p` percentage, `i` integer, `r` decimal, `o` ordinal, `e` item (enumeration), `b` Boolean, `t` true (a Boolean that can only be true), `d` date, `dt` date or date and time, `s` text, `es` text that may be empty, `u` URI; anything else text. |
-| `items` | array of strings or null | no | The item qnames of an `e` cell; ignored for other data types. |
+| `items` | array of strings or null | no | The item qnames of an `e` cell; `[]` allows none, and a missing or null `items` any. Ignored for other data types. |
 | `unit` | Boolean or null | no | `true` for a monetary cell reported in its currency of denomination. |
 
 A report's values are written as in xBRL-CSV, and
 [`ReportProvider`][dpmxl.xbrl.ReportProvider] reads them by the cell's data
 type: `m`, `p`, `i` and `r` as numbers with their decimals; `o` as an exact
 whole number, such as `3`; `e` as an item, such as `eba_CU:EUR`; `b` and
-`t` as Booleans, `true` or `false` (`t` is always `true`); `d` as a date,
-`2026-12-31`, and `dt` as one too when it has no time
-(`2026-12-31T12:00:00` stays text); `s`, `es` and `u` as text. An `es`
+`t` as Booleans, `true` or `false` (`t` is always `true`); `d` and `dt`
+as dates, `2026-12-31`, without a time or time zone
+(`2026-12-31T12:00:00` and `2026-12-31Z` read as 2026-12-31); `s`, `es`
+and `u` as text. A value that does not read as its type, such as `NaN` for
+a number, is an `invalidValue` finding, and no rule reads it. An `es`
 value may be the empty string, which is a value, not null; EBA filing
 rule 2.19 forbids reporting it (`#empty` in xBRL-CSV). No module of DPM
 4.3 or 4.4 has a `dt`, `u` or `o` datapoint.

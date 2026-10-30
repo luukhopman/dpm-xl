@@ -122,7 +122,11 @@ A closed selection returns **every defined cell**, with `value=None` where
 nothing was reported, so `default` and `isnull` work, and numbers carry
 their reported precision: the total exposure was reported with
 `decimalsMonetary = -3`, rounded to thousands, so it stands for
-1,045,000 ± 500. `unplaced` lists the facts in no table of the module.
+1,045,000 ± 500. `unplaced` lists the facts in no table of the module,
+`invalid` those whose value does not read as their cell's data type, and
+`findings` both, which `check-report` reports as errors. An XBRL-XML
+report has no datapoints: pass its taxonomy packages as
+`taxonomy_packages`, and dpm-xbrl places its facts through the taxonomy.
 
 ### 3. Evaluate with the columnar engine and fall back
 

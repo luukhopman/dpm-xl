@@ -272,10 +272,10 @@ exits with status 2.
 | --- | --- |
 | `--format text\|json\|junit` | Print text (the default), one JSON document or a JUnit XML report. |
 | `--json` | Short for `--format json`. |
-| `--fail-on error\|warning` | Exit with status 1 when a filing rule or validation rule of this severity or worse is broken. Default `error`. |
+| `--fail-on error\|warning` | Exit with status 1 when a filing rule, fact finding or validation rule of this severity or worse is broken. Default `error`. |
 | `--all` | In text output, list every rule, not only those that failed, are an error or are unsupported. |
-| `--taxonomy-package ZIP` | A local taxonomy package, repeatable: it resolves xBRL-CSV metadata and adds the filing rules that need the taxonomy. |
-| `--previous REPORT` | A report of the same module for an earlier period, repeatable, read with the same taxonomy packages: `time_shift` rules compare with the one whose reference date they need ([Compare with earlier reports](../guides/time-shift.md#against-earlier-xbrl-reports)). Only `REPORT` is checked against the filing rules. |
+| `--taxonomy-package ZIP` | A local taxonomy package, repeatable: it resolves xBRL-CSV metadata, places XBRL-XML facts (an XBRL-XML report needs it) and adds the filing rules that need the taxonomy. |
+| `--previous REPORT` | A report of the same entity and module for an earlier period, repeatable, read with the same taxonomy packages: `time_shift` rules compare with the one whose reference date they need ([Compare with earlier reports](../guides/time-shift.md#against-earlier-xbrl-reports)). Only `REPORT` is checked against the filing rules. |
 
 ```console
 $ dpm-xl check-report examples/xbrl-module.json examples/xbrl-report
@@ -300,6 +300,17 @@ e0007: unsupported (warning)
 The warning means the EBA taxonomy was not available offline: the report
 is still read, by the EBA's datapoint convention. `--taxonomy-package`
 resolves it and adds the filing rules that need the taxonomy.
+
+The report must be of the module's `entry_point`; another is an input
+error (status 3). Facts in no table of the module, or whose value does not
+read as their cell's data type, are listed after the filing rules as
+`unplacedFact` and `invalidValue` findings of severity `error` (`warning`
+for a `--previous` report), with up to five examples:
+
+```text
+[error] unplacedFact: 1 fact of the report is in no table of module COREP_LR, or lacks an open key of its table, so no rule reads it.
+  - reports/c_01.00.csv:2: module COREP_LR has no table c_01.00
+```
 
 `e0007` compares with the previous quarter, which one report does not hold;
 the message names the reference date of the report it needs. With that
@@ -328,8 +339,8 @@ e0007: failed (warning)
 
 
 The JSON document has the layout of `eval`'s, with more in `summary`
-(`filing_errors`, `filing_warnings` and `unplaced_facts`, the facts in no
-table of the module) and these fields:
+(`filing_errors`, `filing_warnings`, `unplaced_facts`, the facts in no
+table of the module, and `invalid_facts`) and these fields:
 
 | Field | Type | Content |
 | --- | --- | --- |
@@ -337,11 +348,13 @@ table of the module) and these fields:
 | `module` | object | `module` and `release` of the module file. |
 | `warnings` | list | dpm-xbrl's warnings about the report, as text. |
 | `filing_rules` | list | One object per filing rule broken: `rule`, `title`, `code`, `severity`, `message`, `count` and `examples`, as dpm-xbrl gives them. |
+| `fact_findings` | list | One object per fact finding: `code`, `severity`, `message`, `count` and `examples`. |
 | `results` | list | One object per rule of the module, as for `eval`. |
 | `unplaced` | list | The facts in no table of the module: `template`, `datapoint` and `location`. |
 
 In JUnit XML each broken filing rule is a test case (class
-`dpm-xbrl.filing-rules`) besides one per rule of the module.
+`dpm-xbrl.filing-rules`), and so is each fact finding (class
+`dpm-xl.facts`), besides one per rule of the module.
 
 ## `dpm-xl list-modules`
 
@@ -439,10 +452,10 @@ statuses.
 
 | Status | `check` | `eval` and `check-report` |
 | --- | --- | --- |
-| 0 | No expression has an error; with `--strict`, none has a warning either. | No rule (or filing rule) at or above `--fail-on` failed. |
-| 1 | An expression or precondition has an error, such as a syntax error or an unknown function; with `--strict`, also a warning. | A rule (or filing rule) at or above `--fail-on` failed, or such a rule is `error`. An `unsupported` rule does not count. |
+| 0 | No expression has an error; with `--strict`, none has a warning either. | No rule (or filing rule or fact finding) at or above `--fail-on` failed. |
+| 1 | An expression or precondition has an error, such as a syntax error or an unknown function; with `--strict`, also a warning. | A rule (or filing rule or fact finding) at or above `--fail-on` failed, or such a rule is `error`. An `unsupported` rule does not count. |
 | 2 | Usage error (unknown command or option). | Usage error, or `check-report` without the `xbrl` extra. |
-| 3 | The rule file cannot be read or is malformed. | An input file cannot be read or is malformed. |
+| 3 | The rule file cannot be read or is malformed. | An input file cannot be read or is malformed, the report is of another module, or an XBRL-XML report comes without `--taxonomy-package`. |
 
 `list-modules` and `export-module` exit with 0 when done, 2 for a usage
 error and 3 for a database, release or module they cannot read.

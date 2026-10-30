@@ -1177,11 +1177,19 @@ class _Parser:
             end = self.expect("]")
             return Get(operand, name, span=(operand.span[0], end.end))
         if keyword == "sub":
-            name = self.expect_name()
-            self.expect("=")
-            value = self.parse_additive()
+            # DPM-XL 11.4.1: several pairs fix one key after another, as a
+            # chain of clauses with one pair each.
+            fixed: list[tuple[str, Node]] = []
+            while True:
+                name = self.expect_name()
+                self.expect("=")
+                fixed.append((name, self.parse_additive()))
+                if not self.accept(","):
+                    break
             end = self.expect("]")
-            return Sub(operand, name, value, span=(operand.span[0], end.end))
+            for name, value in fixed:
+                operand = Sub(operand, name, value, span=(operand.span[0], end.end))
+            return operand
         pairs: list[tuple[str, str]] = []
         while True:
             old = self.expect_name()

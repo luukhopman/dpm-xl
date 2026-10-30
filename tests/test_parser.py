@@ -75,6 +75,19 @@ def test_references_leave_no_garbage_cycles() -> None:
             gc.enable()
 
 
+def test_sub_takes_several_pairs() -> None:
+    # DPM-XL 11.4.1: [sub key = value {, key = value}*], one Sub per pair.
+    node = parse("{tT1}[sub qX = 1, qY = 2 + 1]")
+    assert isinstance(node, Sub) and node.name == "qY"
+    assert isinstance(node.value, Binary)
+    inner = node.operand
+    assert isinstance(inner, Sub) and inner.name == "qX"
+    assert isinstance(inner.operand, Selection)
+    assert node.span == inner.span == (0, 29)
+    with pytest.raises(DpmXlSyntaxError, match="expected a name"):
+        parse("{tT1}[sub qX = 1,]")
+
+
 def test_clauses_sets_and_group_by() -> None:
     node = parse(
         "sum({tC_08.01.a, r0070} group by qEEA, OGR) = "

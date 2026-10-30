@@ -143,7 +143,7 @@ primary      ::= literal | set | selection | reference | name | call | analytic
 
 clause       ::= "[" "where" expression "]"
                | "[" "get" name "]"
-               | "[" "sub" name "=" additive "]"
+               | "[" "sub" name "=" additive ( "," name "=" additive )* "]"
                | "[" "rename" name "to" name ( "," name "to" name )* "]"
 
 selection    ::= "{" component ( "," component )* "}"

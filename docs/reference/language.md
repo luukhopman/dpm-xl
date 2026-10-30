@@ -1003,7 +1003,7 @@ operand: it nests and combines with operators.
 postfix ::= primary ( "%" | clause )*
 clause  ::= "[" "where" expression "]"
           | "[" "get" name "]"
-          | "[" "sub" name "=" additive "]"
+          | "[" "sub" name "=" additive ( "," name "=" additive )* "]"
           | "[" "rename" name "to" name ( "," name "to" name )* "]"
 ```
 
@@ -1063,12 +1063,15 @@ Keeps the records whose key component equals a value, compared as with
 `=`, and removes that key. The value is an additive expression (a literal,
 a parameter, an item or arithmetic; parenthesize anything else) with one
 value. The result keeps the operand's `default`, as for [`where`](#where).
-Parses to [`Sub`][dpmxl.ast.Sub].
+Several pairs, separated by commas, fix one key after another, as a chain of
+`sub` clauses does (§11.4.1). Parses to [`Sub`][dpmxl.ast.Sub], one node per
+pair, the last pair outermost.
 
 | Expression | Result |
 | --- | --- |
 | `{tO, c0010}[sub qKEY = "a"]` | `qDAT=2026-03-31: 10` |
 | `{tO, c0010}[sub qKEY = "a"][sub qDAT = #2026-03-31#]` | `10` |
+| `{tO, c0010}[sub qKEY = "a", qDAT = #2026-03-31#]` | `10` |
 | `{tT, c0010}[sub r = "0010"]` | `100` |
 | `{tO, c0010}[sub qKEY = "z"]` | `no records` |
 | `{tO, c0010, default: 0}[sub qDAT = #2026-09-30#] + {tP, c0010}` | `qKEY=b: 2; qKEY=d: 4` |

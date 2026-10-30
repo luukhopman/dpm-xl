@@ -352,6 +352,11 @@ EXAMPLES: list[tuple[str, str, str | None]] = [
         "30",
     ),
     (
+        "#subExpr with several pairs",
+        "{tO, c0010} [sub qKEY = 'b', qDAT = #2026-06-30#]",
+        "20",
+    ),
+    (
         "#subExpr with an item",
         "{tO, c0010} [sub qKEY = [qC:a]] [sub qDAT = #2026-03-31#]",
         "10",

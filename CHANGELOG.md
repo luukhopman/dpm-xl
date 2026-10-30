@@ -81,6 +81,8 @@ All notable changes to this project are documented here. The project follows
 - An operand with a `default` that a `where` filters to nothing takes its
   default next to the other operands, also under an aggregate, as the EBA's
   formulas do; such rules were not applicable.
+- `[sub]` takes several pairs, as in `[sub qX = 1, qY = 2]` (§11.4.1);
+  it was a syntax error.
 - `where` can test a record's value as `f`, as in `[where f != 0]`, also in
   a `with` context, where a condition on `f` alone applies to every
   selection instead of being dropped.

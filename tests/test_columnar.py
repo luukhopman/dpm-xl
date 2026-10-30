@@ -63,6 +63,9 @@ EXPRESSIONS = [
     "with {tT, default: 0}: if {r0010, c0010} > 0 then {r0010-0020, (c0010, c0020)} >= 0 endif",
     "count({tO, r0010, c0010}) = 3",
     "{tO, r0010, c0010} [sub qKEY = [qK:c]] = 20",
+    # Several sub pairs fix one key after another (DPM-XL 11.4.1).
+    '{tO, c0010} [sub qKEY = [qK:c], r = "0010"] = 20',
+    'with {tO} [where qKEY != [qK:b]]: {c0010} [sub r = "0020", qKEY = [qK:b]] > 5',
     "with {tO, c0010} [where qKEY != [qK:a]]: {r0010} [where qKEY = [qK:a]] > 5",
     "with {tO} [where qKEY != [qK:b]]: {r0010, c0010} [sub qKEY = [qK:b]] > 5",
     "with {tO} [where qKEY != [qK:b]]: {r0010, c0010} [where qKEY != [qK:c]] > 5",

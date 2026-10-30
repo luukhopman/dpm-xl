@@ -627,3 +627,28 @@ def test_memory_provider_filing_indicators_ignore_case() -> None:
     provider = MemoryProvider([layout], {}, reported=["C_08.00"])
     assert provider.table_reported("C_07.00") is False
     assert provider.is_template("c_08.00") and not provider.is_template("C_09.00")
+
+
+def test_memory_provider_filing_indicators_do_not_scan_each_call() -> None:
+    class Counted(dict):
+        scans = 0
+
+        def values(self):
+            Counted.scans += 1
+            return super().values()
+
+    provider = MemoryProvider(
+        [TableLayout("C_07.00.a", template="C_07.00")], {}, reported=["c_07.00.A"]
+    )
+    provider.tables = Counted(provider.tables)
+    for _ in range(3):
+        assert provider.table_reported("C_07.00") is True
+        assert provider.is_template("c_07.00")
+        assert not provider.table_reported("C_08.00")
+        assert not provider.is_template("C_08.00")
+    assert Counted.scans <= 1
+    # Replacing the tables or the reported codes takes effect.
+    provider.reported = set()
+    assert provider.table_reported("C_07.00") is False
+    provider.tables = {}
+    assert not provider.is_template("C_07.00")

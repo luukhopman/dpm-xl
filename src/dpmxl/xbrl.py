@@ -102,6 +102,7 @@ class ReportProvider:
         self._indicators = {
             code.casefold(): filed for code, filed in report.filing_indicators.items()
         }
+        self._templates = module.templates() | self._indicators.keys()
         self._parameters = {
             name.casefold(): value for name, value in report.parameters.items()
         }
@@ -254,8 +255,7 @@ class ReportProvider:
         Returns:
             bool: Whether ``{vCode}`` reads a filing indicator.
         """
-        folded = code.casefold()
-        return folded in self.module.templates() or folded in self._indicators
+        return code.casefold() in self._templates
 
     def table_reported(self, table: str) -> bool | None:
         """Return the filing indicator of a template or table, ignoring case.

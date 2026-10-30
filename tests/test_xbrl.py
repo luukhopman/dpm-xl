@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from dpmxl import CellQuery, Item, Number, ValueSet, evaluate_rule
-from dpmxl.module import load_module
+from dpmxl.module import Module, load_module
 
 dpmxbrl = pytest.importorskip("dpmxbrl")
 
@@ -194,6 +194,22 @@ def test_open_keys_are_typed_and_open_axes_ignore_selectors() -> None:
     assert provider.open_keys("C_99.00") == ()
     result = evaluate_rule("sum({tC_07.00.a, c0010} group by qCC) = 7", provider)
     assert result.status == "passed"
+
+
+def test_is_template_reads_the_module_templates_once(monkeypatch) -> None:
+    calls = []
+    templates = Module.templates
+
+    def counted(module: Module) -> frozenset[str]:
+        calls.append(module)
+        return templates(module)
+
+    monkeypatch.setattr(Module, "templates", counted)
+    provider = ReportProvider(MODULE, report([]))
+    for _ in range(3):
+        assert provider.is_template("c_07.00.A")
+        assert not provider.is_template("ReportingLevel")
+    assert len(calls) <= 1
 
 
 def test_facts_outside_the_module_are_unplaced() -> None:

@@ -649,6 +649,9 @@ class MemoryProvider:
         self.reported = (
             set(reported) if reported is not None else {key[0] for key in self.values}
         )
+        self._filing_cache: (
+            tuple[tuple[int, ...], frozenset[str], frozenset[str]] | None
+        ) = None
 
     def select(self, query: CellQuery) -> Sequence[DataPoint]:
         """Return closed cells, and one point per reported open key set.
@@ -703,15 +706,8 @@ class MemoryProvider:
         Returns:
             bool | None: Filing-indicator state.
         """
-        folded = table.casefold()
-        reported = {code.casefold() for code in self.reported}
-        if folded in reported:
-            return True
-        return any(
-            (layout.template or "").casefold() == folded
-            and layout.code.casefold() in reported
-            for layout in self.tables.values()
-        )
+        reported, _known = self._filing_codes()
+        return table.casefold() in reported
 
     def is_template(self, code: str) -> bool:
         """Return whether a code is a known table, template or reported code.
@@ -719,11 +715,41 @@ class MemoryProvider:
         Returns:
             bool: Whether ``{vCode}`` reads a filing indicator.
         """
-        folded = code.casefold()
-        return any(
-            folded in (layout.code.casefold(), (layout.template or "").casefold())
-            for layout in self.tables.values()
-        ) or any(reported.casefold() == folded for reported in self.reported)
+        _reported, known = self._filing_codes()
+        return code.casefold() in known
+
+    def _filing_codes(self) -> tuple[frozenset[str], frozenset[str]]:
+        """Return the reported codes and the known codes, case-folded.
+
+        The reported codes include the templates of reported tables. Both
+        are kept until ``tables`` or ``reported`` is replaced or resized.
+
+        Returns:
+            tuple[frozenset[str], frozenset[str]]: The two sets.
+        """
+        tables, codes = self.tables, self.reported
+        source = (id(tables), len(tables), id(codes), len(codes))
+        cached = self._filing_cache
+        if cached is not None and cached[0] == source:
+            return cached[1], cached[2]
+        layouts = list(tables.values())
+        listed = {code.casefold() for code in codes}
+        reported = frozenset(
+            listed.union(
+                (layout.template or "").casefold()
+                for layout in layouts
+                if layout.code.casefold() in listed
+            )
+        )
+        known = frozenset(
+            listed.union(
+                code
+                for layout in layouts
+                for code in (layout.code.casefold(), (layout.template or "").casefold())
+            )
+        )
+        self._filing_cache = (source, reported, known)
+        return reported, known
 
     def parameter(self, name: str) -> Value:
         """Return a report parameter.

@@ -7,9 +7,9 @@ description: The dpm-xl command line - check, eval and check-report, every optio
 ```text
 dpm-xl check [--layouts DATA] [--strict] [--references] [--json] SOURCE
 dpm-xl eval [--precondition EXPRESSION] [--format text|json|junit] [--json]
-            [--fail-on error|warning] RULES DATA
+            [--fail-on error|warning] [--all] RULES DATA
 dpm-xl check-report [--format text|json|junit] [--json] [--fail-on error|warning]
-                    [--taxonomy-package ZIP] MODULE REPORT
+                    [--all] [--taxonomy-package ZIP] MODULE REPORT
 dpm-xl --version
 dpm-xl [COMMAND] --help
 ```
@@ -125,6 +125,7 @@ Evaluates every rule of a rule source against a JSON
 | `--format text\|json\|junit` | Print text (the default), one [JSON document](#json-output_1) or a [JUnit XML report](#junit-xml). |
 | `--json` | Short for `--format json`. |
 | `--fail-on error\|warning` | Exit with status 1 when a rule of this severity or worse fails. Default `error`: a failing `warning` rule is shown but does not fail the run. |
+| `--all` | In text output, list every rule. Without it, only rules that failed, are an error or are unsupported are listed, and the summary line says how many are not. |
 
 ```console
 $ dpm-xl eval examples/rules.json examples/data.json
@@ -134,13 +135,7 @@ v0001: failed
 v0002: failed (warning)
   records: 1 passed, 1 failed, 0 null
   - qCPI=LEI-B: -5 should exceed 0: difference 5
-v0003: passed
-  records: 1 passed, 0 failed, 0 null
-v0004: not_applicable
-  message: precondition not met
-  records: 0 passed, 0 failed, 0 null
-v0005: skipped (inactive rule)
-5 rules: 2 failed, 1 passed, 1 not_applicable, 1 skipped
+5 rules: 2 failed, 1 passed, 1 not_applicable, 1 skipped (3 not listed; --all lists every rule)
 ```
 
 For one expression the output starts with `status:`, and a failing record
@@ -268,6 +263,7 @@ exits with status 2.
 | `--format text\|json\|junit` | Print text (the default), one JSON document or a JUnit XML report. |
 | `--json` | Short for `--format json`. |
 | `--fail-on error\|warning` | Exit with status 1 when a filing finding or a failing rule of this severity or worse is found. Default `error`. |
+| `--all` | In text output, list every rule, not only those that failed, are an error or are unsupported. |
 | `--taxonomy-package ZIP` | A local taxonomy package, repeatable: it resolves xBRL-CSV metadata and adds the filing rules that need the taxonomy. |
 
 ```console
@@ -278,20 +274,13 @@ filing rules broken: 0 errors, 0 warnings
 e0001: failed
   records: 0 passed, 1 failed, 0 null
   - scalar: 1,045,000 should equal 1,042,000 (812,000 + 190,000 + 40,000): difference 3,000, at least 1,000 given the reported precision
-e0002: passed
-  records: 1 passed, 0 failed, 0 null
 e0003: failed
   records: 1 passed, 1 failed, 0 null
   - qRDT=QW4KNDKKV7QH2LA40639: -12,000 should be at least 0: difference 12,000
 e0004: failed (warning)
   records: 1 passed, 1 failed, 0 null
   - qRDT=QW4KNDKKV7QH2LA40639: "QW4KNDKKV7QH2LA4063" does not have the required format
-e0005: not_applicable
-  message: precondition not met
-  records: 0 passed, 0 failed, 0 null
-e0006: passed
-  records: 1 passed, 0 failed, 0 null
-6 rules: 3 failed, 2 passed, 1 not_applicable
+6 rules: 3 failed, 2 passed, 1 not_applicable (3 not listed; --all lists every rule)
 ```
 
 

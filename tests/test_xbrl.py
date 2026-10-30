@@ -349,6 +349,15 @@ def test_check_report_prints_findings_and_rules(capsys) -> None:
     )
     assert "filing rules broken: 0 errors, 0 warnings\n" in output
     assert "e0004: failed (warning)\n" in output
+    assert output.endswith(
+        "6 rules: 3 failed, 2 passed, 1 not_applicable "
+        "(3 not listed; --all lists every rule)\n"
+    )
+    assert ": passed" not in output
+
+    main(["check-report", MODULE_FILE, REPORT_DIR, "--all"])
+    output = capsys.readouterr().out
+    assert ": passed" in output
     assert output.endswith("6 rules: 3 failed, 2 passed, 1 not_applicable\n")
 
 

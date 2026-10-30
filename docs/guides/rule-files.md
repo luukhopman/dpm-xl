@@ -112,9 +112,7 @@ line 2: failed
 line 3: failed
   records: 1 passed, 1 failed, 0 null
   - qCPI=LEI-B: -5 should exceed 0: difference 5
-line 4: passed
-  records: 1 passed, 0 failed, 0 null
-3 rules: 2 failed, 1 passed
+3 rules: 2 failed, 1 passed (1 not listed; --all lists every rule)
 ```
 
 A single expression takes its precondition from `--precondition`:

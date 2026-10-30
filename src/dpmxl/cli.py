@@ -126,6 +126,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             taxonomy_packages=arguments.taxonomy_package,
             output_format=arguments.format,
             fail_on=arguments.fail_on,
+            show_all=arguments.show_all,
         )
     if arguments.command == "check":
         return _check(
@@ -141,6 +142,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         arguments.precondition,
         output_format=arguments.format,
         fail_on=arguments.fail_on,
+        show_all=arguments.show_all,
     )
 
 
@@ -164,6 +166,13 @@ def _output_options(command: argparse.ArgumentParser) -> None:
         default="error",
         help="exit with status 1 when a rule or finding of this severity or "
         "worse fails (default: error)",
+    )
+    command.add_argument(
+        "--all",
+        action="store_true",
+        dest="show_all",
+        help="in text output, list every rule, not only those that failed, "
+        "are an error or are unsupported",
     )
 
 
@@ -504,6 +513,7 @@ def _evaluate(
     *,
     output_format: str = "text",
     fail_on: str = "error",
+    show_all: bool = False,
 ) -> int:
     try:
         rules = _rules(source)
@@ -533,7 +543,7 @@ def _evaluate(
         _junit_rules(suite, runs, failing)
         print(_junit_text(suite))
     else:
-        _print_runs(runs, single=len(rules) == 1)
+        _print_runs(runs, single=len(rules) == 1, show_all=show_all)
     return _exit_status(runs, failing)
 
 
@@ -542,14 +552,28 @@ def _suite_name(source: str) -> str:
     return path.name if path.is_file() else "expression"
 
 
-def _print_runs(runs: Sequence[_Run], *, single: bool = False) -> None:
-    for run in runs:
+_SHOWN = frozenset({"failed", "error", "unsupported"})
+
+
+def _print_runs(
+    runs: Sequence[_Run], *, single: bool = False, show_all: bool = False
+) -> None:
+    """Print rule results, then a summary line.
+
+    Without ``show_all``, only rules that failed, are an error or are
+    unsupported are listed, so a large module's problems are not buried.
+    """
+    shown = [run for run in runs if single or show_all or run.status in _SHOWN]
+    for run in shown:
         _print_run(run, single=single)
     if not single:
         statuses = Counter(run.status for run in runs)
+        hidden = len(runs) - len(shown)
+        note = f" ({hidden} not listed; --all lists every rule)" if hidden else ""
         print(
             f"{_plural(len(runs), 'rule')}: "
             + ", ".join(f"{count} {status}" for status, count in statuses.items())
+            + note
         )
 
 
@@ -649,6 +673,7 @@ def _check_report(
     taxonomy_packages: Sequence[Path] = (),
     output_format: str = "text",
     fail_on: str = "error",
+    show_all: bool = False,
 ) -> int:
     # The xbrl extra: imported only for this command.
     from dpmxbrl import ReportError, read_report
@@ -725,7 +750,7 @@ def _check_report(
                 f"  - [{finding['severity']}] {finding['rule']} "
                 f"{finding['message']}{times}"
             )
-        _print_runs(runs)
+        _print_runs(runs, show_all=show_all)
         if unplaced:
             example = unplaced[0].location or unplaced[0].datapoint
             print(

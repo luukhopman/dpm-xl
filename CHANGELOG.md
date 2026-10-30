@@ -7,6 +7,8 @@ All notable changes to this project are documented here. The project follows
 
 ### Added
 
+- Text output of `eval` and `check-report` lists only rules that failed,
+  are an error or are unsupported; `--all` lists every rule.
 - Rules in a JSON rule file take `severity` (`error` or `warning`),
   `active` and `modules`; `dpm-xl eval` and `check` skip inactive rules.
 - `dpmxl.rules.load_rules` reads a rule file, and `evaluate_rules`

@@ -206,7 +206,7 @@ repository's [`examples/`](https://github.com/luukhopman/dpm-xl/tree/main/exampl
 folder has a rule file and a data file:
 
 ```console
-$ dpm-xl eval examples/rules.json examples/data.json
+$ dpm-xl eval examples/rules.json examples/data.json --all
 v0001: failed
   records: 1 passed, 1 failed, 0 null
   - c=0020: 1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision
@@ -224,7 +224,9 @@ $ echo $?
 1
 ```
 
-The exit status is 1 because a rule failed. `dpm-xl check` only parses, which
+`--all` lists every rule; without it, only rules that failed, are an
+error or are unsupported are listed, above the same summary line. The exit
+status is 1 because a rule failed. `dpm-xl check` only parses, which
 is what a CI job for a rule repository needs:
 
 ```console

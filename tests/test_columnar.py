@@ -553,6 +553,26 @@ def test_set_valued_variables_go_to_the_reference_engine(expression: str) -> Non
     assert evaluate_rule(expression, provider).status == "passed"
 
 
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "sum({tE, c*} group by c) = 0",
+        "sum({tE, r*, c0010} group by r) = 0",
+        "count({tE, c0010} group by r, qGCC) = 0",
+        "sum({tE, c*, default: 0} group by c) = sum({tE, c*} group by c)",
+    ],
+)
+def test_group_by_axis_keys_of_an_empty_operand_has_no_groups(
+    expression: str,
+) -> None:
+    # Template E is filed without rows; its selections have no r or c key.
+    provider = data()
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    reference = evaluate_rule(expression, provider)
+    assert reference.status == "not_applicable", reference.message
+
+
 def parts(a_keys: tuple[str, ...], b_keys: tuple[str, ...]) -> MemoryProvider:
     # Two parts of one open-keyed template.
     tables = [

@@ -1884,13 +1884,17 @@ def _aggregate(
     group_keys: list[str] = []
     for key_name in group_by or ():
         key = resolve_key(key_name, data.keys)
+        if key is None and not data.records and _axis_key(key_name) is not None:
+            # A selection with no records has no r, c or s key (DPM-XL
+            # 3.1.6), yet grouping by one is grouping into no groups.
+            key = _axis_key(key_name)
         if key is None:
             raise EvaluationError(
                 f"group by {key_name!r} is not a key of the operand "
                 f"({', '.join(data.keys) or 'no keys'})"
             )
         group_keys.append(key)
-    positions = [data.keys.index(key) for key in group_keys]
+    positions = [data.keys.index(key) for key in group_keys if key in data.keys]
     groups: dict[tuple[Hashable, ...], list[Record]] = {}
     for key, record in data.records.items():
         groups.setdefault(tuple(key[position] for position in positions), []).append(
@@ -1920,6 +1924,11 @@ def _aggregate(
         # nothing are null.
         result.records[()] = Record(Number(Decimal(0)) if name == "count" else None)
     return result
+
+
+def _axis_key(name: str) -> str | None:
+    folded = name.casefold()
+    return folded if folded in AXIS_KEYS.values() else None
 
 
 def _reduce(name: str, values: list[Value], record_count: int) -> Value:

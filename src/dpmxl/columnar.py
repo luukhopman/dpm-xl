@@ -1736,6 +1736,14 @@ def _aggregate(name: str, frame: Frame, group_by: tuple[str, ...] | None) -> Fra
     group_keys: list[str] = []
     for key_name in group_by or ():
         key = resolve_key(key_name, frame.keys)
+        if (
+            key is None
+            and not frame.df.height
+            and key_name.casefold() in {"r", "c", "s"}
+        ):
+            # The reference evaluator groups an empty operand by r, c or s,
+            # which it lacks, into no groups.
+            raise ColumnarUnsupported("group by an axis key of an empty operand")
         if key is None:
             raise EvaluationError(
                 f"group by {key_name!r} is not a key of the operand "

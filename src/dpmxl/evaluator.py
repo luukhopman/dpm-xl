@@ -528,7 +528,10 @@ class Evaluator:
         if value is None:
             self._notes[f"report parameter {canonical!r} is not available"] = None
             return None
-        return _parameter_value(canonical, CONTEXTUAL_COMPONENTS[canonical], value)
+        found = _parameter_value(canonical, CONTEXTUAL_COMPONENTS[canonical], value)
+        if canonical == "baseCurrency":
+            return _dpm_currency(cast(Item, found))
+        return found
 
     def _clause_operand(
         self,
@@ -1453,6 +1456,25 @@ def _parameter_value(name: str, kind: str, value: Value) -> Value:
     if not isinstance(found, expected):
         raise EvaluationError(f"parameter {name} is not {_ARTICLES[kind]}")
     return found
+
+
+def _dpm_currency(currency: Item) -> Item:
+    """Return a currency in the DPM's currency domain, ``eba_CU``.
+
+    DPM-XL v0.11 §2.2.3.3.1 compares ``baseCurrency`` with ``[eba_CU:EUR]``;
+    an ISO 4217 code, as an XBRL report gives it, is the item of the same
+    code there.
+
+    Returns:
+        Item: The currency.
+
+    Examples:
+        >>> _dpm_currency(Item("iso4217", "EUR"))
+        Item(category='CU', code='EUR')
+    """
+    if currency.category is None or currency.category.casefold() == "iso4217":
+        return Item.parse(f"eba_CU:{currency.code}")
+    return currency
 
 
 _ARTICLES = {

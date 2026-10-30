@@ -510,6 +510,24 @@ def test_missing_contextual_components_are_null() -> None:
     assert evaluation.notes == ["report parameter 'baseCurrency' is not available"]
 
 
+@pytest.mark.parametrize(
+    "currency", ["EUR", "iso4217:EUR", "eba_CU:EUR", Item("iso4217", "EUR")]
+)
+def test_base_currency_is_a_dpm_currency_item(currency: Value) -> None:
+    # 2.2.3.3.1: [where baseCurrency = [eba_CU:EUR]]; an ISO 4217 code is
+    # given in the DPM's currency domain.
+    data = contextual(baseCurrency=currency)
+    assert status("baseCurrency = [eba_CU:EUR]", data) == "passed"
+    assert status("{tT, r*, c0010} [where baseCurrency = [eba_CU:EUR]] > 0", data) == (
+        "passed"
+    )
+    assert status("{tT, r*, c0010} [get baseCurrency] = [eba_CU:EUR]", data) == (
+        "passed"
+    )
+    assert status("baseCurrency = [iso4217:EUR]", data) == "failed"
+    assert status("baseCurrency = [eba_CU:USD]", data) == "failed"
+
+
 def test_if_without_else_leaves_out_records_of_any_type() -> None:
     tables = [
         TableLayout("A", rows=("0010",), columns=("0010",)),

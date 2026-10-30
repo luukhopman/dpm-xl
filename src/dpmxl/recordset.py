@@ -79,7 +79,8 @@ class Recordset:
     [`map`][dpmxl.recordset.Recordset.map]), as do ``where``, ``sub``,
     ``filter``, ``rename``, a ``time_shift`` of a date key and an ``if``
     whose condition has one; ``get``, aggregates and analytic functions drop
-    it.
+    it, except that an aggregate of an operand with no record aggregates its
+    default.
 
     Attributes:
         keys: Key names, such as ``("r", "qCPI")``; empty for a scalar.
@@ -170,9 +171,11 @@ def combine(
 
     Records without a partner on a shared key are dropped, unless the operand
     lacking the partner has a ``default``: it then takes part with its default,
-    as a fact variable with a fallback value does. When every keyed operand
-    has a default, the result has a record for each key any operand with all
-    the keys has, and its own default combines theirs. Operands without any
+    as a fact variable with a fallback value does; a keyed operand with no
+    record at all takes its default at every record the others have, whatever
+    their keys. When every keyed operand has a default, the result has a
+    record for each key any operand with all the keys has, and its own
+    default combines theirs. Operands without any
     shared key form a cross product, which is only allowed when at most one
     of them is keyed (scalar broadcast) to avoid accidental explosions.
 
@@ -199,6 +202,20 @@ def combine(
         {('a',): 1, ('b',): 5, ('c',): 4}
     """
     check_structure(operands)
+    if any(
+        operand.keys and not operand.records and operand.default is not None
+        for operand in operands
+    ) and any(_has_data(operand) for operand in operands):
+        # A keyed operand with no record at all (such as a selection a where
+        # filters to nothing) stands for its default at every record the
+        # other operands have, as a fact variable falls back when it binds
+        # to no fact.
+        operands = [
+            Recordset((), default=operand.default)
+            if operand.keys and not operand.records and operand.default is not None
+            else operand
+            for operand in operands
+        ]
     keyed = [operand for operand in operands if operand.keys]
     if any(
         not operand.keys and not operand.records and operand.default is not None
@@ -344,6 +361,18 @@ def _combine_defaults(
             result.records[key] = Record(function(values), tuple(parts))
     result.default = _combined_default(operands, function)
     return result
+
+
+def _has_data(operand: Recordset) -> bool:
+    """Whether an operand has a record of its own: keyed, or from data points.
+
+    Returns:
+        bool: False for an empty operand and for a constant.
+    """
+    if operand.keys:
+        return bool(operand.records)
+    record = operand.records.get(())
+    return record is not None and bool(record.points)
 
 
 def _scalar_records(operands: Sequence[Recordset]) -> list[Record]:

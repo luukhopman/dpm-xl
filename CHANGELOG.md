@@ -78,6 +78,9 @@ All notable changes to this project are documented here. The project follows
 - A `where` or `sub` on a selection inside `with … [where …]` replaces the
   context's `where` entirely, as the specification says; it used to replace
   only the terms on the same key.
+- An operand with a `default` that a `where` filters to nothing takes its
+  default next to the other operands, also under an aggregate, as the EBA's
+  formulas do; such rules were not applicable.
 - `where` can test a record's value as `f`, as in `[where f != 0]`, also in
   a `with` context, where a condition on `f` alone applies to every
   selection instead of being dropped.

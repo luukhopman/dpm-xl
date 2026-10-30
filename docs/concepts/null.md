@@ -117,8 +117,10 @@ not_applicable []
 
 ## Aggregates
 
-Aggregates over no records are null, except `count`, which is 0. `count`
-counts non-null values; the others skip nulls.
+Aggregates over no records are null, except `count`, which is 0, and an
+operand with a `default`, which aggregates its default next to other
+operands ([Defaults fill in missing records](records-and-keys.md#defaults-fill-in-missing-records)).
+`count` counts non-null values; the others skip nulls.
 
 ```python
 show("count({tT, r0030, c0010}) = 0")

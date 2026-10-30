@@ -1134,6 +1134,12 @@ def _joined(frames: Sequence[Frame]) -> tuple[tuple[str, ...], pl.DataFrame]:
     ):
         # The reference evaluator takes the default of an empty key-less operand.
         raise ColumnarUnsupported("a default for a missing key-less record")
+    if any(
+        frame.keys and not frame.df.height and frame.has_default for frame in frames
+    ) and any(frame.df.height for frame in frames):
+        # The reference evaluator takes the default of an operand with no
+        # record at every record the others have.
+        raise ColumnarUnsupported("a default for an operand with no records")
     aligned = _aligned(frames)
     if aligned is not None:
         return aligned
@@ -1734,6 +1740,9 @@ def _aggregate(name: str, frame: Frame, group_by: tuple[str, ...] | None) -> Fra
             )
         group_keys.append(key)
     df = frame.df
+    if not df.height and frame.has_default and name != "count":
+        # The reference evaluator aggregates the default of an empty operand.
+        raise ColumnarUnsupported("an aggregate of a default")
     text = False
     if name != "count" and frame.kinds & {TXT, FLAG}:
         if name not in {"max", "min"}:

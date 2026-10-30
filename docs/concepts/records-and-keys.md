@@ -122,9 +122,14 @@ One rule covers every construct that combines keyed operands:
   without records is no group, and its value is not the operand's default
   (`sum` of nothing is null, not `0`). Their results join on shared keys
   only.
-- A key-less operand without its record, such as `[sub]` on a key value
-  nobody reported, stands for its default next to keyed operands or
-  reported values; on its own, or with constants only, it yields no record.
+- An operand with no record at all, such as a `[where]` that filters out
+  every record, an open table nobody reported or `[sub]` on a key value
+  nobody reported, stands for its default at every record the other
+  operands have, whatever their keys; an aggregate other than `count` of
+  such an operand is the aggregate of its default (`sum` gives `0` with
+  `default: 0`). This is how the EBA's formulas evaluate these rules: a fact
+  variable that binds to no fact takes its fallback value. On its own, or
+  with constants only, the operand yields no record.
 
 ```python
 show("{tO, c0010} = {tP, c0010}")
@@ -137,6 +142,8 @@ show(
     "with {default: 0}: if {tO, c0010} > 0 then {tO, c0010} < 10 else {tP, c0010} = 0 endif"
 )
 show('{tO, c0010, default: 0} [where qEBB = "A"] <= {tP, c0010}')
+show('with {default: 0}: {tO, c0010} [where qEBB = "Z"] = {tT, r0010, c0010}')
+show('with {default: 0}: sum({tO, c0010} [where qEBB = "Z"]) = {tT, r0010, c0010}')
 ```
 
 ```text
@@ -146,6 +153,8 @@ passed [({'qEBB': 'A'}, True), ({'qEBB': 'B'}, True)]
 failed [({'qEBB': 'B'}, True), ({'qEBB': 'C'}, False)]
 failed [({'qEBB': 'A'}, True), ({'qEBB': 'B'}, False), ({'qEBB': 'C'}, False)]
 failed [({'qEBB': 'B'}, False), ({'qEBB': 'C'}, True)]
+failed [({}, False)]
+failed [({}, False)]
 ```
 
 ## Clauses change keys and records

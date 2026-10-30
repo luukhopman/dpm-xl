@@ -22,7 +22,9 @@ Semantics in brief:
 * Null propagates through arithmetic and comparisons; ``and``/``or`` use
   three-valued (Kleene) logic. A null rule result is "not evaluated", never a
   failure.
-* Aggregates over no records are null, except ``count``, which is 0.
+* Aggregates over no records are null, except ``count``, which is 0. An
+  operand with no record but a default stands for its default next to other
+  operands, also under an aggregate.
 
 ## Threads
 
@@ -244,10 +246,15 @@ class Evaluation:
 
         Returns:
             list[Record]: Matching records; empty when the node was not
-            evaluated for that binding.
+            evaluated for that binding. A node with no record but a default
+            stands for its default at any binding.
         """
         recordset = self.trace.get(id(node))
-        return recordset.lookup(binding) if recordset is not None else []
+        if recordset is None:
+            return []
+        if not recordset.records and recordset.default is not None:
+            return [recordset.default]
+        return recordset.lookup(binding)
 
 
 class SelectionCache:
@@ -1897,6 +1904,17 @@ def _aggregate(
         ]
         points = unique_points(point for record in records for point in record.points)
         result.records[key] = Record(reduce(values), points)
+    if (
+        not groups
+        and name != "count"
+        and data.default is not None
+        and data.default.value is not None
+    ):
+        # An operand with no record but a default (such as a selection a
+        # where filters to nothing) aggregates its default where another
+        # operand has a record, as a fact variable falls back to it.
+        result.default = Record(reduce([data.default.value]))
+        return result
     if not group_keys and not groups:
         # DPM-XL 7.3: count is the number of records; other aggregates of
         # nothing are null.

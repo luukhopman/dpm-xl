@@ -599,6 +599,8 @@ selection it is an evaluation error.
 | `{tT, r0030, c0020, default: (-1)}` | `-1` |
 | `{tO, c0010} + {tP, c0010}` | `qKEY=b, qDAT=2026-06-30: 22` |
 | `{tO, c0010} + {tP, c0010, default: 0}` | `qKEY=a, qDAT=2026-03-31: 10; qKEY=b, qDAT=2026-06-30: 22; qKEY=c, qDAT=2026-09-30: 30` |
+| `{tO, c0010, default: 0} [where qKEY = "z"] + {tT, r0010, c0010}` | `100` |
+| `sum({tO, c0010, default: 0} [where qKEY = "z"]) + {tT, r0010, c0010}` | `100` |
 | `{tT, c0010, default: {1}}` | `error: a set default applies only to set parameters` |
 
 ### `interval` {#interval}
@@ -1629,6 +1631,9 @@ it on purpose, so that EBA rules keep their meaning:
   specification joins inner and generates implicit nulls only for keys the
   operand's own table reports (§2.2.3.3, IM §4.2.1)
   ([Defaults fill in missing records](../concepts/records-and-keys.md#defaults-fill-in-missing-records)).
+  An operand a `where` filters to nothing likewise takes its default at the
+  other operands' records, and an aggregate of it aggregates the default,
+  where a strict reading of IM §4.2.1 gives no record.
 - A `with` context's `where` leaves alone a selection that lacks a key it
   names; the specification makes that a semantic error (§3.2.5, example
   10).

@@ -20,6 +20,7 @@ from dpmxl.columnar import (
     canonical_key,
     evaluate_rule_columnar,
 )
+from dpmxl.explain import explain
 from dpmxl.provider import CellKey
 
 
@@ -596,6 +597,83 @@ def test_defaults_kept_by_clauses_go_to_the_reference_engine(expression: str) ->
     with pytest.raises(ColumnarUnsupported):
         evaluate_rule_columnar(expression, PointsFrameProvider(provider))
     assert evaluate_rule(expression, provider).status in {"passed", "failed"}
+
+
+def emptied() -> MemoryProvider:
+    # An open template whose only record a where removes, and a closed one.
+    tables = [
+        TableLayout("A", columns=("0010",), open_keys=("qKEY",)),
+        TableLayout("C", rows=("0010",), columns=("0010",)),
+    ]
+    values: dict[CellKey, Value] = {
+        ("A", None, "0010", None, (("qKEY", "x"),)): Number.of(5, 0),
+        ("C", "0010", "0010", None, ()): Number.of(7, 0),
+    }
+    return MemoryProvider(tables, values)
+
+
+EMPTIED = [
+    # The default stands in for the record the other operand has, as an
+    # XBRL fact variable falls back when it binds to no fact.
+    (
+        'with {default: 0}: {tA, c0010} [where qKEY = "q"] = {tC, r0010, c0010}',
+        "0 should equal 7: difference 7",
+    ),
+    (
+        'with {default: 0}: sum({tA, c0010} [where qKEY = "q"]) = {tC, r0010, c0010}',
+        "0 should equal 7: difference 7",
+    ),
+    (
+        'with {default: 0}: {tC, r0010, c0010} * {tA, c0010} [where qKEY = "q"] = 7',
+        "0 should equal 7: difference 7",
+    ),
+]
+
+
+@pytest.mark.parametrize(("expression", "summary"), EMPTIED)
+def test_defaults_of_emptied_operands_go_to_the_reference_engine(
+    expression: str, summary: str
+) -> None:
+    provider = emptied()
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    result = evaluate_rule(expression, provider)
+    assert (result.status, result.counts["failed"]) == ("failed", 1)
+    assert result.evaluation is not None
+    explanation = explain(result.evaluation, expression, result.failures[0].key)
+    assert explanation.summary == summary
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        # Nothing but defaults and constants: no record to evaluate.
+        'with {default: 0}: {tA, c0010} [where qKEY = "q"] = 7',
+        'with {default: 0}: sum({tA, c0010} [where qKEY = "q"]) = 7',
+    ],
+)
+def test_emptied_operands_with_constants_are_not_applicable(expression: str) -> None:
+    assert evaluate_rule(expression, emptied()).status == "not_applicable"
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        # Without a default, the emptied operand leaves nothing.
+        '{tA, c0010} [where qKEY = "q"] = {tC, r0010, c0010}',
+        'sum({tA, c0010} [where qKEY = "q"]) = {tC, r0010, c0010}',
+        'with {default: 0}: count({tA, c0010} [where qKEY = "q"]) = 0',
+    ],
+)
+def test_emptied_operands_without_partners_agree(expression: str) -> None:
+    provider = emptied()
+    reference = evaluate_rule(expression, provider)
+    columnar = evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    assert (columnar.status, columnar.passed, columnar.failed) == (
+        reference.status,
+        reference.counts["passed"],
+        reference.counts["failed"],
+    )
 
 
 @pytest.mark.parametrize(

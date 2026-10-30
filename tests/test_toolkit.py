@@ -54,7 +54,7 @@ SHARED_SHA256 = {
         "e9c9cedbb3b254db24555466443817dd4a7d707c177f1eb64591a72d4afa693c"
     ),
     "docs/reference/glossary.md": (
-        "7d14359a8f93f77b6b56226d8e3d5075292b8ba8857010f08a266c7c1cf91cb2"
+        "3256a608b938e2b3b125ff6b1c4d6fb5175f6b64c4c3c2fe6d994c5ee73c834d"
     ),
     "docs/toolkit.md": (
         "0c6c39e5fe959177d0dcb6ff55643486164c7bf938f11ef302fd6ae290856da8"

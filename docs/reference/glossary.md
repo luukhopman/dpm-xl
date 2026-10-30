@@ -89,9 +89,9 @@ module
 module file
 :   A JSON document that describes one module of a DPM release: its tables,
     cells, datapoints and validation rules. dpm-xl reads it in the
-    `dpm-module/1` format; dpm-synth reads the same fields as its template,
-    in the `dpm-synth-template/1` format. An exporter of your own writes it
-    from the release; see [the toolkit](../toolkit.md).
+    `dpm-module/1` format, and dpm-synth reads it as its template.
+    `dpm-xl export-module` writes it from an EBA DPM release; see
+    [the toolkit](../toolkit.md).
 
 template
 :   A reporting form with a code such as `C_27.00`, made of one or more

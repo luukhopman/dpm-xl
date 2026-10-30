@@ -48,8 +48,8 @@ def test_dpm_synth_templates_load_and_extra_fields_are_ignored() -> None:
     module = load_module(document)
     assert module.format == "dpm-synth-template/1"
     assert module.rules[0].source == "own"
-    template = load_module(EXAMPLES / "toolkit-tour" / "template.json")
-    assert template.module == "TOUR"
+    tour = load_module(EXAMPLES / "toolkit-tour" / "module.json")
+    assert tour.module == "TOUR"
 
 
 def test_layouts_give_coordinates_open_axes_templates_and_types() -> None:

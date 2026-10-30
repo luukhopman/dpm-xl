@@ -16,31 +16,33 @@ packages and the module file fit together.
 pip install dpm-synth "dpm-xl[xbrl]"   # dpm-synth, dpm-xl and dpm-xbrl
 ```
 
-The module is a small template in the repository,
-[`examples/toolkit-tour/template.json`](https://github.com/luukhopman/dpm-xl/blob/main/examples/toolkit-tour/template.json):
+The module file is a small one in the repository,
+[`examples/toolkit-tour/module.json`](https://github.com/luukhopman/dpm-xl/blob/main/examples/toolkit-tour/module.json):
 a closed table `T_01.00` whose row 0010 is the sum of rows 0020 and 0030, an
 open table `T_02.00` of exposures by counterparty (`qCP`), and four DPM-XL
 rules. Run the code from a checkout of the repository.
 
 ## 1. Generate a report with dpm-synth
 
+<!-- docs: skip -->
 ```python
 from dpmsynth import generate, load_template
 
-template = load_template("examples/toolkit-tour/template.json")
-generated = generate(template, seed=7)
-print(generated.passed, "of", generated.rules, "rules pass")
+tour = load_template("examples/toolkit-tour/module.json")
+generated = generate(tour, seed=7)
+print(generated.summary["passed"], "of", generated.summary["rules"], "rules pass")
 for fact in generated.report.facts:
     print(fact.datapoint, dict(fact.keys), fact.value)
 ```
 
+<!-- docs: skip -->
 ```text
 4 of 4 rules pass
-dp101 {} 1126000
-dp102 {} 971000
-dp103 {} 155000
-dp201 {'qCP': 'SYNTHZDE8GXD6NCF1086'} 571000
-dp201 {'qCP': 'SYNTHEPF91DHODZDOC37'} 555000
+dp101 {} 9253000
+dp102 {} 283000
+dp103 {} 8970000
+dp201 {'qCP': 'SYNTHE8GXD6NCF10EP96'} 739000
+dp201 {'qCP': 'SYNTHF91DHODZDOC9I07'} 271000
 ```
 
 Every value is generated and the counterparties are fictional LEIs. The
@@ -52,6 +54,7 @@ A synthetic report is for testing a pipeline. Change one value, as a faulty
 upstream system might, and write the report as an xBRL-CSV package with
 dpm-xbrl:
 
+<!-- docs: skip -->
 ```python
 import io
 from dataclasses import replace
@@ -59,17 +62,18 @@ from dataclasses import replace
 from dpmxbrl import write_xbrl_csv
 
 facts = tuple(
-    replace(fact, value="978000") if fact.datapoint == "dp102" else fact
+    replace(fact, value="290000") if fact.datapoint == "dp102" else fact
     for fact in generated.report.facts
 )
 package = io.BytesIO()  # or a path such as "report.zip"
 write_xbrl_csv(replace(generated.report, facts=facts), package)
 ```
 
-Row 0020 now says 978,000 instead of 971,000.
+Row 0020 now says 290,000 instead of 283,000.
 
 ## 3. Read it with dpm-xbrl
 
+<!-- docs: skip -->
 ```python
 from dpmxbrl import read_report
 
@@ -79,6 +83,7 @@ print(report.decimals_parameters, report.filing_indicators)
 print(report.filing)
 ```
 
+<!-- docs: skip -->
 ```text
 xbrl-csv SYNTHETICDPMXL000002.CON 2026-12-31
 {'decimalsMonetary': -3} {'T_01.00': True, 'T_02.00': True}
@@ -92,20 +97,21 @@ in thousands (`decimalsMonetary = -3`).
 ## 4. Evaluate and explain with dpm-xl
 
 dpm-xl reads no files: it asks a [provider](provider.md) for the cells of
-each selection. The template is also a dpm-xl
-[module file](../reference/module-file.md), which places every datapoint at
-a table, row and column, so the shipped
+each selection. The [module file](../reference/module-file.md) dpm-synth
+generated from places every datapoint at a table, row and column, so the
+shipped
 [`ReportProvider`][dpmxl.xbrl.ReportProvider] (the `xbrl` extra) answers
 from the facts dpm-xbrl read. It types each value by the cell's data type
-and keeps the reported precision: 978,000 reported in thousands stands for
-978,000 ± 500.
+and keeps the reported precision: 290,000 reported in thousands stands for
+290,000 ± 500.
 
+<!-- docs: skip -->
 ```python
 from dpmxl import evaluate_rule, explain
 from dpmxl.module import load_module
 from dpmxl.xbrl import ReportProvider
 
-module = load_module("examples/toolkit-tour/template.json")
+module = load_module("examples/toolkit-tour/module.json")
 provider = ReportProvider(module, report)
 for rule in module.rules:
     result = evaluate_rule(rule.expression, provider, precondition=rule.precondition)
@@ -114,9 +120,10 @@ for rule in module.rules:
         print("   ", explain(result.evaluation, rule.expression, outcome.key).summary)
 ```
 
+<!-- docs: skip -->
 ```text
 v1 failed
-    1,126,000 should equal 1,133,000 (978,000 + 155,000): difference 7,000, at least 5,500 given the reported precision
+    9,253,000 should equal 9,260,000 (290,000 + 8,970,000): difference 7,000, at least 5,500 given the reported precision
 v2 passed
 v3 passed
 v4 passed
@@ -127,8 +134,8 @@ explain up to 1,500 of the difference; at least 5,500 they cannot.
 
 ## Where next
 
-- [dpm-synth](https://luukhopman.github.io/dpm-synth/): write a template
-  for your own module, or build one from a DPM release.
+- [dpm-synth](https://luukhopman.github.io/dpm-synth/): generate reports
+  for your own module, from a module file exported from a DPM release.
 - [dpm-xbrl](https://luukhopman.github.io/dpm-xbrl/): read XBRL-XML as well,
   check the EBA filing rules, and read large packages as frames.
 - [From an XBRL report to explained failures](end-to-end.md): the same

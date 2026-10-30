@@ -1,5 +1,5 @@
 ---
-description: The dpm-xl command line - check, eval and check-report, every option, the exit statuses and the JSON output schema.
+description: The dpm-xl command line - check, eval, check-report, list-modules and export-module, every option, the exit statuses and the JSON output schema.
 ---
 
 # CLI
@@ -11,6 +11,8 @@ dpm-xl eval [--precondition EXPRESSION] [--format text|json|junit] [--json]
 dpm-xl check-report [--format text|json|junit] [--json] [--fail-on error|warning]
                     [--all] [--taxonomy-package ZIP] [--previous REPORT]
                     MODULE REPORT
+dpm-xl list-modules [--release R] [--json] DATABASE
+dpm-xl export-module [--release R] [-o FILE] [--format FORMAT] DATABASE MODULE
 dpm-xl --version
 dpm-xl [COMMAND] --help
 ```
@@ -333,6 +335,95 @@ table of the module) and these fields:
 In JUnit XML each broken filing rule is a test case (class
 `dpm-xbrl.filing-rules`) besides one per rule of the module.
 
+## `dpm-xl list-modules`
+
+Lists the releases of an EBA DPM 2.0 database and the modules of one
+release: code, version and name. The database is a SQLite file with the
+EBA's table and column names, or the EBA's Access file when `mdb-export`
+(mdbtools) is on `PATH`; see
+[Start from an EBA DPM release](../guides/from-a-dpm-release.md#2-get-the-database-as-sqlite).
+
+| Option | Effect |
+| --- | --- |
+| `--release R` | The release whose modules to list, such as `4.3`. Default: the latest release of the database. |
+| `--json` | Print one JSON document: `releases` (`id`, `code`, `date`, `type`), `release` and `modules` (`code`, `name`, `version`, `framework`, `release` that introduced the version, `from_date`, `to_date`). |
+
+```console
+$ dpm-xl list-modules examples/dpm-demo.sqlite --release 1.0
+releases: 1.0, 2.0, 2.0.1
+modules of release 1.0: 3
+  DEMO   1.0.0    Demo module
+  DOCS   1.0.0    Documents
+  OTHER  1.0.0    Other module
+```
+
+## `dpm-xl export-module`
+
+Writes one module of a release of an EBA DPM 2.0 database as a
+[module file](module-file.md): its tables, open keys, cells, filing
+indicators and the rules whose scope is the module alone. Notes on the EBA
+data it corrects or leaves out go to standard error
+([which and why](../guides/from-a-dpm-release.md#eba-data-the-export-corrects-or-leaves-out)).
+The module code ignores case.
+
+| Option | Effect |
+| --- | --- |
+| `--release R` | The release, such as `4.3`. Default: the latest release of the database. |
+| `-o FILE`, `--output FILE` | Write the module file to `FILE`, and a summary to standard error. Default: standard output. |
+| `--format dpm-module/1\|dpm-synth-template/1` | The file's `format`. Default `dpm-module/1`; dpm-synth 1.0 reads only `dpm-synth-template/1`, which dpm-xl reads too. |
+
+```console
+$ dpm-xl export-module examples/dpm-demo.sqlite OTHER
+note: OTHER: left out 1 rule whose scope spans several modules: v3
+note: OTHER: rule v7551_m: corrected 'trueendif' to 'true endif' (no space before endif)
+{
+ "format": "dpm-module/1",
+ "release": "2.0.1",
+ "module": "OTHER",
+ "entry_point": "http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/demo/1.0/mod/other.json",
+ "reference_date": "2025-03-31",
+ "decimals": {
+  "m": 0,
+  "p": 4,
+  "i": 0,
+  "r": 2
+ },
+ "filing_indicators": [
+  "O_01.00"
+ ],
+ "tables": [
+  {
+   "code": "O_01.00",
+   "cells": [
+    {
+     "id": "O_01.00/r0010/c0010",
+     "row": "0010",
+     "column": "0010",
+     "sheet": null,
+     "datapoint": "dp520",
+     "data_type": "m"
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "code": "v7551_m",
+   "expression": "if {tT_02.00, c0010} > 0 then true else true endif",
+   "severity": "warning",
+   "active": true,
+   "modules": [
+    "DEMO",
+    "OTHER"
+   ]
+  }
+ ]
+}
+```
+
+A database that cannot be read, a release or module it does not have, and
+a module without tables exit with status 3.
+
 ## Exit statuses
 
 The three dpm toolkit commands, dpm-xl, dpm-xbrl and dpm-synth, share these
@@ -345,6 +436,8 @@ statuses.
 | 2 | Usage error (unknown command or option). | Usage error, or `check-report` without the `xbrl` extra. |
 | 3 | The rule file cannot be read or is malformed. | An input file cannot be read or is malformed. |
 
+`list-modules` and `export-module` exit with 0 when done, 2 for a usage
+error and 3 for a database, release or module they cannot read.
 `dpmxl.cli` names them `EXIT_OK`, `EXIT_FAILED`, `EXIT_USAGE` and
 `EXIT_INPUT`.
 

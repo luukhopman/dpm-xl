@@ -31,6 +31,7 @@ nav = [
     { "Analyse rules statically" = "guides/analyse.md" },
     { "From an XBRL report to explained failures" = "guides/end-to-end.md" },
     { "Toolkit tour" = "guides/toolkit-tour.md" },
+    { "Start from an EBA DPM release" = "guides/from-a-dpm-release.md" },
   ] },
   { "Concepts" = [
     "concepts/index.md",
@@ -60,6 +61,7 @@ nav = [
       { "dpmxl.provider" = "reference/api/provider.md" },
       { "dpmxl.rules" = "reference/api/rules.md" },
       { "dpmxl.module" = "reference/api/module.md" },
+      { "dpmxl.dpm" = "reference/api/dpm.md" },
       { "dpmxl.xbrl" = "reference/api/xbrl.md" },
       { "dpmxl.columnar" = "reference/api/columnar.md" },
       { "dpmxl.parser" = "reference/api/parser.md" },

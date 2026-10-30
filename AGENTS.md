@@ -13,11 +13,11 @@ affiliated with or endorsed by the European Banking Authority.
 
 | Path | Content |
 | --- | --- |
-| `src/dpmxl/` | The package. `parser.py` (tokenizer, recursive-descent parser), `grammar.py` (vocabulary, TextMate grammar), `ast.py` (frozen node classes), `values.py` (`Number` with interval tolerance), `recordset.py` (keyed records, joins), `evaluator.py` (reference evaluator), `explain.py`, `references.py` (static analysis), `provider.py` (`DataProvider`, `MemoryProvider`), `rules.py` (rule files), `module.py` (module files), `xbrl.py` (report bridge, optional), `columnar.py` (polars evaluator, optional), `cli.py`. |
+| `src/dpmxl/` | The package. `parser.py` (tokenizer, recursive-descent parser), `grammar.py` (vocabulary, TextMate grammar), `ast.py` (frozen node classes), `values.py` (`Number` with interval tolerance), `recordset.py` (keyed records, joins), `evaluator.py` (reference evaluator), `explain.py`, `references.py` (static analysis), `provider.py` (`DataProvider`, `MemoryProvider`), `rules.py` (rule files), `module.py` (module files), `dpm.py` (module files from an EBA DPM 2.0 database), `xbrl.py` (report bridge, optional), `columnar.py` (polars evaluator, optional), `cli.py`. |
 | `tests/` | pytest suite. `test_columnar.py` checks both evaluators agree; `test_grammar_coverage.py` covers every grammar alternative; `test_docs.py` runs every docs example and docstring doctest and checks that the language reference covers `dpmxl.grammar`; `data/eba_expressions.txt` samples EBA rules and `data/eba_corpus.json.gz` holds all 14,174 EBA expressions of DPM 3.4–4.4 (source in `data/eba_corpus.md`), which `test_corpus.py` parses. |
 | `docs/` | Documentation site (Zensical + mkdocstrings), configured in `zensical.toml`. |
 | `scripts/build_docs.py` | Strict site build plus `llms.txt`, `llms-full.txt` and Markdown page copies. |
-| `examples/` | Runnable examples and data used by the docs and tests; `language_report.py` is the report the language reference's examples run against. |
+| `examples/` | Runnable examples and data used by the docs and tests; `language_report.py` is the report the language reference's examples run against. `dpm_demo.py` builds `dpm-demo.sqlite`, a small made-up DPM 2.0 database. |
 | `benchmarks/` | Comparison scripts; not run by the tests. |
 | `editors/dpm-xl.tmLanguage.json` | Generated from `dpmxl.grammar`. |
 

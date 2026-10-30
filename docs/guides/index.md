@@ -45,6 +45,13 @@ shown (the test suite executes them).
     Generate a report with dpm-synth, read it with dpm-xbrl, then evaluate
     and explain its rules.
 
+-   :lucide-database:{ .lg .middle } [**Start from an EBA DPM release**](from-a-dpm-release.md)
+
+    ---
+
+    Get the EBA's database as SQLite and export a real module, such as
+    COREP_OF, as a module file with `dpm-xl export-module`.
+
 </div>
 
 ## Scale up

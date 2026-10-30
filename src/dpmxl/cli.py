@@ -21,7 +21,7 @@ from .module import Module, load_module
 from .parser import parse_program
 from .provider import DataProvider, _table_layout, load_memory_provider
 from .references import references
-from .rules import Rule, RuleRun, evaluate_rules, load_rules
+from .rules import Rule, RuleRun, evaluate_rules, load_rules, rules_from
 
 JSON_SCHEMA_VERSION = 2
 """Version of the ``--json`` output layout; it changes only with a new major."""
@@ -222,6 +222,9 @@ def _source(source: str) -> tuple[list[Rule], Module | None]:
         if isinstance(document, dict) and "format" in document:
             module = load_module(document)
             return list(module.rules), module
+        if isinstance(document, list):
+            return rules_from(document), None
+    # load_rules reads other files, and reports what is wrong with this one.
     return load_rules(path), None
 
 

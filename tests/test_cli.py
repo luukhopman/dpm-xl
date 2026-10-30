@@ -1,8 +1,10 @@
 import json
+from pathlib import Path
+from typing import Any
 
 import pytest
 
-from dpmxl.cli import main
+from dpmxl.cli import _source, main
 
 
 def test_check_reports_parse_errors(tmp_path, capsys) -> None:
@@ -429,3 +431,19 @@ def test_check_report_names_the_missing_extra(monkeypatch, capsys) -> None:
         main(["check-report", "module.json", "report.zip"])
     assert exit_.value.code == 2
     assert 'needs the xbrl extra: pip install "dpm-xl[xbrl]"' in capsys.readouterr().err
+
+
+def test_a_json_rule_file_is_read_once(tmp_path, monkeypatch) -> None:
+    path = _rule_file(tmp_path, SEVERITIES)
+    reads = []
+    read_text = Path.read_text
+
+    def counted(self: Path, *args: Any, **kwargs: Any) -> str:
+        reads.append(self)
+        return read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", counted)
+    rules, module = _source(path)
+    assert [rule.code for rule in rules] == [rule["code"] for rule in SEVERITIES]
+    assert module is None
+    assert len(reads) == 1

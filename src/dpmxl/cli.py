@@ -1,9 +1,14 @@
-"""Command-line interface: ``dpm-xl check``, ``eval`` and ``check-report``."""
+"""Command-line interface of dpm-xl.
+
+The commands are ``check``, ``eval``, ``check-report``, ``list-modules``
+and ``export-module``.
+"""
 
 from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 import xml.etree.ElementTree as ET  # ruff: ignore[suspicious-xml-etree-import] - writes XML, never parses it
 from collections import Counter
@@ -18,11 +23,15 @@ from typing import Any
 from .diagnostics import LayoutLookup, diagnose
 from .evaluator import RuleResult
 from .explain import explain
-from .module import Module, load_module
+from .module import FORMATS, MODULE_FORMAT, Module, load_module
 from .parser import parse_program
 from .provider import DataProvider, _table_layout, load_memory_provider
 from .references import references
 from .rules import Rule, RuleRun, evaluate_rules, load_rules, rules_from
+
+_DATABASE_HELP = (
+    "EBA DPM 2.0 database: SQLite, or the Access file with mdbtools on PATH"
+)
 
 JSON_SCHEMA_VERSION = 2
 """Version of the ``--json`` output layout; it changes only with a new major."""
@@ -36,6 +45,8 @@ _EPILOG = """examples:
   dpm-xl eval rules.json data.json --json
   dpm-xl eval rules.json data.json --format junit --fail-on warning
   dpm-xl check-report module.json report.zip --format junit
+  dpm-xl list-modules dpm.sqlite --release 4.3
+  dpm-xl export-module dpm.sqlite COREP_OF --release 4.3 -o corep_of.json
 
 A rule source is one expression, a text file with one expression per line
 (# starts a comment), or a JSON list of objects with "code", "expression"
@@ -124,7 +135,56 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="report of the same module for an earlier period, which time_shift "
         "rules compare with (repeatable)",
     )
+    listing = commands.add_parser(
+        "list-modules",
+        help="list the releases and modules of an EBA DPM 2.0 database",
+        description="List the releases of an EBA DPM 2.0 database, and the "
+        "modules of one release.",
+    )
+    listing.add_argument("database", type=Path, help=_DATABASE_HELP)
+    listing.add_argument(
+        "--release", help="release code, such as 4.3 (default: the latest)"
+    )
+    listing.add_argument("--json", action="store_true", help="print JSON")
+    export = commands.add_parser(
+        "export-module",
+        help="write a module file for one module of an EBA DPM 2.0 database",
+        description="Export one module of a release of an EBA DPM 2.0 database "
+        "as a module file: its tables, cells, open keys and rules. Notes on "
+        "the EBA data it corrects or leaves out go to standard error.",
+    )
+    export.add_argument("database", type=Path, help=_DATABASE_HELP)
+    export.add_argument("module", help="module code, such as COREP_OF")
+    export.add_argument(
+        "--release", help="release code, such as 4.3 (default: the latest)"
+    )
+    export.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        metavar="FILE",
+        help="file to write (default: standard output)",
+    )
+    export.add_argument(
+        "--format",
+        choices=FORMATS,
+        default=MODULE_FORMAT,
+        help="the file's format (default: %(default)s); dpm-synth 1.0 reads "
+        "only dpm-synth-template/1, which dpm-xl reads too",
+    )
     arguments = parser.parse_args(argv)
+    if arguments.command == "list-modules":
+        return _list_modules(
+            arguments.database, arguments.release, as_json=arguments.json
+        )
+    if arguments.command == "export-module":
+        return _export_module(
+            arguments.database,
+            arguments.module,
+            arguments.release,
+            output=arguments.output,
+            document_format=arguments.format,
+        )
     if arguments.command == "check-report":
         if find_spec("dpmxbrl") is None:
             report.error(
@@ -786,6 +846,84 @@ def _check_report(
     broken = any(finding["severity"] in failing for finding in findings)
     status = _exit_status(runs, failing)
     return EXIT_FAILED if broken and status == EXIT_OK else status
+
+
+def _list_modules(database: Path, release: str | None, *, as_json: bool) -> int:
+    from .dpm import DpmError, open_release
+
+    try:
+        with open_release(database) as db:
+            releases = db.releases()
+            chosen = db.release(release)
+            modules = db.modules(chosen.code)
+    except DpmError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return EXIT_INPUT
+    if as_json:
+        document = _header() | {
+            "releases": [asdict(found) for found in releases],
+            "release": chosen.code,
+            "modules": [asdict(module) for module in modules],
+        }
+        print(json.dumps(document, indent=2))
+        return EXIT_OK
+    print("releases: " + ", ".join(found.code for found in releases))
+    print(f"modules of release {chosen.code}: {len(modules)}")
+    width = max((len(module.code) for module in modules), default=0)
+    for module in modules:
+        print(
+            f"  {module.code:<{width}}  {module.version or '-':<7}  "
+            f"{module.name or ''}".rstrip()
+        )
+    return EXIT_OK
+
+
+class _NoteHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        print(f"note: {record.getMessage()}", file=sys.stderr)
+
+
+def _export_module(
+    database: Path,
+    module: str,
+    release: str | None,
+    *,
+    output: Path | None,
+    document_format: str,
+) -> int:
+    from .dpm import DpmError, export_module, open_release
+
+    logger = logging.getLogger("dpmxl.dpm")
+    handler = _NoteHandler()
+    logger.addHandler(handler)
+    propagate, logger.propagate = logger.propagate, False
+    try:
+        with open_release(database) as db:
+            document = export_module(db, module, release, format=document_format)
+    except DpmError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return EXIT_INPUT
+    finally:
+        logger.removeHandler(handler)
+        logger.propagate = propagate
+    text = json.dumps(document, indent=1, ensure_ascii=False) + "\n"
+    if output is None:
+        sys.stdout.write(text)
+        return EXIT_OK
+    try:
+        output.write_text(text, encoding="utf-8")
+    except OSError as error:
+        print(_problem(output, error), file=sys.stderr)
+        return EXIT_INPUT
+    tables = document["tables"]
+    print(
+        f"wrote {output}: module {document['module']}, release "
+        f"{document['release']}: {_plural(len(tables), 'table')}, "
+        f"{_plural(sum(len(table['cells']) for table in tables), 'cell')}, "
+        f"{_plural(len(document['rules']), 'rule')}",
+        file=sys.stderr,
+    )
+    return EXIT_OK
 
 
 def _iso(moment: date | None) -> str | None:

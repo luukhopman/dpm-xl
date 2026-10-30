@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import logging
 import os
 import shutil
@@ -8,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from dpmxl import parse_program
+from dpmxl.cli import main
 from dpmxl.dpm import (
     DpmError,
     DpmRelease,
@@ -240,6 +242,54 @@ def test_an_access_file_is_read_with_mdb_export(
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     with open_release(access) as from_access, open_release(database) as from_sqlite:
         assert export_module(from_access, "DEMO") == export_module(from_sqlite, "DEMO")
+
+
+def test_cli_lists_modules(database: Path, capsys) -> None:
+    assert main(["list-modules", str(database), "--release", "2.0"]) == 0
+    assert capsys.readouterr().out == (
+        "releases: 1.0, 2.0, 2.0.1\n"
+        "modules of release 2.0: 3\n"
+        "  DEMO   2.0.0    Demo module\n"
+        "  DOCS   1.0.0    Documents\n"
+        "  OTHER  1.0.0    Other module\n"
+    )
+    assert main(["list-modules", str(database), "--json"]) == 0
+    document = json.loads(capsys.readouterr().out)
+    assert document["release"] == "2.0.1"
+    assert document["releases"][0] == {
+        "id": 1,
+        "code": "1.0",
+        "date": "2025-01-15",
+        "type": "module",
+    }
+    assert document["modules"][0]["code"] == "DEMO"
+
+
+def test_cli_exports_a_module(database: Path, tmp_path: Path, capsys) -> None:
+    target = tmp_path / "demo.json"
+    assert main(["export-module", str(database), "DEMO", "-o", str(target)]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "note: DEMO: left out 1 rule whose scope spans" in captured.err
+    assert captured.err.endswith(
+        f"wrote {target}: module DEMO, release 2.0.1: 2 tables, 5 cells, 3 rules\n"
+    )
+    assert load_module(target).module == "DEMO"
+    assert main(["check", str(target)]) == 0
+    capsys.readouterr()
+    arguments = ["export-module", str(database), "DEMO", "--release", "1.0"]
+    assert main([*arguments, "--format", "dpm-synth-template/1"]) == 0
+    document = json.loads(capsys.readouterr().out)
+    assert (document["format"], document["release"]) == ("dpm-synth-template/1", "1.0")
+
+
+def test_cli_reports_bad_input_with_status_3(database: Path, capsys) -> None:
+    assert main(["export-module", str(database), "NOPE"]) == 3
+    assert capsys.readouterr().err.startswith("error: no module 'NOPE'")
+    assert main(["list-modules", str(database), "--release", "9"]) == 3
+    assert "no release '9'" in capsys.readouterr().err
+    assert main(["export-module", "missing.sqlite", "DEMO"]) == 3
+    assert capsys.readouterr().err == "error: missing.sqlite: no such file\n"
 
 
 REAL = os.environ.get("DPMXL_DPM_DATABASE")

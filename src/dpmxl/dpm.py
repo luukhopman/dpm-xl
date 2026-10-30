@@ -716,11 +716,12 @@ class DpmRelease:
     ) -> list[str]:
         """Return the item qnames of a subcategory, in its order.
 
-        Each item takes its code from the property's category; failing that,
-        from the subcategory's own category (stale at a rebinding); failing
-        that, from its latest binding before the release, which the EBA can
-        end before it moves the subcategory. The first use of a subcategory
-        reports such items.
+        Each item takes its code from the property's category, failing that
+        from its latest binding there before the release, which the EBA can
+        end before it moves the subcategory. An item that is not in the
+        property's category, as when the subcategory belongs to another
+        category, has no qname there and is left out. The first use of a
+        subcategory reports such items.
 
         Returns:
             list[str]: The qnames.
@@ -736,37 +737,33 @@ class DpmRelease:
         own = None
         if referenced is not None:
             own = dict(self._rows("SubCategory")).get(referenced[1])
+        if own not in self._categories():
+            own = None
         members = self._memo(
             "subcategory items",
             lambda: _group(self._rows("SubCategoryItem"), lambda row: row[0]),
         )
-        sources = [
-            source
-            for source in dict.fromkeys((category, own))
-            if source is not None and source in self._categories()
-        ]
+        found = self._category_items(category, release)
         items: list[str] = []
         carried: list[str] = []
+        foreign: list[str] = []
         missing: list[str] = []
         for row in sorted(members.get(vid, ()), key=lambda row: (row[2] or 0, row[1])):
             item = row[1]
-            qnames = next(
-                (
-                    found
-                    for source in sources
-                    if (found := self._category_items(source, release).get(item))
-                ),
-                [],
-            )
+            qnames = found.get(item, [])
             if not qnames:
-                for source in sources:
-                    code = self._ended_binding(source, item, release)
-                    if code is not None:
-                        qnames = [f"{self._prefix(source)}:{code}"]
-                        carried.extend(qnames)
-                        break
+                code = self._ended_binding(category, item, release)
+                if code is not None:
+                    qnames = [f"{self._prefix(category)}:{code}"]
+                    carried.extend(qnames)
             if not qnames:
-                missing.append(str(item))
+                elsewhere = None
+                if own is not None and own != category:
+                    elsewhere = self._category_items(own, release).get(item)
+                if elsewhere:
+                    foreign.extend(elsewhere)
+                else:
+                    missing.append(str(item))
             items.extend(qname for qname in qnames if qname not in items)
         if carried:
             logger.warning(
@@ -774,6 +771,14 @@ class DpmRelease:
                 where,
                 _count(len(carried), "item keeps", "items keep"),
                 carried[0],
+            )
+        if foreign:
+            logger.warning(
+                "%s: %s not in category %s of the property and left out: %s",
+                where,
+                _count(len(foreign), "item is", "items are"),
+                self._categories()[category][1],
+                ", ".join(foreign),
             )
         if missing:
             logger.warning(

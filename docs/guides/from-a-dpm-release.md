@@ -236,6 +236,9 @@ handles each one the same way every time, and reports it in a note
   satisfy them. The export leaves them out.
 - **Items whose binding ended** before the release while a subcategory
   still lists them keep their last code, as in the EBA's taxonomy.
+- **Items outside the property's category**, which a subcategory of
+  another category lists (such as `_PR` items for a RESOL property of
+  `_NA` in releases 3.4 to 4.1), have no qname there and are left out.
 - **Modules without tables**, such as the Pillar 3 document modules, cannot
   be exported; the command says so and exits with status 3.
 

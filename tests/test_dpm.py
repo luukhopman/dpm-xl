@@ -109,6 +109,7 @@ def test_cells_leave_out_excluded_and_void_ones(db: DpmRelease, caplog) -> None:
         "T_01.00.a/r0020/c0010",
         "T_01.00.a/r0050/c0010",
         "T_01.00.a/r0060/c0010",
+        "T_01.00.a/r0070/c0010",
     ]
     assert cells[0] == {
         "id": "T_01.00.a/r0010/c0010",
@@ -132,6 +133,19 @@ def test_a_header_restricts_the_items_of_a_cell(db: DpmRelease) -> None:
     # header 60 names subcategory version 701 (x1), not its later 702 (x2)
     assert cell["data_type"] == "e"
     assert cell["items"] == ["eba_CA:x1"]
+
+
+def test_items_outside_the_property_category_are_left_out(
+    db: DpmRelease, caplog
+) -> None:
+    with caplog.at_level(logging.WARNING, "dpmxl.dpm"):
+        cell = _table(export_module(db, "DEMO"), "T_01.00.a")["cells"][4]
+    # subcategory 704 is of CC, the property's category is CA: y1 is not in it
+    assert cell["items"] == ["eba_CA:x1"]
+    assert (
+        "DEMO: cell {T_01.00.a, r0070, c0010}: 1 item is not in category CA of "
+        "the property and left out: eba_CC:y1"
+    ) in caplog.messages
 
 
 def test_composed_categories_give_items_of_each(db: DpmRelease) -> None:
@@ -280,7 +294,7 @@ def test_cli_exports_a_module(database: Path, tmp_path: Path, capsys) -> None:
     assert captured.out == ""
     assert "note: DEMO: left out 1 rule whose scope spans" in captured.err
     assert captured.err.endswith(
-        f"wrote {target}: module DEMO, release 2.0.1: 2 tables, 6 cells, 3 rules\n"
+        f"wrote {target}: module DEMO, release 2.0.1: 2 tables, 7 cells, 3 rules\n"
     )
     assert load_module(target).module == "DEMO"
     assert main(["check", str(target)]) == 0

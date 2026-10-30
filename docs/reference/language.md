@@ -11,6 +11,101 @@ it raises, and examples whose results the test suite computes. The
 page; the [concept pages](../concepts/index.md) explain the semantics in
 depth.
 
+<div class="grid cards" markdown>
+
+-   :lucide-book-open-check:{ .lg .middle } [**How to read this page**](#reading)
+
+    ---
+
+    The syntax notation, the example report, data types, records and errors.
+
+-   :lucide-type:{ .lg .middle } [**Lexical structure**](#lexical)
+
+    ---
+
+    Whitespace, case, names, literals and limits.
+
+-   :lucide-list-ordered:{ .lg .middle } [**Programs and statements**](#statements)
+
+    ---
+
+    Scripts, `:=`, `<-` and `with`.
+
+-   :lucide-table:{ .lg .middle } [**Selections**](#selections)
+
+    ---
+
+    Tables, rows, columns, sheets, `default` and `interval`.
+
+-   :lucide-link:{ .lg .middle } [**References**](#references)
+
+    ---
+
+    Variables, parameters, operations and table groups.
+
+-   :lucide-plus:{ .lg .middle } [**Operators**](#operators)
+
+    ---
+
+    Precedence, arithmetic, comparison, `in`, logic and `if`.
+
+-   :lucide-filter:{ .lg .middle } [**Clauses**](#clauses)
+
+    ---
+
+    `where`, `get`, `sub` and `rename`.
+
+-   :lucide-function-square:{ .lg .middle } [**Functions**](#functions)
+
+    ---
+
+    Numeric, null, text, date, time and set functions, and `filter`.
+
+-   :lucide-braces:{ .lg .middle } [**Sets**](#sets)
+
+    ---
+
+    Set literals.
+
+-   :lucide-sigma:{ .lg .middle } [**Aggregates**](#aggregates)
+
+    ---
+
+    `sum`, `count`, `avg`, `median`, `max` and `min`, with `group by`.
+
+-   :lucide-chart-no-axes-column:{ .lg .middle } [**Analytic functions**](#analytic-functions)
+
+    ---
+
+    Windows with `over`, and `rank`.
+
+-   :lucide-git-compare:{ .lg .middle } [**Where dpm-xl differs**](#where-dpm-xl-differs)
+
+    ---
+
+    Every reading that differs from DPM-XL 0.11, with its section.
+
+-   :lucide-triangle-alert:{ .lg .middle } [**Known limitations**](#limitations)
+
+    ---
+
+    What dpm-xl does not do.
+
+-   :lucide-list:{ .lg .middle } [**Index**](#index)
+
+    ---
+
+    Every keyword, function and symbol, with its entry.
+
+</div>
+
+!!! tip "Look a name up"
+
+    The [index](#index) at the end lists every keyword, function and symbol
+    with its entry. To evaluate an expression of your own against the
+    example report, run `python examples/language_report.py "…"` in a
+    checkout of the repository; see [examples and results](#examples).
+
 ## How to read this page {#reading}
 
 ### Syntax notation {#notation}

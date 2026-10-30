@@ -101,6 +101,22 @@ value may be the empty string, which is a value, not null; EBA filing
 rule 2.19 forbids reporting it (`#empty` in xBRL-CSV). No module of DPM
 4.3 or 4.4 has a `dt`, `u` or `o` datapoint.
 
+Module files use the DPM's own codes, as the EBA database has them. The
+`data_types` of a [data file](data-formats.md#data-files), and of a
+[`TableLayout`][dpmxl.provider.TableLayout], use the few types that
+`dpm-xl check` compares, and DPM-XL has its own value types.
+[`cell_type`][dpmxl.module.cell_type] maps the first to the second:
+
+| `data_type` | Data file type | DPM-XL value |
+| --- | --- | --- |
+| `m`, `p`, `r` | `number` | number |
+| `i`, `o` | `integer` | number (whole) |
+| `e` | `item` | item |
+| `b`, `t` | `boolean` | Boolean |
+| `d` | `date` | date |
+| `dt` | none (not checked) | date, or text when it has a time |
+| `s`, `es`, `u`, other codes | `string` | text |
+
 ## Rules
 
 Rules have the fields of a [rule file](data-formats.md#rule-files): `code`

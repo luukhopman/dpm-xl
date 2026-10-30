@@ -5,22 +5,9 @@ description: Evaluate time_shift against earlier reports through earlier_report 
 # Compare with earlier reports
 
 `time_shift(x, period, count[, key])` compares a value with the same value
-some periods earlier. It works in one of two ways, depending on `key`:
-
-- **Another report.** When `key` is not a key component of `x` (usually
-  `refPeriod`, or no key at all), `x` is evaluated on the report `count`
-  periods earlier, which the provider's `earlier_report(period, count)`
-  returns. This is how EBA rules compare with the previous reporting period;
-  for XBRL reports, pass the earlier ones as `previous`
-  ([below](#against-earlier-xbrl-reports)).
-- **Within the report.** When `key` is a date key component of `x`, the
-  values of that key move `count` periods later, so each record lines up
-  with the one `count` periods before it.
-
-Periods are `A` (year), `S` (semester), `Q` (quarter), `M` (month), `W`
-(week) and `D` (day). Dates move by calendar months (12, 6, 3 or 1; a
-month's last day stays the last day) or by 7 or 1 days. A negative `count`
-looks forward.
+some periods earlier: on an earlier report, or, when `key` is a date key of
+`x`, within the same report. [Time](../concepts/time.md) explains both
+modes and the periods; this guide shows the code for each.
 
 ## Against the previous report
 
@@ -136,27 +123,12 @@ time_shift needs the report 1 quarter(s) earlier (reference date 2025-12-31), wh
 or paths, read with the same taxonomy packages), and so does the command
 line, as `--previous`:
 
-```console
-$ dpm-xl check-report examples/xbrl-module.json examples/xbrl-report --previous examples/xbrl-report-previous
-
-report: examples/xbrl-report (xbrl-csv); module COREP_LR, release 4.2
-previous: examples/xbrl-report-previous (2025-12-31)
-warning: reports/report.json: 1 extended metadata document could not be resolved offline (http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_lr.json); tables without resolved metadata use the EBA datapoint/factValue convention
-filing rules broken: 0 errors, 0 warnings
-e0001: failed
-  records: 0 passed, 1 failed, 0 null
-  - scalar: 1,045,000 should equal 1,042,000 (812,000 + 190,000 + 40,000): difference 3,000, at least 1,000 given the reported precision
-e0003: failed
-  records: 1 passed, 1 failed, 0 null
-  - qRDT=QW4KNDKKV7QH2LA40639: -12,000 should be at least 0: difference 12,000
-e0004: failed (warning)
-  records: 1 passed, 1 failed, 0 null
-  - qRDT=QW4KNDKKV7QH2LA40639: "QW4KNDKKV7QH2LA4063" does not have the required format
-e0007: failed (warning)
-  records: 0 passed, 1 failed, 0 null
-  - scalar: 1,045,000 should be at least 1,062,000 (0.9 × time_shift(1,180,000, Q, 1, refPeriod)): difference 17,000
-7 rules: 4 failed, 2 passed, 1 not_applicable (3 not listed; --all lists every rule)
+```bash
+dpm-xl check-report examples/xbrl-module.json examples/xbrl-report --previous examples/xbrl-report-previous
 ```
+
+[Check an XBRL report](end-to-end.md#on-the-command-line) shows its
+output, with `e0007` evaluated.
 
 ## Within one report, on a date key
 
@@ -208,11 +180,7 @@ print(explain(result.evaluation, rising, june.key).summary)
 ## `annualise`
 
 `annualise(x, fiscalYearEnd, key)` scales a year-to-date amount to a full
-year: `x · 12 / months`, where `months` counts the months from the start of
-the fiscal year that ends in month `fiscalYearEnd` up to and including the
-month of the date in `key`. `key` is a date key component of `x`, or else a
-report parameter such as `refPeriod`. The month is treated as complete, so
-`annualise` is meant for period-end dates.
+year ([Time](../concepts/time.md#annualise)):
 
 ```python
 result = evaluate_rule("annualise({tC_99.00, c0010}, 12, qDAT) > 300", history)

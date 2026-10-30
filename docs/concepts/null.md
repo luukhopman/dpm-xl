@@ -41,7 +41,7 @@ A cell with no fact takes the selection's `default`; with no default it is
 null. A provider must therefore return every defined cell of a closed
 selection, reported or not ([Connect your data](../guides/provider.md)).
 The default also stands in where another operand has an open key the
-selection lacks ([Records and keys](records-and-keys.md#defaults-fill-in-missing-records)).
+selection lacks ([Defaults across keys](defaults.md)).
 
 ```python
 show("{tT, r0030, c0010} > 0")
@@ -94,7 +94,7 @@ passed [True]
 The result has the condition's record structure. Branch keys the condition
 lacks widen it, so each condition record applies to every branch record that
 shares its keys. A condition with a `default` also covers the key values only
-a branch has ([Records and keys](records-and-keys.md#defaults-fill-in-missing-records)).
+a branch has ([Defaults across keys](defaults.md)).
 
 ## Errors stay in their record
 
@@ -119,7 +119,7 @@ not_applicable []
 
 Aggregates over no records are null, except `count`, which is 0, and an
 operand with a `default`, which aggregates its default next to other
-operands ([Defaults fill in missing records](records-and-keys.md#defaults-fill-in-missing-records)).
+operands ([Defaults across keys](defaults.md)).
 `count` counts non-null values; the others skip nulls.
 
 ```python

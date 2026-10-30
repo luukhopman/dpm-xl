@@ -183,7 +183,7 @@ An operand is a set of records: one value, or one value per key such as
   include every other's; anything else is the error `operands have
   incompatible keys`.
 - An operand with a `default` stands in for the records it lacks
-  ([Defaults fill in missing records](../concepts/records-and-keys.md#defaults-fill-in-missing-records)).
+  ([Defaults across keys](../concepts/defaults.md)).
 - A **null** operand makes the result null
   ([Null logic](../concepts/null.md)). A record whose result is null is not
   evaluated, never a failure.
@@ -197,7 +197,7 @@ An operand is a set of records: one value, or one value per key such as
   `time_shift` of a date key keep their operand's `default`; the results of
   `get`, aggregates and analytic functions have none and join on shared
   keys only
-  ([Defaults fill in missing records](../concepts/records-and-keys.md#defaults-fill-in-missing-records)).
+  ([Defaults across keys](../concepts/defaults.md)).
 
 ### Errors {#errors}
 
@@ -587,7 +587,7 @@ default ::= ( "+" | "-" )? number "%"? | "(" default ")" | text | "true" | "fals
 The value of a selected cell without a fact; without `default` it is null.
 A written `default`, `default: null` included, also stands in for records
 that another operand has and the selection lacks
-([Defaults fill in missing records](../concepts/records-and-keys.md#defaults-fill-in-missing-records)).
+([Defaults across keys](../concepts/defaults.md)).
 The value is a literal, not an expression: `default: 1 + 1` is a syntax
 error. A set is a default only of a [set parameter](#typed-parameter); on a
 selection it is an evaluation error.
@@ -981,7 +981,7 @@ operand: it nests and combines with operators.
   gives one record per condition record, from the matching branch record;
   branch keys the condition lacks widen it. Defaults on the condition or a
   branch fill in missing keys
-  ([Defaults fill in missing records](../concepts/records-and-keys.md#defaults-fill-in-missing-records)).
+  ([Defaults across keys](../concepts/defaults.md)).
 - **Errors:** `if needs a boolean condition, found …`, in the record
   concerned.
 - **Node:** [`If`][dpmxl.ast.If].
@@ -1028,7 +1028,7 @@ Keeps the records that satisfy a condition. The condition is evaluated for
 each record, with the record's key components as names and its value as
 `f`, and must yield one Boolean; records where it is false or null are
 dropped. The result keeps the operand's `default`, which stands in for the
-keys other operands bring ([Defaults fill in missing records](../concepts/records-and-keys.md#defaults-fill-in-missing-records)).
+keys other operands bring ([Defaults across keys](../concepts/defaults.md)).
 Parses to [`Where`][dpmxl.ast.Where].
 
 | Expression | Result |
@@ -1633,7 +1633,7 @@ it on purpose, so that EBA rules keep their meaning:
   where another operand has them, as an XBRL fallback value does; the
   specification joins inner and generates implicit nulls only for keys the
   operand's own table reports (§2.2.3.3, IM §4.2.1)
-  ([Defaults fill in missing records](../concepts/records-and-keys.md#defaults-fill-in-missing-records)).
+  ([Defaults across keys](../concepts/defaults.md)).
   An operand a `where` filters to nothing likewise takes its default at the
   other operands' records, and an aggregate of it aggregates the default,
   where a strict reading of IM §4.2.1 gives no record.

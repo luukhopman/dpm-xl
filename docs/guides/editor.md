@@ -148,14 +148,15 @@ evaluation would reject. Pass `program=True` to accept scripts with `;`,
 Pass a lookup from table code to [`TableLayout`][dpmxl.provider.TableLayout]
 (or `None` for a table that does not exist) to check tables, rows, columns and
 sheets, and `tables` to suggest a table for an unknown one. A problem in a
-`with` context is reported once, at the context. Severities follow
-evaluation: a selection that selects nothing is an error, while a code
-missing from an axis list whose other codes match is a warning. A layout's
-`open_axes` say which axes have keys instead of codes. What a code on such an
-axis, or on an axis the table does not have, selects is up to the provider (a
-`MemoryProvider` ignores it, another may select nothing), so it is a warning
-when written for that table and not reported when a shared `with` context
-applies it:
+`with` context is reported once, at the context. A layout's `open_axes` say
+which axes have keys instead of codes. Severities follow evaluation:
+
+| Situation | Severity |
+| --- | --- |
+| A selection that selects nothing, such as an unknown table or row | error |
+| A code missing from an axis list whose other codes match | warning |
+| A code on an open axis, or on an axis the table does not have, written for that table | warning (what it selects is up to the provider) |
+| The same code applied by a shared `with` context | not reported |
 
 ```python
 from dpmxl import TableLayout

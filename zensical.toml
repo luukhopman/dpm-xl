@@ -42,6 +42,7 @@ nav = [
   { "Concepts" = [
     "concepts/index.md",
     { "Records and keys" = "concepts/records-and-keys.md" },
+    { "Defaults across keys" = "concepts/defaults.md" },
     { "Null logic" = "concepts/null.md" },
     { "Interval arithmetic" = "concepts/intervals.md" },
     { "Preconditions and results" = "concepts/results.md" },

@@ -88,74 +88,23 @@ than a memory problem (`recordset.MAX_JOIN_RECORDS`).
 
 ## Defaults fill in missing records
 
-An open table has records only for the key combinations reported in it, so
-two tables, or two parts of one template, may each lack keys the other has.
-An operand with a written `default` (`default: null` included) then stands
-for its default where it lacks a key, as a fact variable with a fallback
-value does. The specification instead joins inner and fills in defaults
-only for keys the operand's own table reports (§2.2.3.3, IM §4.2.1), so
-this is a [deliberate difference](../reference/language.md#where-dpm-xl-differs).
-One rule covers every construct that combines keyed operands:
-
-- **Joins** (operators, and functions of several operands such as `nvl`,
-  `max`, `match` and `filter`): the operands without a default decide the
-  keys, keeping those all of them have, and the others fill in their
-  default. When every keyed operand has a default, the result has a record
-  for each key any operand with all the result's keys has. Without
-  defaults, a join keeps only the keys both sides have.
-- **`if`**: a keyed condition with a default also covers the keys a branch
-  has and it lacks, provided every branch without a default has them; the
-  condition takes its default there. A branch lacking a key takes its
-  default; without one, the record is null.
-- **Which results keep a default**: everything that keeps a record's value
-  tied to the same fact keeps it, applied to the default: unary operators,
-  `in`, the operators and functions above (when every keyed operand has a
-  default), `[rename]`, a `time_shift` that moves a date key, and the
-  selecting clauses `[where]`, `[sub]`, `filter` and a `with` context's
-  `where`. A filter restricts the operand's own records, not the keys the
-  other operands bring: there the operand falls back to its default. An
-  `if` keeps the default of the branch its condition's default takes.
-- **Which results have none**: `[get]` turns key components into values,
-  and a default has no key components, so a key the operand lacks gives
-  no value (DPM-XL omits records without a fact). Aggregates and analytic
-  functions build each record from a group or window of records: a key
-  without records is no group, and its value is not the operand's default
-  (`sum` of nothing is null, not `0`). Their results join on shared keys
-  only.
-- An operand with no record at all, such as a `[where]` that filters out
-  every record, an open table nobody reported or `[sub]` on a key value
-  nobody reported, stands for its default at every record the other
-  operands have, whatever their keys; an aggregate other than `count` of
-  such an operand is the aggregate of its default (`sum` gives `0` with
-  `default: 0`). This is how the EBA's formulas evaluate these rules: a fact
-  variable that binds to no fact takes its fallback value. On its own, or
-  with constants only, the operand yields no record.
+An open table has records only for the keys reported in it, so two
+operands may each lack keys the other has. Without a `default`, a join
+keeps only the keys both have. With one, an operand stands for its default
+where it lacks a key:
 
 ```python
-show("{tO, c0010} = {tP, c0010}")
-show("with {default: 0}: {tO, c0010} = {tP, c0010}")
-show("{tO, c0010} >= {tP, c0010, default: 0}")
-show(
-    "with {default: null}: if not isnull({tP, c0010}) then not isnull({tO, c0010}) endif"
-)
-show(
-    "with {default: 0}: if {tO, c0010} > 0 then {tO, c0010} < 10 else {tP, c0010} = 0 endif"
-)
-show('{tO, c0010, default: 0} [where qEBB = "A"] <= {tP, c0010}')
-show('with {default: 0}: {tO, c0010} [where qEBB = "Z"] = {tT, r0010, c0010}')
-show('with {default: 0}: sum({tO, c0010} [where qEBB = "Z"]) = {tT, r0010, c0010}')
+show("{tO, c0010} = {tP, c0010}")  # only B is in both
+show("with {default: 0}: {tO, c0010} = {tP, c0010}")  # A, B and C
 ```
 
 ```text
 passed [({'qEBB': 'B'}, True)]
 failed [({'qEBB': 'A'}, False), ({'qEBB': 'B'}, True), ({'qEBB': 'C'}, False)]
-passed [({'qEBB': 'A'}, True), ({'qEBB': 'B'}, True)]
-failed [({'qEBB': 'B'}, True), ({'qEBB': 'C'}, False)]
-failed [({'qEBB': 'A'}, True), ({'qEBB': 'B'}, False), ({'qEBB': 'C'}, False)]
-failed [({'qEBB': 'B'}, False), ({'qEBB': 'C'}, True)]
-failed [({}, False)]
-failed [({}, False)]
 ```
+
+[Defaults across keys](defaults.md) gives the rules for mixed defaults,
+`if`, filters and aggregates.
 
 ## Clauses change keys and records
 
@@ -168,11 +117,11 @@ failed [({}, False)]
 | `group by k, …` | In an aggregate: one record per value of the listed keys. |
 
 A `with` context's `where` applies to each selection in its body that has
-the keys it names. Its terms (split at `and`) that name a key the selection
-lacks, neither a key, the value `f` nor a report parameter, leave that
-selection alone; a term on `f` alone applies to every selection. A `where` or `sub` on a selection
-inside the body overrides the context's `where` entirely, even on other
-keys.
+the keys it names. A term of that `where` (the parts between `and`s) that
+names something the selection does not have (not one of its keys, not `f`,
+not a report parameter) is ignored for that selection; a term on `f` alone
+applies to every selection. A `where` or `sub` on a selection inside the
+body replaces the context's `where` entirely, even on other keys.
 
 ```python
 show('with {tO, c0010} [where qEBB = "A"]: {tO} > {tT, r0020, c0010}')

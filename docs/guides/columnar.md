@@ -121,17 +121,24 @@ key. Statuses are the reference evaluator's
 
 ## Fall back on `ColumnarUnsupported`
 
-Statements and assignments, set operators such as `union`, analytic
-functions, the `&` operator, functions other than the aggregates, `filter`,
-`abs`, `isnull`, `nvl`, `match`, `len` and `min`/`max` (so `time_shift`,
-`annualise`, `substr`, the mathematical and the date functions), typed
-parameter, operation and table-group references, values that do not fit
-`Decimal(38, 12)`, arithmetic that would overflow it, record-level errors
-(a zero divisor or a type error, which the reference evaluator confines to
-its record), ordering items or text that may be an item and a `default`
-standing in for a record another operand has
-([Records and keys](../concepts/records-and-keys.md#defaults-fill-in-missing-records))
-all raise `ColumnarUnsupported`. Catch it and evaluate the rule with
+As a rule of thumb, comparisons, arithmetic, aggregates and the simple
+functions run columnar; everything else raises `ColumnarUnsupported`:
+
+- statements and assignments;
+- set operators such as `union`, analytic functions and the `&` operator;
+- functions other than the aggregates, `filter`, `abs`, `isnull`, `nvl`,
+  `match`, `len` and `min`/`max`, so `time_shift`, `annualise`, `substr`,
+  the mathematical and the date functions;
+- typed parameter, operation and table-group references;
+- values that do not fit `Decimal(38, 12)`, and arithmetic that would
+  overflow it;
+- record-level errors (a zero divisor or a type error, which the reference
+  evaluator confines to its record);
+- ordering items, or text that may be an item;
+- a `default` standing in for a record another operand has
+  ([Defaults across keys](../concepts/defaults.md)).
+
+Catch it and evaluate the rule with
 [`evaluate_rule`][dpmxl.evaluator.evaluate_rule], which needs `select`. A
 provider can offer both: here `select` builds `DataPoint`s from the same
 frame.

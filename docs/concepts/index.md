@@ -15,6 +15,12 @@ How DPM-XL rules are evaluated. These pages explain the semantics; the
 
     Selections yield keyed records; operators join them.
 
+-   :lucide-layers:{ .lg .middle } [**Defaults across keys**](defaults.md)
+
+    ---
+
+    How an operand with a default fills in keys other operands have.
+
 -   :lucide-circle-slash:{ .lg .middle } [**Null logic**](null.md)
 
     ---

@@ -138,7 +138,7 @@ explain up to 1,500 of the difference; at least 5,500 they cannot.
   for your own module, from a module file exported from a DPM release.
 - [dpm-xbrl](https://luukhopman.github.io/dpm-xbrl/): read XBRL-XML as well,
   check the EBA filing rules, and read large packages as frames.
-- [From an XBRL report to explained failures](end-to-end.md): the same
+- [Check an XBRL report](end-to-end.md): the same
   provider for a real report layout, with the columnar engine, and
   `check_report`, which checks the filing rules too.
 - [Explain failures in a UI](explain.md): the cells and the filled formula

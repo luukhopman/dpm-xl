@@ -1,5 +1,5 @@
 ---
-description: Task-oriented recipes for connecting data, evaluating and explaining rules, checking XBRL reports, scaling up and building tooling.
+description: Task-oriented recipes - start from EBA data, integrate dpm-xl with your data and UI, scale up and build tooling.
 ---
 
 # How-to guides
@@ -8,16 +8,23 @@ Recipes for specific tasks. They assume you have done the
 [getting started](../getting-started.md) tutorial; every example runs as
 shown (the test suite executes them).
 
-## Connect and evaluate
+## Start from EBA data
 
 <div class="grid cards" markdown>
 
--   :lucide-plug:{ .lg .middle } [**Connect your data**](provider.md)
+-   :lucide-database:{ .lg .middle } [**Start from an EBA DPM release**](from-a-dpm-release.md)
 
     ---
 
-    Write a `DataProvider` for your storage, with the optional
-    `open_keys`, `table_group`, `operation` and `earlier_report` hooks.
+    Get the EBA's database as SQLite, export a real module, such as
+    COREP_OF, as a module file, generate a test report and check it.
+
+-   :lucide-file-check:{ .lg .middle } [**Check an XBRL report**](end-to-end.md)
+
+    ---
+
+    Read a report with dpm-xbrl, place its facts with a module file,
+    evaluate and explain, or run `dpm-xl check-report`.
 
 -   :lucide-file-json:{ .lg .middle } [**Evaluate a rule file**](rule-files.md)
 
@@ -26,37 +33,36 @@ shown (the test suite executes them).
     Run a rule set against a report, in Python or with `dpm-xl eval`,
     with rule severities, inactive rules and JUnit output.
 
+</div>
+
+## Integrate
+
+<div class="grid cards" markdown>
+
+-   :lucide-plug:{ .lg .middle } [**Connect your data**](provider.md)
+
+    ---
+
+    Write a `DataProvider` for your storage, with the optional
+    `open_keys`, `is_template`, `table_group`, `operation` and
+    `earlier_report` methods.
+
 -   :lucide-message-square-text:{ .lg .middle } [**Explain failures in a UI**](explain.md)
 
     ---
 
     Sentences, filled formulas and the cells to highlight.
 
--   :lucide-file-check:{ .lg .middle } [**From an XBRL report to explained failures**](end-to-end.md)
+-   :lucide-calendar-clock:{ .lg .middle } [**Compare with earlier reports**](time-shift.md)
 
     ---
 
-    Read a report with dpm-xbrl, place its facts with a module file,
-    evaluate and explain, or run `dpm-xl check-report`, with `--previous`
-    for `time_shift`.
-
--   :lucide-workflow:{ .lg .middle } [**Toolkit tour**](toolkit-tour.md)
-
-    ---
-
-    Generate a report with dpm-synth, read it with dpm-xbrl, then evaluate
-    and explain its rules.
-
--   :lucide-database:{ .lg .middle } [**Start from an EBA DPM release**](from-a-dpm-release.md)
-
-    ---
-
-    Get the EBA's database as SQLite and export a real module, such as
-    COREP_OF, as a module file with `dpm-xl export-module`.
+    `time_shift` and `annualise`, also across XBRL reports with
+    `dpm-xl check-report --previous`.
 
 </div>
 
-## Scale up
+## Scale and tooling
 
 <div class="grid cards" markdown>
 
@@ -73,24 +79,11 @@ shown (the test suite executes them).
 
     What is safe to share between threads.
 
--   :lucide-calendar-clock:{ .lg .middle } [**Compare with earlier reports**](time-shift.md)
+-   :lucide-circle-check:{ .lg .middle } [**Check rules in CI**](ci.md)
 
     ---
 
-    `time_shift` and `annualise`, also across XBRL reports with
-    `dpm-xl check-report --previous`.
-
-</div>
-
-## Build tooling
-
-<div class="grid cards" markdown>
-
--   :lucide-circle-check:{ .lg .middle } [**Check rule syntax in CI**](ci.md)
-
-    ---
-
-    `dpm-xl check`, `--strict` for portable syntax, and a pytest test.
+    `dpm-xl check` and its `--strict` mode, and a pytest test.
 
 -   :lucide-code:{ .lg .middle } [**Build editor support**](editor.md)
 
@@ -105,3 +98,6 @@ shown (the test suite executes them).
     The tree, the selections and the tables a rule reads.
 
 </div>
+
+The [toolkit tour](toolkit-tour.md) takes one generated report through
+dpm-synth, dpm-xbrl and dpm-xl.

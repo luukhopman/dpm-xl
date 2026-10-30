@@ -1,19 +1,15 @@
 ---
-description: Read an xBRL-CSV report with dpm-xbrl, place its facts with a module file and the shipped ReportProvider, evaluate rules with the columnar engine and the reference fallback, and explain the failures.
+description: Check an xBRL-CSV report with dpm-xl check-report, or in Python - read it with dpm-xbrl, place its facts with a module file and the shipped ReportProvider, evaluate rules with the columnar engine and the reference fallback, and explain the failures.
 ---
 
-# From an XBRL report to explained failures
+# Check an XBRL report
 
 dpm-xl evaluates rules but reads no files;
 [dpm-xbrl](https://luukhopman.github.io/dpm-xbrl/) reads xBRL-CSV and
 XBRL-XML reports but evaluates no rules. The `xbrl` extra connects the two:
 a [module file](../reference/module-file.md) places each datapoint of the
 report in a table cell, and [`ReportProvider`][dpmxl.xbrl.ReportProvider]
-answers the evaluator from the report. This guide reads an EBA-style
-xBRL-CSV report, evaluates its module's rules with the columnar engine
-(falling back to the reference evaluator where needed) and explains every
-failure. To start from a generated report instead, see the
-[toolkit tour](toolkit-tour.md).
+answers the evaluator from the report.
 
 ```bash
 pip install "dpm-xl[xbrl,columnar]"
@@ -24,10 +20,53 @@ The report is a small leverage-ratio package in the repository,
 a closed table `C_47.00` and an open table `C_48.02` keyed by counterparty
 (`qRDT`). Its module file is
 [`examples/xbrl-module.json`](https://github.com/luukhopman/dpm-xl/blob/main/examples/xbrl-module.json).
-Run the code from a checkout of the repository, or point it at your own
-report and module.
+Run the commands from a checkout of the repository, or point them at your
+own report and module file.
 
-## 1. Read the report
+## On the command line
+
+`dpm-xl check-report` checks the report's filing rules and evaluates the
+module's validation rules. `e0007` compares with the previous quarter, so
+pass that report too:
+
+```console
+$ dpm-xl check-report examples/xbrl-module.json examples/xbrl-report --previous examples/xbrl-report-previous
+report: examples/xbrl-report (xbrl-csv); module COREP_LR, release 4.2
+previous: examples/xbrl-report-previous (2025-12-31)
+warning: reports/report.json: 1 extended metadata document could not be resolved offline (http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_lr.json); tables without resolved metadata use the EBA datapoint/factValue convention
+filing rules broken: 0 errors, 0 warnings
+e0001: failed
+  records: 0 passed, 1 failed, 0 null
+  - scalar: 1,045,000 should equal 1,042,000 (812,000 + 190,000 + 40,000): difference 3,000, at least 1,000 given the reported precision
+e0003: failed
+  records: 1 passed, 1 failed, 0 null
+  - qRDT=QW4KNDKKV7QH2LA40639: -12,000 should be at least 0: difference 12,000
+e0004: failed (warning)
+  records: 1 passed, 1 failed, 0 null
+  - qRDT=QW4KNDKKV7QH2LA40639: "QW4KNDKKV7QH2LA4063" does not have the required format
+e0007: failed (warning)
+  records: 0 passed, 1 failed, 0 null
+  - scalar: 1,045,000 should be at least 1,062,000 (0.9 × time_shift(1,180,000, Q, 1, refPeriod)): difference 17,000
+7 rules: 4 failed, 2 passed, 1 not_applicable (3 not listed; --all lists every rule)
+$ echo $?
+1
+```
+
+The warning means the EBA taxonomy was not available offline; the report
+is still read, and
+[`--taxonomy-package`](../reference/cli.md#dpm-xl-check-report) resolves it.
+Only rules that failed, are an error or are unsupported are listed, and
+the run fails because `error` rules failed; failing `warning` rules, such
+as `e0004`, fail it only with `--fail-on warning`. `--format junit` writes
+the results as a JUnit XML report for CI.
+
+## In Python
+
+The rest of this guide does the same step by step: read the report,
+evaluate its module's rules with the columnar engine (falling back to the
+reference evaluator where needed) and explain every failure.
+
+### 1. Read the report
 
 ```python
 from dpmxbrl import read_report
@@ -55,7 +94,7 @@ precision of numbers comes from the report's `decimals*` parameters by data
 type. See the [dpm-xbrl documentation](https://luukhopman.github.io/dpm-xbrl/)
 for the fact model, XBRL-XML and the EBA filing rules it checks.
 
-## 2. Place the facts with the module
+### 2. Place the facts with the module
 
 DPM-XL rules address cells by table, row and column, so each datapoint needs
 its position. The module file gives it: each cell names its row, column,
@@ -85,7 +124,7 @@ their reported precision: the total exposure was reported with
 `decimalsMonetary = -3`, rounded to thousands, so it stands for
 1,045,000 ± 500. `unplaced` lists the facts in no table of the module.
 
-## 3. Evaluate with the columnar engine and fall back
+### 3. Evaluate with the columnar engine and fall back
 
 [`PointsFrameProvider`][dpmxl.columnar.PointsFrameProvider] presents the
 same provider as polars frames. Each rule of the module runs on the
@@ -145,7 +184,7 @@ its precondition tests `C_43.00`, which the report's filing indicators mark
 as not reported. `e0004` is a `warning`: it is reported, but would not fail
 a [`check-report`](../reference/cli.md#dpm-xl-check-report) run on its own.
 
-## 4. Explain the failures
+### 4. Explain the failures
 
 The columnar result has the failing keys but no trace, so evaluate the
 failed rules again with [`evaluate_rule`][dpmxl.evaluator.evaluate_rule] and
@@ -182,7 +221,7 @@ rounded to thousands could explain up to 2,000 of that; at least 1,000
 cannot. The leverage ratio rule `e0002` passed because 52,000 / 1,045,000 is
 within the precision of the reported 4.98 %.
 
-## All at once
+### All at once
 
 [`check_report`][dpmxl.xbrl.check_report] reads the report, checks the EBA
 filing rules dpm-xbrl knows and evaluates every active rule of the module,
@@ -206,9 +245,6 @@ True True
 `e0007` compares with the previous quarter through `time_shift`, which one
 report cannot answer. Pass the earlier reports as `previous`
 ([Compare with earlier reports](time-shift.md#against-earlier-xbrl-reports)).
-
-On the command line, [`dpm-xl check-report`](../reference/cli.md#dpm-xl-check-report)
-prints the same as text, JSON or JUnit XML for CI.
 
 ## In production
 

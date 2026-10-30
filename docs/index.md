@@ -1,5 +1,5 @@
 ---
-description: What dpm-xl is, a 30-second example in Python and on the command line, installation, the standards it implements, four commands from an EBA DPM release to explained failures, and where to go next.
+description: What dpm-xl is, a 30-second example in Python and on the command line, installation, four commands from an EBA DPM release to explained failures, and where to start as an analyst, a developer or a rule author.
 ---
 
 # dpm-xl
@@ -11,21 +11,12 @@ tells you which records fail and explains each failure in plain numbers.
 dpm-xl is an independent project, not affiliated with or endorsed by the
 European Banking Authority.
 
-<div class="toolkit-badges" markdown>
-
-[DPM-XL 0.11](reference/standards.md#dpm-xl)
-[EBA Filing Rules 5.9, rule 2.18](reference/standards.md#eba-filing-rules)
-[VTL 2.1](reference/standards.md#vtl)
-[Python 3.11+](project/stability.md#supported-python-versions)
-
-</div>
-
 It is for teams that check supervisory reports before they are filed, build
-validation into a reporting platform, or analyse and edit DPM-XL rules. It
+validation into a reporting platform, or write and analyse DPM-XL rules. It
 has no dependencies.
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
-[Standards and conformance](reference/standards.md){ .md-button }
+[Check an XBRL report](guides/end-to-end.md){ .md-button }
 
 ## In 30 seconds
 
@@ -125,123 +116,43 @@ get it and what the export writes. `corep_of.json` is a
 rules, which dpm-xl and [dpm-synth] both read. `check-report` needs the
 `xbrl` extra.
 
-On the example module and report in the repository's
-[`examples/`](https://github.com/luukhopman/dpm-xl/tree/main/examples),
-with the previous quarter's report for the `time_shift` rule `e0007`, the
-last step prints:
-
-```console
-$ dpm-xl check-report examples/xbrl-module.json examples/xbrl-report --previous examples/xbrl-report-previous
-report: examples/xbrl-report (xbrl-csv); module COREP_LR, release 4.2
-previous: examples/xbrl-report-previous (2025-12-31)
-warning: reports/report.json: 1 extended metadata document could not be resolved offline (http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_lr.json); tables without resolved metadata use the EBA datapoint/factValue convention
-filing rules broken: 0 errors, 0 warnings
-e0001: failed
-  records: 0 passed, 1 failed, 0 null
-  - scalar: 1,045,000 should equal 1,042,000 (812,000 + 190,000 + 40,000): difference 3,000, at least 1,000 given the reported precision
-e0003: failed
-  records: 1 passed, 1 failed, 0 null
-  - qRDT=QW4KNDKKV7QH2LA40639: -12,000 should be at least 0: difference 12,000
-e0004: failed (warning)
-  records: 1 passed, 1 failed, 0 null
-  - qRDT=QW4KNDKKV7QH2LA40639: "QW4KNDKKV7QH2LA4063" does not have the required format
-e0007: failed (warning)
-  records: 0 passed, 1 failed, 0 null
-  - scalar: 1,045,000 should be at least 1,062,000 (0.9 × time_shift(1,180,000, Q, 1, refPeriod)): difference 17,000
-7 rules: 4 failed, 2 passed, 1 not_applicable (3 not listed; --all lists every rule)
-$ echo $?
-1
-```
-
-Only rules that failed, are an error or are unsupported are listed;
-`--all` lists every rule. The exit status is 1 because rules of severity
-`error` failed; failing `warning` rules, such as `e0004`, fail the run only
-with `--fail-on warning`. `--format junit` writes the same results as a
-JUnit XML report for CI ([CLI](reference/cli.md#dpm-xl-check-report)).
-
-## Find your way
+## Where to start
 
 <div class="grid cards" markdown>
 
--   :lucide-graduation-cap:{ .lg .middle } **Getting started**
+-   :lucide-file-check:{ .lg .middle } **Check a report**
 
     ---
 
-    Install dpm-xl, evaluate a first rule, read the explanation and run the
-    command line, in about ten minutes.
+    You have a report and want to know which rules it breaks and why.
+    Start with the [tutorial](getting-started.md), then
+    [check an XBRL report](guides/end-to-end.md) or
+    [start from an EBA DPM release](guides/from-a-dpm-release.md).
 
-    [:lucide-arrow-right: Tutorial](getting-started.md)
-
--   :lucide-list-checks:{ .lg .middle } **How-to guides**
-
-    ---
-
-    Recipes for one task each: export a module from an EBA DPM release,
-    connect your data, check an XBRL report, explain failures in a UI,
-    evaluate large reports, check rules in CI.
-
-    [:lucide-arrow-right: Guides](guides/index.md)
-
--   :lucide-lightbulb:{ .lg .middle } **Concepts**
+-   :lucide-plug:{ .lg .middle } **Integrate dpm-xl**
 
     ---
 
-    How rules are evaluated: records and keys, null logic, interval
-    arithmetic, sets, time and the rest of the semantics.
+    You build a reporting platform. [Connect your data](guides/provider.md),
+    [explain failures in a UI](guides/explain.md) and
+    [evaluate large reports](guides/columnar.md); the
+    [Python API](reference/api/index.md) has every name.
 
-    [:lucide-arrow-right: Concepts](concepts/index.md)
-
--   :lucide-library:{ .lg .middle } **Reference**
+-   :lucide-code:{ .lg .middle } **Write rules**
 
     ---
 
-    The language, the command line, the data and module file formats, the
-    Python API, and the standards implemented.
-
-    [:lucide-arrow-right: Reference](reference/index.md)
+    You write or maintain DPM-XL rules. The
+    [language reference](reference/language.md),
+    [check rules in CI](guides/ci.md) and
+    [editor support](guides/editor.md); the
+    [standards page](reference/standards.md) says what is implemented.
 
 </div>
 
-## Features
-
-- **The whole language.** Every construct of the DPM-XL grammar, each with
-  tested examples in the [language reference](reference/language.md). All
-  14,174 distinct EBA rule and precondition expressions of DPM releases
-  3.4–4.4 parse but the two with typos in the EBA source, about 0.1 ms
-  each; see [how conformance is tested](reference/standards.md#how-conformance-is-tested).
-- **EBA semantics.** Interval arithmetic, null logic and key joins, and
-  each failure pointed at the cells involved; see the
-  [concepts](concepts/index.md).
-- **Problems before evaluation.** Every syntax error, unknown functions and
-  tables, coordinates a table lacks, keys and operand types, each with its
-  position and, where one fits, a suggested fix, for
-  [editors](guides/editor.md) and [CI](guides/ci.md). `non-portable`
-  warnings mark syntax other DPM-XL engines may reject, and
-  `dpm-xl check --strict` fails on them
-  ([where dpm-xl differs](reference/language.md#where-dpm-xl-differs)).
-- **Any data source.** A three-method [provider](guides/provider.md), so
-  the same evaluator runs against a report upload, a database or test
-  fixtures.
-- **Modules from the EBA's DPM.** `dpm-xl export-module` and
-  `list-modules` (or `dpmxl.dpm` in Python) write a module of an EBA DPM
-  2.0 database as a [module file](reference/module-file.md); see
-  [start from an EBA DPM release](guides/from-a-dpm-release.md).
-- **XBRL reports.** With the `xbrl` extra, `dpm-xl check-report` checks a
-  report against a module file: the filing rules [dpm-xbrl] checks, and
-  the module's rules, with earlier reports as `--previous` for
-  `time_shift`; see
-  [from an XBRL report to explained failures](guides/end-to-end.md).
-- **Rule metadata.** Rules carry a `severity` (`error` or `warning`) and
-  `active`; inactive rules are skipped and `--fail-on` sets which failures
-  fail a run ([rule files](reference/data-formats.md#rule-files)).
-- **Output for people and CI.** Text that lists only what needs attention
-  (`--all` for every rule), [JSON](reference/cli.md#json-output_1) and
-  [JUnit XML](reference/cli.md#junit-xml).
-- **Millions of rows.** The `columnar` extra adds a polars evaluator for
-  large open tables; see [evaluate large reports](guides/columnar.md).
-- **For AI agents too.** The essentials on [one page](agents.md), and
-  every page as Markdown in [`llms.txt`](llms.txt) and
-  [`llms-full.txt`](llms-full.txt).
+The [how-to guides](guides/index.md), [concepts](concepts/index.md) and
+[reference](reference/index.md) cover the rest, and
+[one page for AI agents](agents.md) has the essentials.
 
 ## Part of the dpm toolkit
 

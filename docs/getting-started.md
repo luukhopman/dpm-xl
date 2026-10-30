@@ -305,7 +305,7 @@ each status.
 
 - [Connect your data](guides/provider.md): write a provider for your own
   storage.
-- [From an XBRL report to explained failures](guides/end-to-end.md): the
+- [Check an XBRL report](guides/end-to-end.md): the
   same check in Python, with every failure explained.
 - [Start from an EBA DPM release](guides/from-a-dpm-release.md): export a
   real module, such as COREP_OF, as a module file with

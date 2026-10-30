@@ -2,7 +2,7 @@
 description: Fail a CI job when a rule in a rule repository does not parse, with dpm-xl check or a pytest test.
 ---
 
-# Check rule syntax in CI
+# Check rules in CI
 
 A repository of rules (exported from a DPM release, or written by hand)
 should never hold an expression that does not parse or names a function

@@ -20,18 +20,24 @@ nav = [
   { "Getting started" = "getting-started.md" },
   { "How-to guides" = [
     "guides/index.md",
-    { "Connect your data" = "guides/provider.md" },
-    { "Evaluate a rule file" = "guides/rule-files.md" },
-    { "Explain failures in a UI" = "guides/explain.md" },
-    { "Evaluate large reports" = "guides/columnar.md" },
-    { "Run rules in threads" = "guides/threads.md" },
-    { "Compare with earlier reports" = "guides/time-shift.md" },
-    { "Check rule syntax in CI" = "guides/ci.md" },
-    { "Build editor support" = "guides/editor.md" },
-    { "Analyse rules statically" = "guides/analyse.md" },
-    { "From an XBRL report to explained failures" = "guides/end-to-end.md" },
+    { "Start from EBA data" = [
+      { "Start from an EBA DPM release" = "guides/from-a-dpm-release.md" },
+      { "Check an XBRL report" = "guides/end-to-end.md" },
+      { "Evaluate a rule file" = "guides/rule-files.md" },
+    ] },
+    { "Integrate" = [
+      { "Connect your data" = "guides/provider.md" },
+      { "Explain failures in a UI" = "guides/explain.md" },
+      { "Compare with earlier reports" = "guides/time-shift.md" },
+    ] },
+    { "Scale and tooling" = [
+      { "Evaluate large reports" = "guides/columnar.md" },
+      { "Run rules in threads" = "guides/threads.md" },
+      { "Check rules in CI" = "guides/ci.md" },
+      { "Build editor support" = "guides/editor.md" },
+      { "Analyse rules statically" = "guides/analyse.md" },
+    ] },
     { "Toolkit tour" = "guides/toolkit-tour.md" },
-    { "Start from an EBA DPM release" = "guides/from-a-dpm-release.md" },
   ] },
   { "Concepts" = [
     "concepts/index.md",
@@ -54,6 +60,7 @@ nav = [
     { "Data formats" = "reference/data-formats.md" },
     { "Module file" = "reference/module-file.md" },
     { "Glossary" = "reference/glossary.md" },
+    { "For AI agents" = "agents.md" },
     { "Python API" = [
       "reference/api/index.md",
       { "dpmxl.evaluator" = "reference/api/evaluator.md" },
@@ -73,7 +80,6 @@ nav = [
       { "dpmxl.diagnostics" = "reference/api/diagnostics.md" },
     ] },
   ] },
-  { "AI agents" = "agents.md" },
   { "Toolkit" = [
     { "Overview" = "toolkit.md" },
     { "Toolkit tour" = "https://luukhopman.github.io/dpm-xl/guides/toolkit-tour/" },

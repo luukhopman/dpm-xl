@@ -8,7 +8,8 @@ A repository of rules (exported from a DPM release, or written by hand)
 should never hold an expression that does not parse. `dpm-xl check` parses
 every expression and precondition of a rule source and exits with status 1
 when any of them fails. With `--strict` it also fails on other errors, such
-as an unknown function or a call with the wrong operands, and with
+as an unknown function or a call with the wrong operands, and on syntax
+that other DPM-XL engines may reject, such as `.5`, and with
 `--layouts` it checks tables and coordinates too
 ([CLI reference](../reference/cli.md#dpm-xl-check)).
 

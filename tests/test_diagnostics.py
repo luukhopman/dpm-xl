@@ -115,7 +115,7 @@ def test_eba_rules_have_no_diagnostics() -> None:
         "count({tC_27.00, c0020} group by qNCO, INC) > 0",
         "{tC_27.00, c0010} [where qNCO = [qCO:x1] and r = r] [get qINC] = 'A'",
         "{tC_28.00, r0010, c0010} > 0",
-        "max({tC_01.00, r0010, c0010}, 0) = max({tC_01.00, c0010} group by r)",
+        "max({tC_01.00, r0010, c0010}, 0) = max_aggr({tC_01.00, c0010} group by r)",
         "{g_G1, r9999} = 1 and {o_v1} and {v_C_99.00}",
         "if isnull({tC_01.00, r0010, c0010}) then 1 else 2 endif = 1",
         "{tC_01.00, r0010, c0020} & 'x' = 'yx'",
@@ -267,6 +267,61 @@ def test_operand_counts_match_the_signatures() -> None:
         ),
     ]
     assert codes("abs({tC_01.00, r*, c0010} group by r) > 0") == ["group-by"]
+
+
+NON_PORTABLE = "; other DPM-XL engines may reject it"
+
+
+@pytest.mark.parametrize(
+    ("expression", "text", "suggestion"),
+    [
+        (".5 > 0", ".5", "0.5"),
+        ("1e5 > 0", "1e5", "100000"),
+        ("{tC_01.00, r0010, c0010, default: 1E-2} > 0", "1E-2", "0.01"),
+        ("max({tC_01.00, r*, c0010}) > 0", "max", "max_aggr"),
+        ("min({tC_01.00, r*, c0010}) > 0", "min", "min_aggr"),
+        ("{tC_01.00, r0010, c0010} <> 1", "<>", "!="),
+        ("{tC_01.00, r0010, c0010} > 0 AND true", "AND", "and"),
+        ("{tC_01.00, r0010, c0010, default: 0} = Null", "Null", "null"),
+        ("Abs({tC_01.00, r0010, c0010}) > 0", "Abs", "abs"),
+        ("length('a') = 1", "length", "len"),
+        ("with {tC_01.00}: with {r0010}: {c0010} > 0", "with", None),
+        ("substr('abc', 1 + 1) = 'bc'", "1 + 1", None),
+        (
+            "substr('abc', 1, {tC_01.00, r0010, c0010}) = 'a'",
+            "{tC_01.00, r0010, c0010}",
+            None,
+        ),
+        ("{tC_01.00, r0010, c0010, default: -1} > 0", "-1", "(-1)"),
+        ("with {default: +2}: {tC_01.00, r0010, c0010} > 0", "+2", "2"),
+        ("{p_X, number, default: -1.5} > 0", "-1.5", None),
+        ("{tC_01.00, r0010, c0010} in {1.5, -3}", "-3", "(-3)"),
+    ],
+)
+def test_syntax_beyond_the_official_grammar_is_non_portable(
+    expression: str, text: str, suggestion: str | None
+) -> None:
+    ((severity, code, written, message, suggested),) = found(expression)
+    assert (severity, code, written, suggested) == (
+        "warning",
+        "non-portable",
+        text,
+        suggestion,
+    )
+    assert message.endswith(NON_PORTABLE)
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "0.5 + 100000 > {tC_01.00, r0010, c0010, default: (-1)}",
+        "max({tC_01.00, r0010, c0010}, 0) = max_aggr({tC_01.00, r*, c0010})",
+        "substr('abc', 2, (-1)) = 'bc' and {tC_01.00, r0010, c0010} in {(-3), 1.5}",
+        "abs(-1) = 1 and 3 != null and -{tC_01.00, r0010, c0010} < 0",
+    ],
+)
+def test_portable_spellings_are_not_flagged(expression: str) -> None:
+    assert found(expression) == []
 
 
 def test_key_operands_must_be_names() -> None:

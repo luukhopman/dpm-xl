@@ -1675,12 +1675,43 @@ it on purpose, so that EBA rules keep their meaning:
 {tT, r0010, r0020}
 ```
 
-In the other direction dpm-xl accepts keywords in any case, `null` and `<>`
-anywhere, a last statement without `;`, `length` for `len`, codes without
-leading zeros (`r310` is row `0310`), ranges that repeat the axis letter
-(`r0440-r0480`), key names without the `q` prefix or in another case, item
-codes without a category (`[ei86]`), and `max` and `min` over dates, text
-and items.
+### Syntax beyond the official grammar {#beyond-the-grammar}
+
+In the other direction dpm-xl accepts syntax that the ANTLR grammar
+published with v0.11 rejects. Where the grammar contradicts the
+specification's own text or the EBA's rules, dpm-xl follows them and
+[`diagnose`][dpmxl.diagnostics.diagnose] reports nothing:
+
+| Accepted | Evidence |
+| --- | --- |
+| `default:null`, `interval:false` without a space after the colon | 185 of the 14,174 EBA expressions write them so; the grammar's lexer reads `default:null` as an item code, although it otherwise ignores whitespace (§3.1.1 defines `default` and `interval` as arguments) |
+| `null` as an operand, as in `max(1, 3, null)` | Examples such as `3 = null` (§5.2), `max(1, 3, null)` (§4.3.5) and `len(null)` (§9.1); the grammar takes `null` only after `default:` |
+| `abs(-1)` | The example of §4.2.3; the grammar reads `(-1)` as one literal, so the call lacks its parentheses |
+| A last statement without `;` | The example of §3.1.6.1; the grammar needs `;` after every statement of a script |
+
+The others have no such basis: no EBA expression uses them, and other
+engines may reject a rule that does. dpm-xl evaluates them, and `diagnose`
+reports each as a `non-portable` warning with the portable spelling where
+there is one, so that `dpm-xl check --strict` fails on them:
+
+| Accepted | Portable spelling |
+| --- | --- |
+| `.5`, `1e5` | `0.5`, `100000` |
+| `max(x)`, `min(x)`, also with `group by` | `max_aggr(x)`, `min_aggr(x)` |
+| `substr(x, 1 + 1)`: positions that are not integer literals (the grammar's reading of §9.3, whose text allows any integer) | `substr(x, 2)` |
+| `default: -1`, `{1.5, -3}` | `default: (-1)`, `{1.5, (-3)}`; a negative decimal cannot be written |
+| Keywords, functions and literals not in lower case, such as `AND`, `TRUE` | `and`, `true` |
+| `<>` | `!=` |
+| `length` | `len` |
+| `with` inside a `with` body | One `with` |
+
+`union` and `intersect` of one operand parse, but are an error, as in the
+specification. Not flagged: codes without leading zeros (`r310` is row
+`0310`), ranges that repeat the axis letter (`r0440-r0480`), key names
+without the `q` prefix or in another case and item codes without a category
+(`[ei86]`), which the grammar accepts; and [bare names](#bare-names), sets
+that mix types and `max` and `min` over dates, text and items, which
+concern meaning rather than spelling.
 
 Every distinct EBA rule and precondition expression of DPM releases 3.4–4.4
 parses, except two source expressions with typos (`trueendif`, `ornot`),

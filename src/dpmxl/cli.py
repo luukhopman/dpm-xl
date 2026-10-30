@@ -65,8 +65,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Returns:
         int: Process exit code: 0 when everything parsed (with ``--strict``:
-        had no errors) or no rule at or above ``--fail-on`` failed, 1 when an
-        expression did not parse (with ``--strict``: had an error) or such a
+        had no errors and no ``non-portable`` warnings) or no rule at or
+        above ``--fail-on`` failed, 1 when an expression did not parse (with
+        ``--strict``: had an error or a ``non-portable`` warning) or such a
         rule failed or is an error, 2 for a usage error and 3 for unreadable
         or invalid input.
     """
@@ -91,7 +92,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     check.add_argument(
         "--strict",
         action="store_true",
-        help="exit with status 1 for any error, not only syntax errors",
+        help="exit with status 1 for any error, not only syntax errors, and "
+        "for syntax other DPM-XL engines may reject",
     )
     check.add_argument("--references", action="store_true", help="print selections")
     check.add_argument("--json", action="store_true", help="print JSON")
@@ -423,7 +425,8 @@ def _check(
             + "".join(f"; {note}" for note in notes)
         )
     if strict:
-        return EXIT_FAILED if counts["error"] else EXIT_OK
+        portable = all(item["code"] != "non-portable" for item in found)
+        return EXIT_FAILED if counts["error"] or not portable else EXIT_OK
     return EXIT_FAILED if unparsed else EXIT_OK
 
 

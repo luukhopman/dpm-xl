@@ -221,6 +221,14 @@ def test_check_warnings_do_not_fail(tmp_path, capsys) -> None:
     assert output.out.strip() == "1/1 expressions parsed; 1 warning"
 
 
+def test_check_strict_fails_on_non_portable_syntax(capsys) -> None:
+    assert main(["check", "{tC_01.00, r0010, c0010} > .5"]) == 0
+    assert main(["check", "{tC_01.00, r0010, c0010} > .5", "--strict"]) == 1
+    output = capsys.readouterr()
+    assert "expression: warning: DPM-XL 0.11 numbers have digits" in output.err
+    assert main(["check", "{tC_01.00, r0010, c0010} > 0.5", "--strict"]) == 0
+
+
 def test_check_json_lists_diagnostics(tmp_path, capsys) -> None:
     assert main(["check", "abs(1, 2) > (", "--json"]) == 1
     document = json.loads(capsys.readouterr().out)

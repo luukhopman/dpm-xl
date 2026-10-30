@@ -44,12 +44,15 @@ Checks every expression and precondition of a rule source with
 functions, calls with the wrong operands and selections without a table.
 Expressions may be scripts with `;`, `:=` and `<-`. Every problem is
 printed; the exit status is 1 when an expression does not parse, or with
-`--strict` when any expression has an error. Warnings never change it.
+`--strict` when any expression has an error or uses syntax other DPM-XL
+engines may reject (a `non-portable` warning, see
+[Where dpm-xl differs](language.md#where-dpm-xl-differs)). Other warnings
+never change it.
 
 | Option | Effect |
 | --- | --- |
 | `--layouts DATA` | Also check tables, coordinates, open-table keys and, when the tables give `data_types`, operand types against the `tables` of a [data file](data-formats.md#data-files), and names against its `parameters`. |
-| `--strict` | Exit with status 1 for any error, not only for syntax errors. |
+| `--strict` | Exit with status 1 for any error, not only for syntax errors, and for a `non-portable` warning. |
 | `--references` | Also print every selection, with its `with` context applied. |
 | `--json` | Print one JSON document instead of text. |
 
@@ -337,8 +340,8 @@ statuses.
 
 | Status | `check` | `eval` and `check-report` |
 | --- | --- | --- |
-| 0 | Everything parsed; with `--strict`, nothing has an error. | No rule (or filing finding) at or above `--fail-on` failed. |
-| 1 | An expression or precondition does not parse; with `--strict`, one has an error. | A rule (or filing finding) at or above `--fail-on` failed, or such a rule is `error`. An `unsupported` rule does not count. |
+| 0 | Everything parsed; with `--strict`, nothing has an error or a `non-portable` warning. | No rule (or filing finding) at or above `--fail-on` failed. |
+| 1 | An expression or precondition does not parse; with `--strict`, one has an error or a `non-portable` warning. | A rule (or filing finding) at or above `--fail-on` failed, or such a rule is `error`. An `unsupported` rule does not count. |
 | 2 | Usage error (unknown command or option). | Usage error, or `check-report` without the `xbrl` extra. |
 | 3 | The rule file cannot be read or is malformed. | An input file cannot be read or is malformed. |
 

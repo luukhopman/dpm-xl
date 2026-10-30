@@ -36,6 +36,11 @@ All notable changes to this project are documented here. The project follows
   to 4.4, committed as test data.
 - The language reference lists every place where dpm-xl differs from the
   DPM-XL specification v0.11, with the section concerned.
+- `diagnose` warns about syntax the v0.11 grammar rejects and no EBA rule
+  needs, such as `.5` or `<>` (code `non-portable`); `dpm-xl check
+  --strict` fails on it.
+- The language reference lists the syntax dpm-xl accepts beyond the v0.11
+  grammar, with the evidence for each.
 
 ### Changed
 

@@ -61,6 +61,17 @@ def test_every_eba_expression_parses_but_two_typos() -> None:
         assert diagnostic.message == suggestion
 
 
+def test_no_eba_expression_is_non_portable() -> None:
+    # The non-portable warnings flag only leniencies the EBA does not use.
+    flagged = {
+        code: diagnostic.message
+        for expression, code in CORPUS.items()
+        for diagnostic in diagnose(expression, program=True)
+        if diagnostic.code == "non-portable"
+    }
+    assert flagged == {}
+
+
 def test_eba_variables_keep_their_meaning() -> None:
     # {v_X} names a template and {vReportingLevel} is the only parameter, so
     # reading both spellings as one variable changes no EBA verdict.

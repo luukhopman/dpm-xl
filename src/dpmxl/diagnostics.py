@@ -14,6 +14,7 @@ import difflib
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from decimal import Decimal
 from typing import Literal
 
 from .ast import (
@@ -81,6 +82,7 @@ DIAGNOSTIC_CODES = frozenset(
         "type-mismatch",
         "unknown-key",
         "unknown-name",
+        "non-portable",
     }
 )
 """Every [`Diagnostic.code`][dpmxl.diagnostics.Diagnostic]. Codes are stable;
@@ -121,7 +123,15 @@ class Diagnostic:
             * ``unknown-key``: a name in a clause that is not a key of what
               the clause applies to (a warning where a report parameter may
               stand in and the parameters are not known); ``unknown-name``: a
-              name that is no report parameter or earlier assignment.
+              name that is no report parameter or earlier assignment;
+            * ``non-portable``: a warning for syntax dpm-xl accepts and the
+              DPM-XL 0.11 grammar does not, and neither the specification's
+              text nor EBA rules need: ``.5``, ``1e5``, ``max`` or ``min``
+              of one operand, ``substr`` positions that are not integer
+              literals, an unparenthesized signed ``default`` or set
+              element, keywords not in lower case, ``<>``, ``length`` and
+              ``with`` inside a ``with`` body. Other engines may reject the
+              rule.
         message: What is wrong, in plain words.
         start: Zero-based offset of the first character concerned.
         end: Offset just past the last character; equals ``start`` for a
@@ -264,6 +274,8 @@ _NUMBER_RESULTS = frozenset(
 )
 # Single words that run together when a space is left out, as in ornot.
 _JOINABLE = frozenset(word for word in KEYWORDS if " " not in word) | LITERAL_WORDS
+# Tokens that DPM-XL 0.11 knows in lower case only.
+_CASED = frozenset({"keyword", "function", "boolean", "null"})
 # Operands longer than this are not quoted in a type-mismatch message.
 _LONG_TEXT = 40
 
@@ -312,6 +324,7 @@ class _Checker:
     def run(self, tree: Program | None) -> tuple[Diagnostic, ...]:
         for error in self.errors:
             self.syntax(error)
+        self.check_tokens()
         if tree is not None:
             self.walk(tree)
         return tuple(
@@ -454,6 +467,21 @@ class _Checker:
         match node:
             case Selection(spec=spec):
                 self.check_selection(spec, spec.merged_into(scope.context), node.span)
+                self.check_signed(spec.default, "a default")
+            case With(context=context, body=body):
+                self.check_signed(context.default, "a default")
+                if isinstance(body, With):
+                    self.non_portable(
+                        "DPM-XL 0.11 has no with inside a with body",
+                        (body.span[0], body.span[0] + len("with")),
+                    )
+            case TypedParameter(default=default):
+                self.check_signed(default, "a default")
+            case SetLiteral(items=items):
+                for item in items:
+                    self.check_signed(item, "a set element")
+            case Literal_(kind="number"):
+                self.check_number(node)
             case Call():
                 self.check_call(node, scope)
             case Name(name=name):
@@ -468,6 +496,72 @@ class _Checker:
             case Analytic(operand=operand, partition_by=partition, order_by=order):
                 names = [*partition, *(key for key, _ in order)]
                 self.check_keys(node, operand, names, scope)
+
+    # Portability ---------------------------------------------------------
+
+    def non_portable(
+        self, message: str, span: tuple[int, int], suggestion: str | None = None
+    ) -> None:
+        self.add(
+            "warning",
+            "non-portable",
+            f"{message}; other DPM-XL engines may reject it",
+            span,
+            self.source[span[0] : span[1]],
+            suggestion,
+        )
+
+    def check_tokens(self) -> None:
+        """Warn about spellings the DPM-XL 0.11 grammar does not know."""
+        for token in self.tokens:
+            text = token.text
+            if token.kind == "operator" and text == "<>":
+                self.non_portable(
+                    "DPM-XL 0.11 writes 'not equal' as !=",
+                    (token.start, token.end),
+                    "!=",
+                )
+            elif token.kind == "function" and text.casefold() == "length":
+                self.non_portable(
+                    "DPM-XL 0.11 calls length len", (token.start, token.end), "len"
+                )
+            elif token.kind in _CASED and text != text.lower():
+                self.non_portable(
+                    "DPM-XL 0.11 writes keywords, functions and literals in lower case",
+                    (token.start, token.end),
+                    text.lower(),
+                )
+
+    def check_number(self, node: Literal_) -> None:
+        """Warn about ``.5`` and ``1e5``, which DPM-XL 0.11 cannot write."""
+        text = self.source[node.span[0] : node.span[1]].lstrip("+-")
+        if not (text.startswith(".") or "e" in text or "E" in text):
+            return
+        assert isinstance(node.value, Decimal)
+        plain = format(node.value, "f")
+        if plain.startswith("-"):
+            plain = f"({plain})"
+        self.non_portable(
+            "DPM-XL 0.11 numbers have digits before the point and no exponent",
+            node.span,
+            plain,
+        )
+
+    def check_signed(self, node: object, what: str) -> None:
+        """Warn about ``default: -1``: DPM-XL 0.11 writes ``default: (-1)``."""
+        if not isinstance(node, Literal_ | Unary):
+            return
+        text = self.source[node.span[0] : node.span[1]]
+        if not text.startswith(("-", "+")):
+            return
+        digits = text[1:].strip()
+        self.non_portable(
+            f"DPM-XL 0.11 cannot write a signed number as {what} without parentheses",
+            node.span,
+            (digits if text[0] == "+" else f"(-{digits})")
+            if digits.isdigit()
+            else None,
+        )
 
     # Selections ----------------------------------------------------------
 
@@ -666,6 +760,22 @@ class _Checker:
             code = "group-by" if problem.startswith("group by") else "operand-count"
             self.add("error", code, problem, where, name)
             return
+        written = self.source[where[0] : where[1]].casefold()
+        if written in {"max", "min"} and len(node.args) == 1:
+            self.non_portable(
+                f"DPM-XL 0.11 {written} takes two or more operands; the "
+                f"aggregate is {written}_aggr",
+                where,
+                f"{written}_aggr",
+            )
+        if name == "substr":
+            for arg in node.args[1:]:
+                text = self.source[arg.span[0] : arg.span[1]]
+                if not re.fullmatch(r"\d+|\(-\d+\)", text):
+                    self.non_portable(
+                        "DPM-XL 0.11 substr takes integer literals as positions",
+                        arg.span,
+                    )
         position = signature.key_operand
         if position is not None and position < len(node.args):
             operand = node.args[position]

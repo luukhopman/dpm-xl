@@ -53,6 +53,9 @@ All notable changes to this project are documented here. The project follows
 
 ### Changed
 
+- **Breaking:** `dpm-xl check` exits with status 1 for any error, such as
+  an unknown function, not only a syntax error; `--strict` also fails on
+  warnings.
 - **Breaking:** `eval` exits with status 1, not 3, for a rule that is an
   error, and an `unsupported` rule no longer affects the exit status.
 - **Breaking:** `{v_X}` and `{vX}` are the same variable (DPM-XL v0.11

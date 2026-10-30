@@ -45,16 +45,20 @@ Checks every expression and precondition of a rule source with
 [`diagnose`][dpmxl.diagnostics.diagnose]: every syntax error, unknown
 functions, calls with the wrong operands and selections without a table.
 Expressions may be scripts with `;`, `:=` and `<-`. Every problem is
-printed; the exit status is 1 when an expression does not parse, or with
-`--strict` when any expression has an error or uses syntax other DPM-XL
-engines may reject (a `non-portable` warning, see
-[Where dpm-xl differs](language.md#where-dpm-xl-differs)). Other warnings
-never change it.
+printed with its severity: an `error` (the expression would fail or select
+nothing) fails the run, a `warning` (it evaluates but probably does not
+mean what it says) fails it only with `--strict`. Syntax other DPM-XL
+engines may reject is a `non-portable` warning (see
+[Where dpm-xl differs](language.md#where-dpm-xl-differs)).
+
+The summary counts expressions, not rules: a rule with a precondition is
+two expressions, so 4 active rules, 2 of them with a precondition, make
+`6/6 expressions parsed`.
 
 | Option | Effect |
 | --- | --- |
 | `--layouts DATA` | Also check tables, coordinates, open-table keys and, when the tables give `data_types`, operand types against the `tables` of a [data file](data-formats.md#data-files), and names against its `parameters`. |
-| `--strict` | Exit with status 1 for any error, not only for syntax errors, and for a `non-portable` warning. |
+| `--strict` | Exit with status 1 for a warning too, such as `non-portable`. |
 | `--references` | Also print every selection, with its `with` context applied. |
 | `--json` | Print one JSON document instead of text. |
 
@@ -90,7 +94,7 @@ $ dpm-xl check "with {tC_01.00}: {r0010} >= 0" --references --json
 {
   "schema_version": 2,
   "tool": "dpm-xl",
-  "version": "1.2.3",
+  "version": "1.3.0",
   "summary": {
     "total": 1,
     "parsed": 1,
@@ -163,7 +167,7 @@ $ dpm-xl eval "{tC_27.00, c0010} > 0" examples/data.json --json
 {
   "schema_version": 2,
   "tool": "dpm-xl",
-  "version": "1.2.3",
+  "version": "1.3.0",
   "summary": {
     "rules": 1,
     "passed": 0,
@@ -236,7 +240,7 @@ $ dpm-xl eval examples/rules.json examples/data.json --format junit
 <testsuite name="rules.json" tests="5" failures="1" errors="0" skipped="2">
   <properties>
     <property name="tool" value="dpm-xl" />
-    <property name="version" value="1.2.3" />
+    <property name="version" value="1.3.0" />
   </properties>
   <testcase classname="dpm-xl.rules" name="v0001">
     <failure message="1 failing record" type="error">c=0020: 1,204 should equal 1,211 (1,180 + 31): difference 7, at least 5.5 given the reported precision</failure>
@@ -431,8 +435,8 @@ statuses.
 
 | Status | `check` | `eval` and `check-report` |
 | --- | --- | --- |
-| 0 | Everything parsed; with `--strict`, nothing has an error or a `non-portable` warning. | No rule (or filing finding) at or above `--fail-on` failed. |
-| 1 | An expression or precondition does not parse; with `--strict`, one has an error or a `non-portable` warning. | A rule (or filing finding) at or above `--fail-on` failed, or such a rule is `error`. An `unsupported` rule does not count. |
+| 0 | No expression has an error; with `--strict`, none has a warning either. | No rule (or filing finding) at or above `--fail-on` failed. |
+| 1 | An expression or precondition has an error, such as a syntax error or an unknown function; with `--strict`, also a warning. | A rule (or filing finding) at or above `--fail-on` failed, or such a rule is `error`. An `unsupported` rule does not count. |
 | 2 | Usage error (unknown command or option). | Usage error, or `check-report` without the `xbrl` extra. |
 | 3 | The rule file cannot be read or is malformed. | An input file cannot be read or is malformed. |
 

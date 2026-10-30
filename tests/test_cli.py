@@ -173,9 +173,8 @@ def layouts_file(tmp_path) -> str:
     return str(data)
 
 
-def test_check_reports_problems_beyond_syntax(capsys) -> None:
-    # Without --strict only syntax errors fail, as before.
-    assert main(["check", "summ({tC_01.00, r0010}) > 0"]) == 0
+def test_check_fails_on_any_error(capsys) -> None:
+    assert main(["check", "summ({tC_01.00, r0010}) > 0"]) == 1
     output = capsys.readouterr()
     assert (
         "expression: error: unknown function 'summ'; did you mean 'sum'?" in output.err
@@ -202,23 +201,14 @@ def test_check_against_layouts(tmp_path, capsys) -> None:
     assert main(["check", "refDate > #2026-01-01#", *strict]) == 1
 
 
-def test_check_warnings_do_not_fail(tmp_path, capsys) -> None:
+def test_check_fails_on_warnings_only_with_strict(tmp_path, capsys) -> None:
     layouts = layouts_file(tmp_path)
-    assert (
-        main(
-            [
-                "check",
-                "{tC_01.00, (r0010, r0030-0050), c0010} > 0",
-                "--layouts",
-                layouts,
-                "--strict",
-            ]
-        )
-        == 0
-    )
+    source = "{tC_01.00, (r0010, r0030-0050), c0010} > 0"
+    assert main(["check", source, "--layouts", layouts]) == 0
     output = capsys.readouterr()
     assert "warning: rows 0030-0050 select no row of table C_01.00" in output.err
     assert output.out.strip() == "1/1 expressions parsed; 1 warning"
+    assert main(["check", source, "--layouts", layouts, "--strict"]) == 1
 
 
 def test_check_strict_fails_on_non_portable_syntax(capsys) -> None:
@@ -427,7 +417,7 @@ def test_eval_writes_junit(tmp_path, capsys) -> None:
 
 
 def test_inline_expressions_are_labelled_expression(capsys) -> None:
-    assert main(["check", "sun(1) > 0"]) == 0
+    assert main(["check", "sun(1) > 0"]) == 1
     assert capsys.readouterr().err.startswith(
         "expression: error: unknown function 'sun'; did you mean 'sum'?"
     )

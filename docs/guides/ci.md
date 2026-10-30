@@ -5,12 +5,11 @@ description: Fail a CI job when a rule in a rule repository does not parse, with
 # Check rule syntax in CI
 
 A repository of rules (exported from a DPM release, or written by hand)
-should never hold an expression that does not parse. `dpm-xl check` parses
-every expression and precondition of a rule source and exits with status 1
-when any of them fails. With `--strict` it also fails on other errors, such
-as an unknown function or a call with the wrong operands, and on syntax
-that other DPM-XL engines may reject, such as `.5`, and with
-`--layouts` it checks tables and coordinates too
+should never hold an expression that does not parse or names a function
+that does not exist. `dpm-xl check` checks every expression and
+precondition of a rule source and fails when any of them has an error.
+`--strict` also fails on warnings, such as syntax that other DPM-XL engines
+may reject (`.5`), and `--layouts` checks tables and coordinates too
 ([CLI reference](../reference/cli.md#dpm-xl-check)).
 
 ## With the CLI
@@ -44,7 +43,7 @@ $ dpm-xl check "if {tC_01.00, r0010} > 0 then true" --json
 {
   "schema_version": 2,
   "tool": "dpm-xl",
-  "version": "1.2.3",
+  "version": "1.3.0",
   "summary": {
     "total": 1,
     "parsed": 0,
@@ -97,42 +96,34 @@ jobs:
       - run: uvx dpm-xl check rules/rules.json --strict
 ```
 
-Pin the version (`uvx dpm-xl@1.0.0 ...`) if you want a new release to be a
+Pin the version (`uvx dpm-xl@1.3.0 ...`) if you want a new release to be a
 deliberate change.
 
 ## With pytest
 
-A test can check more than syntax: that every rule only refers to tables your
-release defines, for example. [`parse_program`][dpmxl.parser.parse_program]
-accepts everything `dpm-xl check` accepts, and
-[`tables`][dpmxl.references.tables] lists the tables an expression selects
-from.
+A test can check the rules against the tables of your release, as `check
+--layouts` does. [`load_rules`][dpmxl.rules.load_rules] reads a rule file,
+[`Module.layouts`][dpmxl.module.Module.layouts] gives a module's tables and
+[`diagnose`][dpmxl.diagnostics.diagnose] finds the problems:
 
 ```python
-import json
-from pathlib import Path
+from dpmxl import diagnose
+from dpmxl.module import load_module
+from dpmxl.rules import load_rules
 
-from dpmxl import DpmXlSyntaxError, parse_program, tables
-
-KNOWN_TABLES = {"C_01.00", "C_27.00"}
+module = load_module("examples/module.json")
+layouts = {layout.code: layout for layout in module.layouts()}
 
 
 def check_rules(path):
     problems = []
-    for rule in json.loads(Path(path).read_text()):
+    for rule in load_rules(path):
         for part in ("expression", "precondition"):
-            if not rule.get(part):
-                continue
-            try:
-                tree = parse_program(rule[part])
-            except DpmXlSyntaxError as error:
-                problems.append(f"{rule['code']} {part}: {error.message}")
-                continue
-            unknown = set(tables(tree)) - KNOWN_TABLES
-            if unknown:
-                problems.append(
-                    f"{rule['code']} {part}: unknown tables {sorted(unknown)}"
-                )
+            text = getattr(rule, part)
+            if rule.active and text:
+                for problem in diagnose(text, layouts.get, tables=tuple(layouts)):
+                    if problem.severity == "error":
+                        problems.append(f"{rule.code} {part}: {problem.message}")
     return problems
 
 
@@ -140,7 +131,7 @@ print(check_rules("examples/rules.json"))
 ```
 
 ```text
-["v0004 expression: unknown tables ['C_99.00']"]
+['v0004 expression: unknown table C_99.00']
 ```
 
 In a test, `assert not check_rules("rules/rules.json")` fails the job and

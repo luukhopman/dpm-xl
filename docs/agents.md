@@ -101,7 +101,7 @@ v1 failed
 ## Commands
 
 ```text
-dpm-xl check SOURCE [--strict] [--json]          # diagnose every expression; exit 1 if one does not parse
+dpm-xl check SOURCE [--strict] [--json]          # diagnose every expression; exit 1 on an error
 dpm-xl eval RULES DATA [--format text|json|junit] [--fail-on error|warning] [--all]
 dpm-xl check-report MODULE REPORT [--previous REPORT] [--format text|json|junit] [--fail-on error|warning]
 dpm-xl list-modules DATABASE [--release R] [--json]
@@ -112,11 +112,10 @@ dpm-xl export-module DATABASE MODULE [--release R] [-o FILE]
   expressions or one expression; `MODULE` is a
   [module file](reference/module-file.md); `DATABASE` an EBA DPM 2.0
   database as SQLite ([how to get one](guides/from-a-dpm-release.md)).
-- Exit statuses: 0 nothing at or above `--fail-on` failed, 1 something did
-  (or a rule is `error`; `unsupported` never counts), 2 usage error or
-  `check-report` without the `xbrl` extra, 3 unreadable or malformed
-  input. `check --strict` also exits 1 for any error or `non-portable`
-  warning.
+- `check` exits 1 when an expression has an error, and with `--strict`
+  also on a warning; `eval` and `check-report` exit 1 when a rule at or
+  above `--fail-on` failed or is `error`. All
+  [exit statuses](reference/cli.md#exit-statuses) are in the CLI reference.
 - `--json` (`--format json`) prints `{"schema_version": 2, "tool":
   "dpm-xl", "version", "summary": {...}, "results": [...]}`; each result
   has `rule`, `expression`, `severity`, `active`, `modules`, `status`,

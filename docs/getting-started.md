@@ -226,8 +226,8 @@ $ echo $?
 
 `--all` lists every rule; without it, only rules that failed, are an
 error or are unsupported are listed, above the same summary line. The exit
-status is 1 because a rule failed. `dpm-xl check` only parses, which
-is what a CI job for a rule repository needs:
+status is 1 because a rule failed. `dpm-xl check` checks the rules without
+data, which is what a CI job for a rule repository needs:
 
 ```console
 $ dpm-xl check examples/rules.json
@@ -243,7 +243,7 @@ $ dpm-xl check examples/rules.json
 - `explain` turns a failing record into a sentence, a filled formula and
   the cells involved.
 - `dpm-xl eval` does the same for a rule file, and `dpm-xl check` checks
-  syntax only.
+  rules without data.
 
 ## Next steps
 

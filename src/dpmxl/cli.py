@@ -55,7 +55,8 @@ format: https://luukhopman.github.io/dpm-xl/reference/data-formats/
 
 exit statuses:
   0  done; nothing failed at or above --fail-on
-  1  an expression does not parse, or a rule failed or is an error
+  1  an expression has an error (with --strict, also a warning), or a rule
+     failed or is an error
   2  usage error
   3  unreadable or invalid input"""
 
@@ -64,12 +65,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI.
 
     Returns:
-        int: Process exit code: 0 when everything parsed (with ``--strict``:
-        had no errors and no ``non-portable`` warnings) or no rule at or
-        above ``--fail-on`` failed, 1 when an expression did not parse (with
-        ``--strict``: had an error or a ``non-portable`` warning) or such a
-        rule failed or is an error, 2 for a usage error and 3 for unreadable
-        or invalid input.
+        int: Process exit code: 0 when no expression has an error (with
+        ``--strict``: nor a warning) or no rule at or above ``--fail-on``
+        failed, 1 when one has (with ``--strict``: an error or a warning) or
+        such a rule failed or is an error, 2 for a usage error and 3 for
+        unreadable or invalid input.
     """
     parser = argparse.ArgumentParser(
         prog="dpm-xl",
@@ -92,8 +92,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     check.add_argument(
         "--strict",
         action="store_true",
-        help="exit with status 1 for any error, not only syntax errors, and "
-        "for syntax other DPM-XL engines may reject",
+        help="exit with status 1 for warnings too, such as syntax other "
+        "DPM-XL engines may reject",
     )
     check.add_argument("--references", action="store_true", help="print selections")
     check.add_argument("--json", action="store_true", help="print JSON")
@@ -424,10 +424,9 @@ def _check(
             f"{total - unparsed}/{total} expressions parsed"
             + "".join(f"; {note}" for note in notes)
         )
-    if strict:
-        portable = all(item["code"] != "non-portable" for item in found)
-        return EXIT_FAILED if counts["error"] or not portable else EXIT_OK
-    return EXIT_FAILED if unparsed else EXIT_OK
+    if counts["error"] or (strict and counts["warning"]):
+        return EXIT_FAILED
+    return EXIT_OK
 
 
 def _plural(count: int, noun: str) -> str:
@@ -463,7 +462,7 @@ def _layouts(
 EXIT_OK = 0
 """Exit status when nothing fails at or above the ``--fail-on`` severity."""
 EXIT_FAILED = 1
-"""Exit status when an expression does not parse, or a rule fails or is an error."""
+"""Exit status when an expression has an error, or a rule fails or is an error."""
 EXIT_USAGE = 2
 """Exit status of a usage error, such as an unknown option."""
 EXIT_INPUT = 3

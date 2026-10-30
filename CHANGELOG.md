@@ -123,6 +123,10 @@ All notable changes to this project are documented here. The project follows
 - `diagnose` checks the `partition by` and `order by` keys of analytic
   functions; it used to skip them.
 - `diagnose` suggests a short name one typo away, such as `sum` for `sun`.
+- The columnar engine leaves a set-valued `{vX}` to the reference engine;
+  it compared the set as text.
+- `group by r`, `c` or `s` of a selection with no records gives no groups
+  instead of an error.
 
 ## 1.2.3 - 2026-10-26
 

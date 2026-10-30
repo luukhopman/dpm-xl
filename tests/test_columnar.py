@@ -593,6 +593,31 @@ def test_report_parameters_in_where_go_to_the_reference_engine(
     assert reference.status == expected, reference.message
 
 
+@pytest.mark.parametrize(
+    ("condition", "expected"),
+    [
+        ("{tE, r0010, c0010, default: 10} > 5", "failed"),
+        ("{tO, r0010, c0010, default: 10} [where qKEY = [qK:z]] > 5", "failed"),
+        ("{tE, r0010, c0010, default: 1} > 5", "not_applicable"),
+    ],
+)
+def test_defaults_in_if_conditions_apply_as_in_and(
+    condition: str, expected: str
+) -> None:
+    # An operand with no records takes its default, as an XBRL fact
+    # variable falls back, whether it is in an if condition or an and.
+    provider = data()
+    consequence = "{tT, r0020, c0010} = 15"
+    implication = f"if {condition} then {consequence} endif"
+    conjunction = f"{condition} and {consequence}"
+    assert evaluate_rule(implication, provider).status == expected
+    if expected == "failed":
+        assert evaluate_rule(conjunction, provider).status == expected
+    for expression in (implication, conjunction):
+        with pytest.raises(ColumnarUnsupported):
+            evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+
+
 def parts(a_keys: tuple[str, ...], b_keys: tuple[str, ...]) -> MemoryProvider:
     # Two parts of one open-keyed template.
     tables = [

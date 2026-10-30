@@ -121,6 +121,7 @@ from .recordset import (
     Record,
     Recordset,
     UnsupportedError,
+    _has_data,
     _is_fact,
     combine,
     resolve_key,
@@ -1697,7 +1698,9 @@ def conditional(
     the keys a branch has and it lacks, taking its default there, as in
     [`combine`][dpmxl.recordset.combine]: each branch without a default must
     have the key. A branch lacking a key takes its default, and the result
-    has a default when the condition's default picks one.
+    has a default when the condition's default picks one. A keyed condition
+    with no record at all takes its default as a key-less condition when a
+    branch has data.
 
     Returns:
         Recordset: The result.
@@ -1713,6 +1716,15 @@ def conditional(
             return _failure(f"if needs a boolean condition, found {type_name(value)}")
         return value
 
+    if (
+        condition.keys
+        and not condition.records
+        and condition.default is not None
+        and any(_has_data(branch) for branch in (then, otherwise) if branch)
+    ):
+        # A condition with no record at all stands for its default, as in
+        # combine (an XBRL fact variable's fallback value).
+        condition = Recordset((), default=condition.default)
     if not condition.keys:
         record = condition.single() or condition.default
         value = _checked(verdict(record.value if record else None))

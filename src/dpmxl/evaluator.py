@@ -2169,7 +2169,7 @@ def _make_date(year: Value, month: Value, day: Value) -> Value:
     parts = [_integer(value, "date") for value in (year, month, day)]
     try:
         return date(*parts)
-    except ValueError:
+    except (ValueError, OverflowError):
         # DPM-XL 10.3.6: a day, month or year that does not exist is null.
         return None
 

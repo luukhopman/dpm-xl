@@ -170,7 +170,14 @@ def test_math_domain_errors_fail_only_their_records() -> None:
 
 
 @pytest.mark.parametrize(
-    "rule", ["isnull(date(2025, 2, 30))", "isnull(date(2025, 13, 1))"]
+    "rule",
+    [
+        "isnull(date(2025, 2, 30))",
+        "isnull(date(2025, 13, 1))",
+        # Parts beyond any C integer, for which Python raises OverflowError.
+        "isnull(date(1000000000000000000000, 1, 1))",
+        "isnull(date(2026, 1000000000000000000000, 1))",
+    ],
 )
 def test_date_of_no_calendar_day_is_null(rule: str) -> None:
     # 10.3.6: the resulting Date is null.

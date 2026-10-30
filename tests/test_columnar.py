@@ -100,6 +100,8 @@ EXPRESSIONS = [
     "with {c0010} [where qKEY != [qK:a]]: {tO, r0010} >= {tONE, r0010}",
     "with {c0010} [where qKEY != [qK:a]]: sum({tO, r0010}) >= sum({tT, r*})",
     "{tO, r*, c0010} [rename qKEY to r] > 0",
+    # A with-level where term on a contextual component applies everywhere.
+    "with {tO, c0010} [where baseCurrency = [eba_CU:EUR] and qKEY = [qK:a]]: {r0010} >= 0",
 ]
 
 
@@ -513,6 +515,17 @@ def test_newer_constructs_go_to_the_reference_engine(expression: str) -> None:
     with pytest.raises(ColumnarUnsupported):
         evaluate_rule_columnar(expression, PointsFrameProvider(provider))
     assert evaluate_rule(expression, provider).status == "passed"
+
+
+def test_with_where_on_contextual_components_goes_to_the_reference() -> None:
+    expression = (
+        "with {tO, c0010} [where baseCurrency = [eba_CU:EUR] and qKEY = [qK:a]]:"
+        " {r0010} >= 0"
+    )
+    provider = data()
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    assert evaluate_rule(expression, provider).status == "not_applicable"
 
 
 def test_set_defaults_go_to_the_reference_engine() -> None:

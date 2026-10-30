@@ -736,7 +736,12 @@ class ColumnarEvaluator:
                     kept = _context_condition(
                         condition,
                         frame.keys,
-                        lambda name: self.provider.parameter(name) is not None,
+                        # As in the reference evaluator; a kept contextual
+                        # component goes to it (see _key_column).
+                        lambda name: (
+                            _contextual(name) is not None
+                            or self.provider.parameter(name) is not None
+                        ),
                     )
                     if kept is not None:
                         frame = self._where(frame, kept)

@@ -340,6 +340,15 @@ def test_clauses_on_a_selection_override_the_context_where() -> None:
         result = evaluate_rule(context + body, data)
         assert result.status == expected, body
         assert len(result.outcomes) == count, body
+    # The override is the clause's selection's alone: selections in a sub
+    # value keep the with-level where, whatever clauses follow.
+    value = 'if sum({tO2}) = 1 then "b2" else "b1" endif'
+    for body in [
+        f"{{tO2}} [sub qB = {value}] > -10",
+        f'{{tO2}} [sub qB = {value}] [where A != "zz"] > -10',
+    ]:
+        result = evaluate_rule(context + body, data)
+        assert [outcome.key for outcome in result.outcomes] == [{"qA": "a1"}], body
 
 
 @pytest.mark.parametrize(

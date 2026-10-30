@@ -65,6 +65,9 @@ EXPRESSIONS = [
     "with {tO, c0010} [where qKEY != [qK:a]]: {r0010} [where qKEY = [qK:a]] > 5",
     "with {tO} [where qKEY != [qK:b]]: {r0010, c0010} [sub qKEY = [qK:b]] > 5",
     "with {tO} [where qKEY != [qK:b]]: {r0010, c0010} [where qKEY != [qK:c]] > 5",
+    "with {tO} [where qKEY != [qK:b]]: {r0010, c0010} [where qKEY != [qK:c]] [where qKEY != [qK:a]] > 5",
+    # A sub value's selections keep the with-level where.
+    "with {tO, c0010} [where qKEY != [qK:a]]: {r0010} [sub qKEY = if sum({r0020}) = 30 then [qK:c] else [qK:b] endif] = 20",
     "with {tT, c0010}: abs({r0010} - {r0020}) <= max({r0030}, 50)",
     # Among equal values, max and min keep the largest tolerance.
     "with {tT, interval: true}: max({r0010, c0010}, 100) = 100.5",

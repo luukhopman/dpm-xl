@@ -305,9 +305,6 @@ class Evaluator:
         self._notes: list[str] = []
         self._selection_cache: dict[tuple[object, ...], list[DataPoint]] = {}
         self._context_conditions: list[Node] = []
-        # Whether the selection being evaluated has a where or sub clause of
-        # its own, which overrides the context's where.
-        self._overridden = False
         self._members: dict[int, list[Value]] = {}
         self._operations: list[str] = []
         self._temporaries: dict[str, Recordset] = {}
@@ -367,13 +364,7 @@ class Evaluator:
             case Literal_():
                 return Recordset.scalar(_literal_value(node))
             case Selection(spec=spec):
-                merged = spec.merged_into(context)
-                if merged.table_group is None and merged.operation is None:
-                    selected = self._selection(merged)
-                else:
-                    selected = self._indirect(merged)
-                if self._overridden:
-                    return selected
+                selected = self._selected(spec, context)
                 for condition in self._context_conditions:
                     kept = _context_condition(condition, selected.keys, self._known)
                     if kept is not None:
@@ -537,15 +528,22 @@ class Evaluator:
         bindings: Mapping[str, Value] | None,
     ) -> Recordset:
         # DPM-XL 3.2.6: a where or sub clause on a selection fully overrides
-        # the with-level where, whichever keys either names.
-        saved = self._overridden
-        self._overridden = isinstance(operand, Selection | Where | Sub)
-        try:
+        # the with-level where, whichever keys either names. A chain of
+        # clauses comes back here for each operand, down to the selection.
+        if not isinstance(operand, Selection):
             return self.evaluate(operand, context, bindings)
-        finally:
-            self._overridden = saved
+        result = self._selected(operand.spec, context)
+        if self.trace_enabled and bindings is None:
+            self._trace[id(operand)] = result
+        return result
 
     # Selections ---------------------------------------------------------
+
+    def _selected(self, spec: SelectionSpec, context: SelectionSpec) -> Recordset:
+        merged = spec.merged_into(context)
+        if merged.table_group is None and merged.operation is None:
+            return self._selection(merged)
+        return self._indirect(merged)
 
     def _selection(self, spec: SelectionSpec) -> Recordset:
         if not spec.table:
@@ -683,25 +681,14 @@ class Evaluator:
         node = _parse_cached(expression) if isinstance(expression, str) else expression
         # An operation is evaluated on its own: the caller's context,
         # temporaries and assignments neither reach it nor receive its own.
-        saved = (
-            self._context_conditions,
-            self._overridden,
-            self._temporaries,
-            self._assignments,
-        )
+        saved = (self._context_conditions, self._temporaries, self._assignments)
         self._operations.append(code)
-        self._context_conditions, self._overridden = [], False
-        self._temporaries, self._assignments = {}, {}
+        self._context_conditions, self._temporaries, self._assignments = [], {}, {}
         try:
             return self.evaluate(node, SelectionSpec(), None)
         finally:
             self._operations.pop()
-            (
-                self._context_conditions,
-                self._overridden,
-                self._temporaries,
-                self._assignments,
-            ) = saved
+            self._context_conditions, self._temporaries, self._assignments = saved
 
     def _typed_parameter(self, node: TypedParameter) -> Value:
         value = self.provider.parameter(node.name)
@@ -808,7 +795,6 @@ class Evaluator:
             only_keys=self.only_keys,
         )
         inner._context_conditions = list(self._context_conditions)
-        inner._overridden = self._overridden
         inner._temporaries = dict(self._temporaries)
         inner._operations = list(self._operations)
         result = inner.evaluate(operand, context, bindings)

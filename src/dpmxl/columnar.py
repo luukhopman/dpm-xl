@@ -703,7 +703,6 @@ class ColumnarEvaluator:
         self.provider = provider
         self.cache = cache or FrameCache()
         self._conditions: list[Node] = []
-        self._overridden = False
 
     def evaluate(self, node: Node, context: SelectionSpec | None = None) -> Frame:
         """Evaluate a node under an inherited ``with`` context.
@@ -730,8 +729,6 @@ class ColumnarEvaluator:
                 return scalar_frame(_literal_value(node))
             case Selection(spec=spec):
                 frame = self._selection(spec.merged_into(context))
-                if self._overridden:
-                    return frame
                 for condition in self._conditions:
                     kept = _context_condition(
                         condition,
@@ -806,13 +803,10 @@ class ColumnarEvaluator:
 
     def _clause_operand(self, operand: Node, context: SelectionSpec) -> Frame:
         # DPM-XL 3.2.6: a where or sub on a selection fully overrides the
-        # with-where.
-        saved = self._overridden
-        self._overridden = isinstance(operand, Selection | Where | Sub)
-        try:
-            return self.evaluate(operand, context)
-        finally:
-            self._overridden = saved
+        # with-where; a chain of clauses comes back here for each operand.
+        if isinstance(operand, Selection):
+            return self._selection(operand.spec.merged_into(context))
+        return self.evaluate(operand, context)
 
     # Selections -------------------------------------------------------------
 

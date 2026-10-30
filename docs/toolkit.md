@@ -27,8 +27,8 @@ flowchart TD
 ```
 
 1. A DPM release defines each module's tables, cells and validation rules.
-   None of the three packages reads the DPM database: an exporter, a script
-   of your own over the release, writes one module as a
+   [`dpm-xl export-module`](https://luukhopman.github.io/dpm-xl/guides/from-a-dpm-release/)
+   reads the EBA's DPM database and writes one module as a
    [module file](https://luukhopman.github.io/dpm-xl/reference/module-file/),
    a JSON document with the module's tables, cells, datapoints and rules.
 2. One module file serves dpm-xl and dpm-synth. dpm-xl reads it in the

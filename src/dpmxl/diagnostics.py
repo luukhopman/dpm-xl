@@ -42,8 +42,8 @@ from .ast import (
     children,
 )
 from .grammar import (
+    _CONTEXTUAL_BY_FOLDED,
     CALL_NAMES,
-    CONTEXTUAL_COMPONENTS,
     KEYWORDS,
     LITERAL_WORDS,
     SIGNATURES,
@@ -278,7 +278,8 @@ class _Scope:
     clause: bool = False
     keys: tuple[str, ...] | None = None
     table: str | None = None
-    temporaries: frozenset[str] = frozenset()
+    # The temporaries assigned so far, by case-folded name.
+    temporaries: Mapping[str, str] = field(default_factory=dict)
 
 
 class _Checker:
@@ -434,7 +435,8 @@ class _Checker:
                 for statement in statements:
                     found.append((statement, replace(scope, temporaries=assigned)))
                     if isinstance(statement, Assignment):
-                        assigned = assigned | {statement.name}
+                        name = statement.name
+                        assigned = {**assigned, name.casefold(): name}
                 return found
             case Call(name=name, args=args) if name in SIGNATURES:
                 # A key name or period code is not a report parameter.
@@ -734,7 +736,8 @@ class _Checker:
             ):
                 continue
             if parameter:
-                if _is_contextual(name):
+                # DPM-XL 2.2.3.1.4 and 2.2.3.3.1: every record set has them.
+                if name.casefold() in _CONTEXTUAL_BY_FOLDED:
                     continue
                 if self.parameters is None:
                     severity = "warning"
@@ -746,9 +749,8 @@ class _Checker:
             )
 
     def check_name(self, name: str, span: tuple[int, int], scope: _Scope) -> None:
-        if name.casefold() in {temporary.casefold() for temporary in scope.temporaries}:
-            return
-        if _is_contextual(name):
+        folded = name.casefold()
+        if folded in scope.temporaries or folded in _CONTEXTUAL_BY_FOLDED:
             return
         if self.parameters is not None and name in self.parameters:
             return
@@ -769,7 +771,7 @@ class _Checker:
             return
         if self.parameters is None:
             return
-        known = sorted(self.parameters | scope.temporaries)
+        known = sorted(self.parameters | set(scope.temporaries.values()))
         match = _closest(name, known, cutoff=0.75)
         self.add(
             "error",
@@ -1148,11 +1150,6 @@ def _edit_distance(left: str, right: str) -> int:
                 cost = min(cost, earlier[j - 2] + 1)
             row.append(cost)
     return row[-1]
-
-
-def _is_contextual(name: str) -> bool:
-    # DPM-XL 2.2.3.1.4 and 2.2.3.3.1: every record set has them.
-    return name.casefold() in {known.casefold() for known in CONTEXTUAL_COMPONENTS}
 
 
 __all__ = ["DIAGNOSTIC_CODES", "Diagnostic", "LayoutLookup", "Severity", "diagnose"]

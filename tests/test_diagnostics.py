@@ -490,6 +490,18 @@ def test_earlier_assignments_are_names() -> None:
             None,
         )
     ]
+    # Names ignore case; a suggestion keeps the assignment's spelling.
+    script = "MyTotal := 1; mytotal > 0 and BASECURRENCY = [CU:EUR] and MyTotl > 0"
+    assert found(script, program=True, parameters=()) == [
+        (
+            "error",
+            "unknown-name",
+            "MyTotl",
+            "unknown name 'MyTotl': no report parameter or earlier assignment "
+            "has it; did you mean 'MyTotal'?",
+            "MyTotal",
+        )
+    ]
 
 
 # Types -------------------------------------------------------------------

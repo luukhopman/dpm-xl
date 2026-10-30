@@ -73,6 +73,12 @@ CONTEXTUAL_COMPONENTS: Mapping[str, str] = MappingProxyType(
 A rule reads them as names, such as ``baseCurrency``; the evaluator takes
 their values from the report parameters of the same name."""
 
+_CONTEXTUAL_BY_FOLDED: Mapping[str, str] = MappingProxyType(
+    {name.casefold(): name for name in CONTEXTUAL_COMPONENTS}
+)
+"""The contextual components' names by their case-folded form: names ignore
+case (DPM-XL 2.4.1)."""
+
 PARAMETER_TYPES = frozenset(
     {
         "boolean",

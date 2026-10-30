@@ -100,7 +100,7 @@ from .ast import (
     With,
     walk,
 )
-from .grammar import CONTEXTUAL_COMPONENTS, SIGNATURES
+from .grammar import _CONTEXTUAL_BY_FOLDED, CONTEXTUAL_COMPONENTS, SIGNATURES
 from .parser import _may_be_program, parse, parse_program
 from .provider import (
     CellQuery,
@@ -1492,10 +1492,7 @@ def _contextual(name: str) -> str | None:
     Returns:
         str | None: Its canonical name, such as ``baseCurrency``, or ``None``.
     """
-    folded = name.casefold()
-    return next(
-        (known for known in CONTEXTUAL_COMPONENTS if known.casefold() == folded), None
-    )
+    return _CONTEXTUAL_BY_FOLDED.get(name.casefold())
 
 
 def _check_rename(new: str, others: Sequence[str]) -> None:

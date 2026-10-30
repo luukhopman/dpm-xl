@@ -85,18 +85,9 @@ in-memory report the CLI reads from a
 [data file](../reference/data-formats.md#data-files); in your application the
 provider is your own ([Connect your data](provider.md)).
 
-Each result has one of five statuses:
-
-| Status | Meaning |
-| --- | --- |
-| `passed` | At least one record held and none failed. |
-| `failed` | At least one record failed; `result.failures` lists them. |
-| `not_applicable` | The precondition was not met, or no record could be evaluated (all null). |
-| `error` | Syntax error, unknown table, type mismatch, or a division by zero that reaches the result; `result.message` says which. |
-| `unsupported` | A `time_shift`, `{o_…}` or `{g_…}` the provider cannot resolve. |
-
-[Preconditions and results](../concepts/results.md) explains each one.
-`evaluate_rule` never raises for a bad rule or bad data, so one broken rule
+Each result has a status, `passed`, `failed`, `not_applicable`, `error` or
+`unsupported`, which [Preconditions and results](../concepts/results.md)
+explains. `evaluate_rule` never raises for a bad rule or bad data, so one broken rule
 does not stop the run.
 
 ## On the command line
@@ -131,7 +122,7 @@ $ dpm-xl eval "{tC_27.00, c0010} > 0" examples/data.json --json
 {
   "schema_version": 2,
   "tool": "dpm-xl",
-  "version": "1.2.3",
+  "version": "1.3.0",
   "summary": {
     "rules": 1,
     "passed": 0,
@@ -174,9 +165,8 @@ $ dpm-xl eval "{tC_27.00, c0010} > 0" examples/data.json --json
 `--format junit` writes a JUnit XML report instead, for CI systems that
 show test results.
 
-The exit status is 0 when no rule failed, 1 when a rule of severity `error`
-failed (or of any severity, with `--fail-on warning`) and 3 when a rule is
-an error or unsupported, or the input cannot be read. A failing `warning`
-rule is shown but does not fail the run. The
-[CLI reference](../reference/cli.md) lists every option, the JSON layout and
-the JUnit report.
+The run fails (exit status 1) when a rule of severity `error` failed or is
+an error; a failing `warning` rule is shown but fails the run only with
+`--fail-on warning`. The [CLI reference](../reference/cli.md) lists every
+option, the [exit statuses](../reference/cli.md#exit-statuses), the JSON
+layout and the JUnit report.

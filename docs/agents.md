@@ -55,8 +55,9 @@ from dpmxl import (
 | `dpmxl.dpm.open_release(path)` / `export_module(db, module_code, release=None, *, format="dpm-module/1")` | An open EBA DPM 2.0 database (`releases()`, `modules(release)`) / the module file as a `dict` | `DpmError` |
 | `dpmxl.xbrl.ReportProvider(module, report, *, previous=())` / `check_report(module, report, *, previous=())` | A provider over a dpm-xbrl `Report` / `ReportCheck` with `filing`, `rules`, `unplaced`, `failed(fail_on)` | `dpmxbrl.ReportError` for an unreadable report; needs the `xbrl` extra |
 
-Statuses: `passed`, `failed`, `not_applicable`, `error`, `unsupported`;
-rule files and modules add `skipped` for an inactive rule.
+Statuses: `passed`, `failed`, `not_applicable`, `error`, `unsupported`,
+and `skipped` for an inactive rule; see
+[Preconditions and results](concepts/results.md).
 
 ## A complete, correct example
 

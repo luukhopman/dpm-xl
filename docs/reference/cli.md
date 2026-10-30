@@ -218,7 +218,7 @@ $ dpm-xl eval "{tC_27.00, c0010} > 0" examples/data.json --json
 | `results[].severity` | string | `error` or `warning`, from the rule file; `error` otherwise. |
 | `results[].active` | Boolean | Whether the rule is active. |
 | `results[].modules` | list | The module codes the rule applies to; empty for every module. |
-| `results[].status` | string | `passed`, `failed`, `not_applicable`, `error` or `unsupported`; `skipped` for an inactive rule. |
+| `results[].status` | string | One of the [statuses](../concepts/results.md): `passed`, `failed`, `not_applicable`, `error`, `unsupported` or `skipped`. |
 | `results[].message` | string or null | Why the status is `error`, `unsupported`, `not_applicable` or `skipped`. |
 | `results[].counts` | object | `passed`, `failed` and `null` (not evaluated) record counts, as the text output's `records:` line. |
 | `results[].failures` | list | Per failing record: `key` (key name to value, as text), `summary` (the explanation sentence) and `cells` (each cell used, as DPM-XL text). |

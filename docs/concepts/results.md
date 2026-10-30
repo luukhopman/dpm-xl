@@ -1,12 +1,14 @@
 ---
-description: The five rule statuses, what preconditions do, and what a RuleResult and its outcomes hold.
+description: The rule statuses, record counts and severities, what preconditions do, and what a RuleResult and its outcomes hold.
 ---
 
 # Preconditions and results
 
 [`evaluate_rule(expression, provider, *, precondition=None)`][dpmxl.evaluator.evaluate_rule]
 never raises for a bad rule or bad data. It returns a
-[`RuleResult`][dpmxl.evaluator.RuleResult] whose status is one of five:
+[`RuleResult`][dpmxl.evaluator.RuleResult] whose status is one of the first
+five below; [`evaluate_rules`][dpmxl.rules.evaluate_rules], `check_report`
+and the CLI add `skipped`. Other pages link to this list.
 
 | Status | When |
 | --- | --- |
@@ -15,6 +17,7 @@ never raises for a bad rule or bad data. It returns a
 | `not_applicable` | The precondition is not met, or no record could be evaluated (all null). |
 | `error` | A syntax error, an unknown table, a type mismatch, a rule that yields values instead of Booleans, or a run-time error (such as division by zero) in a record that reaches the result. |
 | `unsupported` | The rule needs something the provider does not offer (a `time_shift` report, a `{o_…}` operation or a `{g_…}` table group), or a function dpm-xl does not know. |
+| `skipped` | The rule is inactive (`"active": false`) or is for another module, so it is not evaluated. |
 
 ```python
 from dpmxl import MemoryProvider, Number, TableLayout, evaluate_rule
@@ -81,8 +84,31 @@ from each layout's `template`.
 the cell, so a user interface can highlight it
 ([Explain failures in a UI](../guides/explain.md)).
 
-## The CLI
+## Records and counts
 
-`dpm-xl eval` prints the same statuses and exits with 0 when every rule
-passed or did not apply, 1 when a rule failed and 3 when a rule is an error
-or unsupported ([CLI reference](../reference/cli.md)).
+A rule has one record per key, and each record is true (passed), false
+(failed) or null. A null record could not be evaluated, because a cell it
+needs was not reported and has no `default` ([Null logic](null.md)).
+`counts` and the CLI's `records:` line count the three:
+`records: 1 passed, 1 failed, 0 null`.
+
+A rule whose every record is null is `not_applicable`, just like one whose
+precondition is not met. In an empty or incomplete report, a rule can
+therefore show `not_applicable` because the data it checks is missing;
+`message` tells the two apart.
+
+## Severity
+
+A validation rule has a severity, `error` or `warning`, from its rule file
+or module file (the DPM gives it for EBA rules); `error` when none is
+given. The status does not depend on it: a failing `warning` rule is
+`failed`, and the CLI shows it as `failed (warning)`. The severity decides
+whether a failure fails a run: by default only `error` rules do, and
+`--fail-on warning` makes warnings count too.
+
+The [filing rules](https://luukhopman.github.io/dpm-xbrl/) that dpm-xbrl
+checks, on the file rather than its values, have a severity of their own:
+`error` where the EBA filing rules say MUST, `warning` where they say
+SHOULD. `dpm-xl check-report` lists both kinds and applies `--fail-on` to
+both. How each command's exit status follows from this is in the
+[CLI reference](../reference/cli.md#exit-statuses).

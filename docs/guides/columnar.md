@@ -116,7 +116,8 @@ failed 19920 80 0
 
 `failing_keys` lists the first `max_failing_keys` (1,000 by default) failing
 keys as dictionaries; `failing_frame` has all of them, one string column per
-key. Statuses are the same five as the reference evaluator's.
+key. Statuses are the reference evaluator's
+([Preconditions and results](../concepts/results.md)).
 
 ## Fall back on `ColumnarUnsupported`
 

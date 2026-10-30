@@ -127,6 +127,8 @@ All notable changes to this project are documented here. The project follows
   it compared the set as text.
 - `group by r`, `c` or `s` of a selection with no records gives no groups
   instead of an error.
+- The columnar engine leaves a `where` on a report parameter, such as
+  `[where Level = "con"]`, to the reference engine instead of failing.
 
 ## 1.2.3 - 2026-10-26
 

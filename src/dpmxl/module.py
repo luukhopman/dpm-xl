@@ -90,7 +90,8 @@ class OpenKey:
         data_type: The DPM data type code of a typed key, such as ``i`` or
             ``d``; ``None`` for text.
         items: The allowed item qnames of an enumerated key, such as
-            ``eba_qEC:qx16``; ``None`` for a typed key.
+            ``eba_qEC:qx16``; empty when none is allowed, ``None`` for a
+            typed key.
     """
 
     code: str
@@ -116,7 +117,8 @@ class Cell:
             only be true, ``d`` date, ``dt`` date or date and time; ``s``
             text, ``es`` text that may be empty, ``u`` URI, and anything
             else, or ``None``, is text.
-        items: The allowed item qnames of an ``e`` cell.
+        items: The allowed item qnames of an ``e`` cell; empty when none is
+            allowed, ``None`` when they are not known.
         unit: Whether a monetary value is reported in its currency of
             denomination, in the table's ``unit`` column.
     """
@@ -455,7 +457,7 @@ def _items(parent: Mapping[str, Any], path: str) -> tuple[str, ...] | None:
                 f"{path}.items[{index}]: expected an item qname such as "
                 f"'eba_qEC:qx16', got {_describe(item)}"
             )
-    return tuple(values) or None
+    return tuple(values)
 
 
 def _filing_indicator(value: object, path: str) -> str:

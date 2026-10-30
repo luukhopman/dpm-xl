@@ -52,6 +52,14 @@ def test_dpm_synth_templates_load_and_extra_fields_are_ignored() -> None:
     assert tour.module == "TOUR"
 
 
+def test_an_empty_items_array_differs_from_none() -> None:
+    document = copy.deepcopy(MODULE)
+    document["tables"][0]["cells"][0]["items"] = []
+    module = load_module(document)
+    assert module.tables[0].cells[0].items == ()
+    assert module.tables[0].cells[1].items is None
+
+
 def test_layouts_give_coordinates_open_axes_templates_and_types() -> None:
     module = load_module(
         {

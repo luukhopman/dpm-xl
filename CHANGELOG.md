@@ -67,6 +67,8 @@ All notable changes to this project are documented here. The project follows
   `dpm-xl list-modules DATABASE` lists the releases and modules.
 - The export writes each data type as the DPM codes it, `es` and `t`
   included.
+- A module file's `items: []` allows no item, and an export writes it for
+  an empty subcategory; a missing `items` leaves the items open.
 
 ### Changed
 

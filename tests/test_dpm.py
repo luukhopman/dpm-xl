@@ -108,6 +108,7 @@ def test_cells_leave_out_excluded_and_void_ones(db: DpmRelease, caplog) -> None:
         "T_01.00.a/r0010/c0010",
         "T_01.00.a/r0020/c0010",
         "T_01.00.a/r0050/c0010",
+        "T_01.00.a/r0060/c0010",
     ]
     assert cells[0] == {
         "id": "T_01.00.a/r0010/c0010",
@@ -121,6 +122,9 @@ def test_cells_leave_out_excluded_and_void_ones(db: DpmRelease, caplog) -> None:
     assert cells[2]["data_type"] == "es"
     assert "items" not in cells[2]
     assert not any("written as" in message for message in caplog.messages)
+    # an explicitly empty subcategory allows no item; a missing one, any
+    assert cells[3]["items"] == []
+    assert load_module(export_module(db, "DEMO")).tables[0].cells[3].items == ()
 
 
 def test_a_header_restricts_the_items_of_a_cell(db: DpmRelease) -> None:
@@ -276,7 +280,7 @@ def test_cli_exports_a_module(database: Path, tmp_path: Path, capsys) -> None:
     assert captured.out == ""
     assert "note: DEMO: left out 1 rule whose scope spans" in captured.err
     assert captured.err.endswith(
-        f"wrote {target}: module DEMO, release 2.0.1: 2 tables, 5 cells, 3 rules\n"
+        f"wrote {target}: module DEMO, release 2.0.1: 2 tables, 6 cells, 3 rules\n"
     )
     assert load_module(target).module == "DEMO"
     assert main(["check", str(target)]) == 0

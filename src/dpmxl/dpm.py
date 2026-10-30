@@ -1093,7 +1093,9 @@ class _Export:
                 continue
             if any(key["code"] == code for key in keys):
                 continue
-            restriction = header[3] or (variable[3] if variable else None)
+            restriction = header[3]
+            if restriction is None and variable is not None:
+                restriction = variable[3]
             items = db._items(prop, restriction, basis, where)
             key: dict[str, Any] = {"code": code, "column": code}
             if items is not None:
@@ -1142,11 +1144,11 @@ class _Export:
                 restriction = self.cell_restriction(row[1], variable[2], table_vid)
                 items = db._items(
                     variable[2],
-                    restriction or variable[3],
+                    variable[3] if restriction is None else restriction,
                     self.basis,
                     f"{self.code}: cell {row[3]}",
                 )
-                if items:
+                if items is not None:
                     cell["items"] = items
             cells.append(cell)
         return cells

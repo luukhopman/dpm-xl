@@ -60,6 +60,7 @@ ROWS: dict[str, list[tuple]] = {
         (22, 3, None, "{T_01.00.a, r0030, c0010}", 1, 0),  # excluded
         (22, 4, 504, "{T_01.00.a, r0040, c0010}", 0, 1),  # void
         (22, 5, 505, "{T_01.00.a, r0050, c0010}", 0, 0),  # es, text that may be empty
+        (22, 6, 506, "{T_01.00.a, r0060, c0010}", 0, 0),  # no item allowed
         (31, 10, 510, "{T_02.00, r*, c0010}", 0, 0),
         (31, 11, 511, "{T_02.00, r*, c0020}", 0, 0),
         (41, 20, 520, "{O_01.00, r0010, c0010}", 0, 0),
@@ -68,6 +69,7 @@ ROWS: dict[str, list[tuple]] = {
         (1, 62, 61, None),
         (2, 60, 61, None),
         (5, 63, 61, None),
+        (6, 66, 61, None),
         (10, None, 64, None),
         (11, None, 65, None),
         (20, None, None, None),
@@ -75,12 +77,23 @@ ROWS: dict[str, list[tuple]] = {
     "TableVersionHeader": [  # TableVID, HeaderID, HeaderVID, Order
         (22, 60, 560, 1),
         (22, 61, 561, 2),
+        (22, 66, 566, 3),
         (31, 50, 550, 1),
         (31, 51, 551, 2),
         (31, 64, 564, 3),
         (31, 65, 565, 4),
     ],
-    "Header": [(50, 1), (51, 1), (60, 0), (61, 0), (62, 0), (63, 0), (64, 0), (65, 0)],
+    "Header": [
+        (50, 1),
+        (51, 1),
+        (60, 0),
+        (61, 0),
+        (62, 0),
+        (63, 0),
+        (64, 0),
+        (65, 0),
+        (66, 0),
+    ],
     "HeaderVersion": [
         # HeaderVID, HeaderID, PropertyID, SubCategoryVID, KeyVariableVID, S, E
         (550, 50, 1003, 700, 600, 1, None),  # key restricted by subcategory 700
@@ -89,6 +102,7 @@ ROWS: dict[str, list[tuple]] = {
         (561, 61, None, None, None, 1, None),
         (564, 64, 1001, None, None, 1, None),
         (565, 65, 1006, None, None, 1, None),
+        (566, 66, 1002, 703, None, 1, None),  # an empty subcategory: no item
     ],
     "VariableVersion": [
         # VariableVID, VariableID, PropertyID, SubCategoryVID, Code, Start, End
@@ -96,6 +110,7 @@ ROWS: dict[str, list[tuple]] = {
         (502, 502, 1002, None, None, 1, None),
         (504, 504, 1001, None, None, 1, None),
         (505, 505, 1005, None, None, 1, None),
+        (506, 506, 1002, None, None, 1, None),
         (510, 510, 1001, None, None, 1, None),
         (511, 511, 1006, None, None, 1, None),
         (520, 520, 1001, None, None, 1, None),
@@ -146,11 +161,12 @@ ROWS: dict[str, list[tuple]] = {
         (2011, 24, "z2", 2, None),
     ],
     "SuperCategoryComposition": [(21, 22, 1, None), (21, 24, 1, None)],
-    "SubCategory": [(70, 20), (71, 20)],  # SubCategoryID, CategoryID
+    "SubCategory": [(70, 20), (71, 20), (72, 20)],  # SubCategoryID, CategoryID
     "SubCategoryVersion": [  # SubCategoryVID, SubCategoryID, Start, End
         (700, 70, 1, None),
         (701, 71, 1, 2),
         (702, 71, 2, None),  # a later version, which DEMO 2.0.0 does not name
+        (703, 72, 1, None),  # no items
     ],
     "SubCategoryItem": [  # SubCategoryVID, ItemID, Order
         (700, 2002, 1),

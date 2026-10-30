@@ -272,7 +272,7 @@ exits with status 2.
 | --- | --- |
 | `--format text\|json\|junit` | Print text (the default), one JSON document or a JUnit XML report. |
 | `--json` | Short for `--format json`. |
-| `--fail-on error\|warning` | Exit with status 1 when a filing finding or a failing rule of this severity or worse is found. Default `error`. |
+| `--fail-on error\|warning` | Exit with status 1 when a filing rule or validation rule of this severity or worse is broken. Default `error`. |
 | `--all` | In text output, list every rule, not only those that failed, are an error or are unsupported. |
 | `--taxonomy-package ZIP` | A local taxonomy package, repeatable: it resolves xBRL-CSV metadata and adds the filing rules that need the taxonomy. |
 | `--previous REPORT` | A report of the same module for an earlier period, repeatable, read with the same taxonomy packages: `time_shift` rules compare with the one whose reference date they need ([Compare with earlier reports](../guides/time-shift.md#against-earlier-xbrl-reports)). Only `REPORT` is checked against the filing rules. |
@@ -296,6 +296,10 @@ e0007: unsupported (warning)
   records: 0 passed, 0 failed, 0 null
 7 rules: 3 failed, 2 passed, 1 not_applicable, 1 unsupported (3 not listed; --all lists every rule)
 ```
+
+The warning means the EBA taxonomy was not available offline: the report
+is still read, by the EBA's datapoint convention. `--taxonomy-package`
+resolves it and adds the filing rules that need the taxonomy.
 
 `e0007` compares with the previous quarter, which one report does not hold;
 the message names the reference date of the report it needs. With that
@@ -374,7 +378,7 @@ The module code ignores case.
 | --- | --- |
 | `--release R` | The release, such as `4.3`. Default: the latest release of the database. |
 | `-o FILE`, `--output FILE` | Write the module file to `FILE`, and a summary to standard error. Default: standard output. |
-| `--format dpm-module/1\|dpm-synth-template/1` | The file's `format`. Default `dpm-module/1`; dpm-synth 1.0 reads only `dpm-synth-template/1`, which dpm-xl reads too. |
+| `--format dpm-module/1\|dpm-synth-template/1` | The file's `format`. Default `dpm-module/1`. dpm-xl and dpm-synth read both. |
 
 ```console
 $ dpm-xl export-module examples/dpm-demo.sqlite OTHER
@@ -435,8 +439,8 @@ statuses.
 
 | Status | `check` | `eval` and `check-report` |
 | --- | --- | --- |
-| 0 | No expression has an error; with `--strict`, none has a warning either. | No rule (or filing finding) at or above `--fail-on` failed. |
-| 1 | An expression or precondition has an error, such as a syntax error or an unknown function; with `--strict`, also a warning. | A rule (or filing finding) at or above `--fail-on` failed, or such a rule is `error`. An `unsupported` rule does not count. |
+| 0 | No expression has an error; with `--strict`, none has a warning either. | No rule (or filing rule) at or above `--fail-on` failed. |
+| 1 | An expression or precondition has an error, such as a syntax error or an unknown function; with `--strict`, also a warning. | A rule (or filing rule) at or above `--fail-on` failed, or such a rule is `error`. An `unsupported` rule does not count. |
 | 2 | Usage error (unknown command or option). | Usage error, or `check-report` without the `xbrl` extra. |
 | 3 | The rule file cannot be read or is malformed. | An input file cannot be read or is malformed. |
 

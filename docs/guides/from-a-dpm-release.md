@@ -19,7 +19,7 @@ release as a module file, which dpm-xl and dpm-synth both read.
 pip install dpm-xl
 ```
 
-The export uses only the standard library. Step 6 also needs
+The export uses only the standard library. Steps 6 and 7 also need
 `pip install "dpm-xl[xbrl]" dpm-synth`.
 
 ## 2. Get the database as SQLite
@@ -122,8 +122,10 @@ Without `-o`, the module file is written to standard output.
 
 ## 5. Check the module file
 
-`dpm-xl check` parses every active rule and checks that the cells it selects
-exist in the module's tables:
+`dpm-xl check` checks every active rule against the module's tables: that
+it parses, that its functions exist and that the cells it selects do. It
+exits with status 1 when a rule has an error, and with `--strict` also on
+a warning:
 
 ```bash
 dpm-xl check corep_of.json
@@ -133,17 +135,19 @@ dpm-xl check corep_of.json
 2410/2410 expressions parsed; 213 inactive rules skipped
 ```
 
-## 6. Generate a test report and check it
+The count is of expressions: a rule's precondition is checked as an
+expression of its own, so 1,205 active rules make 2,410 expressions.
 
-dpm-synth 1.0 reads only the `dpm-synth-template/1` format, which dpm-xl
-reads too, so export in that format for both:
+## 6. Generate a test report
+
+[dpm-synth] generates a report that satisfies the module's rules, as far
+as it can, from the same module file:
 
 ```bash
-dpm-xl export-module dpm-4.4.sqlite COREP_OF --release 4.3 \
-  --format dpm-synth-template/1 -o corep_of.json
 dpm-synth generate corep_of.json -o report.zip --seed 7
-dpm-xl check-report corep_of.json report.zip
 ```
+
+dpm-synth prints:
 
 ```text
 rules: 1418, passed: 1146, failed: 5, not applicable: 54, skipped: 213
@@ -152,10 +156,37 @@ still failing: e4891_n (warning), v4810_m (warning), v6050_m (warning), v6052_m 
 wrote report.zip (25486 facts)
 ```
 
-`dpm-xl check-report` then gives the same counts: 1,146 rules pass, 5 fail,
-54 do not apply and the 213 inactive rules are skipped; no rule is an error
-and every fact has its cell. [Limits of the loop](https://luukhopman.github.io/dpm-synth/concepts/limits/)
+[Limits of the loop](https://luukhopman.github.io/dpm-synth/concepts/limits/)
 explains the rules that stay failing.
+
+## 7. Check the report
+
+`dpm-xl check-report` reads the report with [dpm-xbrl], checks its filing
+rules and evaluates the module's rules on it:
+
+```bash
+dpm-xl check-report corep_of.json report.zip
+```
+
+```text
+report: report.zip (xbrl-csv); module COREP_OF, release 4.3
+warning: reports/report.json: 1 extended metadata document could not be resolved offline (http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_of.json); tables without resolved metadata use the EBA datapoint/factValue convention
+filing rules broken: 0 errors, 1 warning
+  - [warning] file-naming The file name does not follow ReportSubject_Country_FrameworkCodeModuleVersion_Module_ReferenceDate_CreationTimestamp, the structure for reports sent to the EBA.
+e4891_n: failed (warning)
+…
+v6290_m: failed
+  records: 0 passed, 1 failed, 0 null
+  - scalar: 208,290,245 should equal 807,250,548 (37,194,687 + 76,800,000 + 609,992,861 + 4,377,000 + max(541,000, 78,886,000)): difference 598,960,303, at least 598,960,300 given the reported precision
+1418 rules: 213 skipped, 1146 passed, 5 failed, 54 not_applicable (1413 not listed; --all lists every rule)
+```
+
+The counts are dpm-synth's, and only the five failing rules are listed.
+The first warning means the EBA taxonomy was not available offline; the
+report is still read, and
+[`--taxonomy-package`](../reference/cli.md#dpm-xl-check-report) resolves
+it. The file-naming warning is a filing rule: a generated report is not
+named as one sent to the EBA.
 
 ## Which release?
 

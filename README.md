@@ -55,7 +55,7 @@ On the command line, against a JSON data file or an XBRL report:
 ```bash
 dpm-xl check rules.json                       # report every problem in every expression
 dpm-xl eval rules.json data.json              # evaluate and explain every rule
-dpm-xl check-report module.json report.zip    # filing rules and module rules (xbrl extra)
+dpm-xl check-report module.json report.zip    # filing rules and validation rules (xbrl extra)
 ```
 
 From an EBA DPM release to explained failures in four commands:
@@ -64,19 +64,18 @@ From an EBA DPM release to explained failures in four commands:
 dpm-xl list-modules dpm-4.4.sqlite --release 4.3   # the releases and modules
 dpm-xl export-module dpm-4.4.sqlite COREP_OF --release 4.3 -o corep_of.json
 dpm-synth generate corep_of.json -o report.zip     # or use your own report
-dpm-xl check-report corep_of.json report.zip       # filing rules and module rules
+dpm-xl check-report corep_of.json report.zip       # filing rules and validation rules
 ```
 
 `dpm-4.4.sqlite` is the EBA's DPM 2.0 database as SQLite and
-`corep_of.json` a module file (`dpm-module/1`; dpm-synth 1.0 needs
-`--format dpm-synth-template/1` on the export); see
+`corep_of.json` a module file, which dpm-xl and dpm-synth both read; see
 [Start from an EBA DPM release](https://luukhopman.github.io/dpm-xl/guides/from-a-dpm-release/).
 
 ## Features
 
 - Parses every construct of the DPM-XL grammar and all 14,174 distinct EBA
-  validation rule and precondition expressions of DPM releases 3.4–4.4 but
-  the two with typos in the EBA source, about 0.1 ms each; a
+  validation rule and precondition expressions of DPM releases 3.4–4.4
+  except the two with typos in the EBA source, about 0.1 ms each; a
   [test](https://github.com/luukhopman/dpm-xl/blob/main/tests/test_corpus.py)
   parses every one.
 - Evaluates them with EBA's interval arithmetic, null logic and key joins, and

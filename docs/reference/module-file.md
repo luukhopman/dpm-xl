@@ -10,10 +10,10 @@ the rules a report of the module must satisfy. It is a JSON document (UTF-8)
 in the `dpm-module/1` format, read by
 [`load_module`][dpmxl.module.load_module]. dpm-synth's
 [`dpm-synth-template/1`](https://luukhopman.github.io/dpm-synth/reference/template-format/)
-has the same fields, so one file serves both tools: dpm-synth generates
-reports from it, and dpm-xl checks its rules and evaluates them on a report
-([`dpm-xl check-report`](cli.md#dpm-xl-check-report)). dpm-synth 1.0
-reads a file only with `"format": "dpm-synth-template/1"`.
+has the same fields, and each tool reads both formats, so one file serves
+both: dpm-synth generates reports from it, and dpm-xl checks its rules and
+evaluates them on a report
+([`dpm-xl check-report`](cli.md#dpm-xl-check-report)).
 [`dpm-xl export-module`](cli.md#dpm-xl-export-module) writes one for a
 module of an EBA DPM release; see
 [Start from an EBA DPM release](../guides/from-a-dpm-release.md).

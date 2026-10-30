@@ -115,16 +115,15 @@ failures of a report:
 dpm-xl list-modules dpm-4.4.sqlite --release 4.3   # the releases and modules
 dpm-xl export-module dpm-4.4.sqlite COREP_OF --release 4.3 -o corep_of.json
 dpm-synth generate corep_of.json -o report.zip     # or use your own report
-dpm-xl check-report corep_of.json report.zip       # filing rules and module rules
+dpm-xl check-report corep_of.json report.zip       # filing rules and validation rules
 ```
 
 `dpm-4.4.sqlite` is the EBA's DPM 2.0 database as SQLite;
 [Start from an EBA DPM release](guides/from-a-dpm-release.md) says how to
 get it and what the export writes. `corep_of.json` is a
-[module file](reference/module-file.md) (`dpm-module/1`) with the
-module's tables, cells and rules, which dpm-xl and [dpm-synth] both read
-(dpm-synth 1.0 needs `--format dpm-synth-template/1` on the export).
-`check-report` needs the `xbrl` extra.
+[module file](reference/module-file.md) with the module's tables, cells and
+rules, which dpm-xl and [dpm-synth] both read. `check-report` needs the
+`xbrl` extra.
 
 On the example module and report in the repository's
 [`examples/`](https://github.com/luukhopman/dpm-xl/tree/main/examples),

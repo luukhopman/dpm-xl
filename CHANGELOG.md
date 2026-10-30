@@ -73,6 +73,12 @@ All notable changes to this project are documented here. The project follows
 - **Breaking:** `load_memory_provider` moved from `dpmxl.cli` to
   `dpmxl.provider`.
 - **Breaking:** `dpmxl.cli.INVALID_INPUT` is now `EXIT_INPUT`.
+- **Breaking:** a `default` applies to any keyed operand with no records,
+  not only one a `where` filtered to nothing, as an XBRL fact variable
+  falls back to its fallback value.
+- **Breaking:** an `if` without `else` inside arithmetic leaves records
+  out, so combining it with an operand that has more records is a
+  standard-key mismatch error, as the specification says; 1.2.3 passed.
 - An expression given on the command line is labelled `expression`, not
   `argument`.
 - A `time_shift` without the earlier report names its reference date.

@@ -665,6 +665,9 @@ The contextual components of DPM-XL 2.2.3.1.4 and 2.2.3.3.1, listed in
 `entityID`, `baseCurrency`, `decimalsInteger`, `decimalsMonetary`,
 `decimalsPercentage`, `decimalsDecimal`), are the report parameters of
 those names, of the component's type, in any case; a missing one is null.
+`baseCurrency` is an item of the DPM's currency domain, as in `[eba_CU:EUR]`
+(DPM-XL §2.2.3.3.1); an ISO 4217 code such as `iso4217:EUR` or `EUR` reads
+as `eba_CU:EUR`.
 
 | Expression | Result |
 | --- | --- |

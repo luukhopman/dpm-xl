@@ -653,7 +653,7 @@ def _keys(table: Table, fact: Fact, prefixes: Mapping[str, str]) -> _RowKey | st
 
 
 def _key(key: OpenKey, text: str, prefixes: Mapping[str, str]) -> Value:
-    if key.items:
+    if key.items is not None:
         if not _QNAME.fullmatch(text):
             raise _Invalid(f"{text!r} is not one item")
         return Item.parse(_canonical(text, prefixes))

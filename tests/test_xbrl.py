@@ -1,5 +1,6 @@
 import importlib
 import sys
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -355,6 +356,19 @@ def test_facts_without_their_open_keys_are_unplaced(keys, reason) -> None:
     assert provider.unplaced == (stray,)
     assert provider.select(CellQuery("C_07.00.a")) == []
     assert provider.findings[0].examples == (f"dpo: {reason}",)
+
+
+def test_a_key_with_no_allowed_items_is_still_enumerated() -> None:
+    table = MODULE.tables[1]
+    keys = (replace(table.open_keys[0], items=()), *table.open_keys[1:])
+    tables = (MODULE.tables[0], replace(table, open_keys=keys), *MODULE.tables[2:])
+    module = replace(MODULE, tables=tables)
+    values = {"CC": "eba_CU:EUR", "qNUM": "1", "qDAT": "2026-01-31", "qTXT": "a"}
+    provider = ReportProvider(
+        module, report([fact("dpo", "7", template="C_07.00.a", keys=values)])
+    )
+    (point,) = provider.select(CellQuery("C_07.00.a"))
+    assert point.keys["qCC"] == Item("CU", "EUR")
 
 
 def test_text_keys_are_stripped() -> None:

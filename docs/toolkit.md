@@ -24,7 +24,9 @@ You need the report, as an xBRL-CSV report package or an XBRL-XML file.
 `dpm-xbrl inspect` checks the EBA filing rules and needs nothing else.
 `dpm-xl check-report` also evaluates the module's validation rules, so it
 needs the module file of the report's module (see
-[export a module](#export-a-module-from-an-eba-dpm-release)). Read
+[export a module](#export-a-module-from-an-eba-dpm-release)); for an
+XBRL-XML report it also needs the EBA taxonomy packages of its entry
+point, given with `--taxonomy-package` (repeatable). Read
 [check the filing rules](https://luukhopman.github.io/dpm-xbrl/guides/check-filing-rules/)
 and [`dpm-xl check-report`](https://luukhopman.github.io/dpm-xl/reference/cli/#dpm-xl-check-report).
 

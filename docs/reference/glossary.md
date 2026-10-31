@@ -216,7 +216,8 @@ rule status
     check); `error` (the rule cannot be evaluated, such as `+` on a text
     cell); `unsupported` (it needs something the evaluation does not have,
     such as last period's report for `time_shift`); or `skipped` (the rule
-    is inactive). The status `error` is not the severity `error`.
+    is inactive or for another module). The status `error` is not the
+    severity `error`.
 
 filing rules
 :   The EBA's technical rules for how a report file is written: encoding,
@@ -225,10 +226,12 @@ filing rules
     [standards and conformance](standards.md).
 
 finding
-:   One filing rule a report breaks, as dpm-xbrl reports it: its severity,
-    rule number (or id), title, tag, spec code, message, count and
-    locations. The tag is the EBA's short code for the condition, such as
-    `nilUsed`.
+:   One problem with a report file. Mostly a filing rule it breaks, as
+    dpm-xbrl reports it: its severity, rule number (or id), title, tag,
+    spec code, message, count and locations. The tag is the EBA's short
+    code for the condition, such as `nilUsed`. `dpm-xl check-report` adds
+    fact findings for facts it cannot place in the module or read as their
+    data type, such as `unplacedFact`, `invalidValue` and `duplicateFact`.
 
 severity
 :   How serious a broken rule is: `error` or `warning`.
@@ -255,5 +258,6 @@ profile
 
 exit status
 :   The number a command returns, the same in the three tools: 0 done, 1 a
-    rule or finding at or above `--fail-on` failed, 2 a usage error, 3
-    unreadable or invalid input.
+    rule or finding at or above `--fail-on` failed (for `dpm-xl check`,
+    an expression has an error), 2 a usage error, 3 unreadable or invalid
+    input, or output that cannot be written.

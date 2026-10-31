@@ -5,6 +5,34 @@ All notable changes to this project are documented here. The project follows
 
 ## 1.3.0 - 2026-10-30
 
+### Breaking
+
+- `dpm-xl check` exits with status 1 for any error, such as
+  an unknown function, not only a syntax error; `--strict` also fails on
+  warnings.
+- `eval` exits with status 1, not 3, for a rule that is an
+  error, and an `unsupported` rule no longer affects the exit status.
+- `{v_X}` and `{vX}` are the same variable (DPM-XL v0.11
+  §3.1.1): a template's filing indicator when `X` is a template code, else
+  report parameter `X`.
+- both parse to `Variable`, which replaces the
+  `TableReported` and `Parameter` nodes.
+- the `--json` output opens with `tool`, `version` and a
+  `summary` of counts (`schema_version` 2).
+- `load_memory_provider` moved from `dpmxl.cli` to
+  `dpmxl.provider`.
+- `dpmxl.cli.INVALID_INPUT` is now `EXIT_INPUT`.
+- a `default` applies to any keyed operand with no records,
+  not only one a `where` filtered to nothing, as an XBRL fact variable
+  falls back to its fallback value.
+- an `if` without `else` inside arithmetic leaves records
+  out, so combining it with an operand that has more records is a
+  standard-key mismatch error, as the specification says; 1.2.3 passed.
+- Rule verdicts change where dpm-xl now follows DPM-XL v0.11 (counting
+  sets, set equality, analytic windows, `if` without `else`, `with`
+  clauses, math domains, invalid dates); each change is listed under
+  Fixed.
+
 ### Added
 
 - Text output of `eval` and `check-report` lists only rules that failed,
@@ -89,27 +117,6 @@ All notable changes to this project are documented here. The project follows
 
 ### Changed
 
-- **Breaking:** `dpm-xl check` exits with status 1 for any error, such as
-  an unknown function, not only a syntax error; `--strict` also fails on
-  warnings.
-- **Breaking:** `eval` exits with status 1, not 3, for a rule that is an
-  error, and an `unsupported` rule no longer affects the exit status.
-- **Breaking:** `{v_X}` and `{vX}` are the same variable (DPM-XL v0.11
-  §3.1.1): a template's filing indicator when `X` is a template code, else
-  report parameter `X`.
-- **Breaking:** both parse to `Variable`, which replaces the
-  `TableReported` and `Parameter` nodes.
-- **Breaking:** the `--json` output opens with `tool`, `version` and a
-  `summary` of counts (`schema_version` 2).
-- **Breaking:** `load_memory_provider` moved from `dpmxl.cli` to
-  `dpmxl.provider`.
-- **Breaking:** `dpmxl.cli.INVALID_INPUT` is now `EXIT_INPUT`.
-- **Breaking:** a `default` applies to any keyed operand with no records,
-  not only one a `where` filtered to nothing, as an XBRL fact variable
-  falls back to its fallback value.
-- **Breaking:** an `if` without `else` inside arithmetic leaves records
-  out, so combining it with an operand that has more records is a
-  standard-key mismatch error, as the specification says; 1.2.3 passed.
 - An expression given on the command line is labelled `expression`, not
   `argument`.
 - A `time_shift` without the earlier report names its reference date.

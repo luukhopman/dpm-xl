@@ -1,11 +1,13 @@
 ---
-description: What the public API is, what semantic versioning promises for it, and what may change in minor releases.
+description: What the public API is, how versions are numbered, and when a release may break it.
 ---
 
 # Stability and versioning
 
-dpm-xl follows [semantic versioning](https://semver.org). From 1.0.0, a
-change that breaks the public API needs a new major version.
+dpm-xl uses [semantic versioning](https://semver.org) version numbers:
+major, minor and patch. dpm-xl, dpm-xbrl and dpm-synth have no outside
+users yet. Until they do, a minor release may contain breaking changes;
+the [changelog](changelog.md) always lists them under "Breaking".
 
 ## The public API
 
@@ -35,7 +37,8 @@ start with one. `dpmxl.__version__` gives the installed version.
   [changelog](changelog.md).
 
 Statuses, record keys, field names, `Explanation.kind` values and the JSON
-field names do not change outside a major release.
+field names change only in a release whose changelog lists the change
+under "Breaking".
 
 ## Supported Python versions
 

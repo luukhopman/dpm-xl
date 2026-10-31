@@ -204,9 +204,10 @@ item takes its category bindings valid in that release. An item that moves
 to another category in that release has both qnames, as the taxonomy
 mostly lists both, the binding that starts later first.
 
-Whether a rule is active is not tied to a release: the EBA deactivates rules
-in the database itself, in releases such as 4.3.0.1. Export from the newest
-database to get the current state. The June 2026 database of 4.3 has 27
+The EBA deactivates rules in the database itself, in releases such as
+4.3.0.1, from a date: a rule is inactive in the releases dated on or after
+it, and still active in earlier ones. Export from the newest database to
+get the current state. The June 2026 database of 4.3 has 27
 COREP_OF rules active that the September deactivation release switched
 off; exported from the 4.4 database, COREP_OF 4.3 has 1,205 active rules
 and 213 inactive.
@@ -313,7 +314,7 @@ print([(rule.code, rule.active) for rule in module.rules])
 ['DEMO', 'DOCS', 'OTHER']
 2.0 ['T_01.00.a', 'T_02.00']
 {'code': 'qKEY', 'column': 'qKEY', 'items': ['eba_CA:x2', 'eba_CA:x1', 'eba_CA:x4']}
-[('v1', True), ('v6', False), ('v7551_m', True)]
+[('v1', True), ('v6', True), ('v7551_m', True)]
 ```
 
 Write it with `json.dump(document, file)`. The notes go to the `dpmxl.dpm`

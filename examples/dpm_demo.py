@@ -239,14 +239,14 @@ ROWS: dict[str, list[tuple]] = {
         (806, 6, None, "{tT_01.00.a, r0020, c0010} in {[eba_CA:x1]}", 2, None),
         (850, 5, None, "{v_T_01.00}", 1, None),
     ],
-    "OperationScope": [  # OperationScopeID, OperationVID, IsActive, Severity
-        (1, 801, 1, "error"),
-        (2, 802, 1, "error"),
-        (3, 803, 1, "warning"),
-        (4, 803, 1, "warning"),
-        (5, 804, 1, "error"),
-        (6, 805, 1, "error"),
-        (7, 806, 0, "warning"),  # deactivated
+    "OperationScope": [  # ID, OperationVID, IsActive, Severity, FromSubmissionDate
+        (1, 801, 1, "error", "2025-03-31"),
+        (2, 802, 1, "error", "2025-03-31"),
+        (3, 803, 1, "warning", "2025-03-31"),
+        (4, 803, 1, "warning", "2025-03-31"),
+        (5, 804, 1, "error", "2025-03-31"),
+        (6, 805, 1, "error", "2025-03-31"),
+        (7, 806, 0, "warning", "2026-04-15"),  # deactivated from release 2.0.1
     ],
     "OperationScopeComposition": [  # OperationScopeID, ModuleVID
         (1, 100),

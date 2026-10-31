@@ -148,7 +148,13 @@ TABLES: Mapping[str, tuple[str, ...]] = {
         "StartReleaseID",
         "EndReleaseID",
     ),
-    "OperationScope": ("OperationScopeID", "OperationVID", "IsActive", "Severity"),
+    "OperationScope": (
+        "OperationScopeID",
+        "OperationVID",
+        "IsActive",
+        "Severity",
+        "FromSubmissionDate",
+    ),
     "OperationScopeComposition": ("OperationScopeID", "ModuleVID"),
 }
 """The tables and columns of the DPM 2.0 database that an export reads."""
@@ -1485,8 +1491,9 @@ class _Export:
                         self.code,
                         code,
                     )
-            active = any(scope[2] == 1 for scope in scopes)
-            chosen = next((scope for scope in scopes if scope[2] == 1), scopes[0])
+            live = [scope for scope in scopes if self.active(scope)]
+            active = bool(live)
+            chosen = live[0] if live else scopes[0]
             severity = (chosen[3] or "error").lower()
             rule: dict[str, Any] = {"code": code, "expression": expression}
             if precondition is not None:
@@ -1502,6 +1509,20 @@ class _Export:
                 )
             rules[code] = rule
         return [rules[code] for code in sorted(rules)]
+
+    def active(self, scope: Sequence[Any]) -> bool:
+        """Tell whether a rule's scope is active in the release.
+
+        A deactivated scope (``IsActive`` 0) stays active in the releases
+        before its ``FromSubmissionDate``, from which the EBA deactivated it.
+
+        Returns:
+            bool: Whether the scope is active.
+        """
+        if scope[2] == 1:
+            return True
+        since, date = _date(scope[4]), self.release.date
+        return since is not None and date is not None and date < since
 
     def fix(self, code: str, expression: str) -> str:
         for fix in KNOWN_ERRORS:

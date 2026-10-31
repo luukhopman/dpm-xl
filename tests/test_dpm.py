@@ -230,6 +230,9 @@ def test_the_release_selects_the_module_version_and_rules(db: DpmRelease) -> Non
     new = export_module(db, "DEMO", "2.0")
     assert new["release"] == "2.0"
     assert _rule(new, "v1")["expression"].endswith(">= 0")
+    # v6 is deactivated from 2026-04-15, the date of release 2.0.1
+    assert _rule(new, "v6")["active"] is True
+    assert _rule(export_module(db, "DEMO", "2.0.1"), "v6")["active"] is False
 
 
 def _taxonomy_package(path: Path) -> Path:

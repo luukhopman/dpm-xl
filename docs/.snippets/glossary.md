@@ -10,22 +10,36 @@
 *[UTR]: XBRL Units Registry: the units, such as currencies and pure, that reports may use
 *[COREP]: Common Reporting: the EBA framework for own funds and capital requirements
 *[FINREP]: Financial Reporting: the EBA framework for financial statements
-*[datapoint]: A cell of a reporting template, with a code such as dp5488013; it fixes what a fact means
-*[datapoints]: Cells of reporting templates, with codes such as dp5488013; each fixes what a fact means
-*[data point]: A cell of a reporting template, with a code such as dp5488013; it fixes what a fact means
-*[data points]: Cells of reporting templates, with codes such as dp5488013; each fixes what a fact means
+*[datapoint]: A cell of a table, with a code such as dp5488013; it fixes what a fact means
+*[datapoints]: Cells of tables, with codes such as dp5488013; each fixes what a fact means
+*[data point]: A cell of a table, with a code such as dp5488013; it fixes what a fact means
+*[data points]: Cells of tables, with codes such as dp5488013; each fixes what a fact means
+*[fact]: One reported value; in an xBRL-CSV table file, a row with a datapoint and its value
+*[facts]: Reported values; in an xBRL-CSV table file, rows with a datapoint and its value
+*[qname]: A qualified name, prefix:name, such as eba_GA:DE or iso4217:EUR
+*[qnames]: Qualified names, prefix:name, such as eba_GA:DE or iso4217:EUR
+*[reporting template]: An EBA reporting form, such as C_07.00, made of one or more tables
+*[reporting templates]: EBA reporting forms, such as C_07.00, each made of one or more tables
+*[template file]: dpm-synth's input: a module file, or the same fields in the dpm-synth-template/1 format
 *[filing indicator]: A code in a report that says whether a template is reported (true) or not (false)
 *[filing indicators]: Codes in a report that say whether each template is reported (true) or not (false)
+*[precondition]: A condition on a validation rule, usually a filing indicator; the rule is evaluated only when it holds
+*[preconditions]: Conditions on validation rules, usually filing indicators; a rule is evaluated only when its precondition holds
 *[entry point]: The taxonomy file a report refers to, which fixes its framework, module and version
 *[entry points]: The taxonomy files reports refer to, which fix their framework, module and version
 *[key column]: A column of an open table whose values identify the row, such as a counterparty code
 *[key columns]: Columns of an open table whose values identify the row, such as a counterparty code
-*[module file]: A JSON file with one module's tables, cells, datapoints and validation rules, read by dpm-xl and, as a template, by dpm-synth
-*[module files]: JSON files, each with one module's tables, cells, datapoints and validation rules, read by dpm-xl and, as templates, by dpm-synth
-*[open table]: A table whose rows the reporter adds, each identified by its key column values
-*[open tables]: Tables whose rows the reporter adds, each identified by its key column values
+*[module file]: A JSON file with one module's tables, cells, datapoints and validation rules, read by dpm-xl and dpm-synth
+*[module files]: JSON files, each with one module's tables, cells, datapoints and validation rules, read by dpm-xl and dpm-synth
+*[open table]: A table whose rows (or, in some, sheets) the reporter adds, each identified by its key column values
+*[open tables]: Tables whose rows (or, in some, sheets) the reporter adds, each identified by its key column values
 *[reference date]: The date the values of a report refer to (refPeriod in xBRL-CSV)
 *[report package]: A ZIP that holds a report in a standard layout (XBRL Report Packages 1.0)
 *[report packages]: ZIPs that hold a report in a standard layout (XBRL Report Packages 1.0)
+*[taxonomy]: The XBRL definition of a framework's reports: concepts, dimensions, tables and entry points
 *[taxonomy package]: A ZIP of taxonomy files with a catalogue that maps their URLs to the files inside (XBRL Taxonomy Packages 1.0)
 *[taxonomy packages]: ZIPs of taxonomy files with a catalogue that maps their URLs to the files inside (XBRL Taxonomy Packages 1.0)
+*[spec code]: The error code an XBRL International specification gives a condition, such as xbrlce:unknownColumn
+*[XDT]: XBRL Dimensions 1.0: the specification of dimensions and hypercubes
+*[hypercube]: The dimensions and members a taxonomy allows for a concept's facts (XBRL Dimensions)
+*[hypercubes]: The dimensions and members a taxonomy allows for concepts' facts (XBRL Dimensions)

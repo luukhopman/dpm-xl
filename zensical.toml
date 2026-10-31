@@ -83,7 +83,6 @@ nav = [
   ] },
   { "Toolkit" = [
     { "Overview" = "toolkit.md" },
-    { "Toolkit tour" = "https://luukhopman.github.io/dpm-xl/guides/toolkit-tour/" },
     { "dpm-xbrl" = "https://luukhopman.github.io/dpm-xbrl/" },
     { "dpm-synth" = "https://luukhopman.github.io/dpm-synth/" },
   ] },

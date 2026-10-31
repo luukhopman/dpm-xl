@@ -11,3 +11,4 @@
 [dpm-xl-spec]: https://dpm-alliance.github.io/dpm-xl-docs/0.11/
 [dpm-xl-spec-release]: https://github.com/dpm-alliance/dpm-xl-docs/releases/tag/0.11
 [vtl-21]: https://sdmx.org/wp-content/uploads/VTL-2.1-Reference-Manual.pdf
+[xdt-spec]: https://www.xbrl.org/specification/dimensions/rec-2012-01-25/dimensions-rec-2006-09-18+corrected-errata-2012-01-25-clean.html

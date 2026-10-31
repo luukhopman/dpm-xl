@@ -38,6 +38,7 @@
   color: var(--md-default-fg-color--light);
   font-size: 0.7rem;
   padding: 0.1rem 0.6rem;
+  text-decoration: none;
   transition: border-color 125ms, color 125ms;
 }
 
@@ -49,8 +50,4 @@
 /* The three toolkit cards in one row where there is room. */
 .md-typeset .grid.toolkit-cards {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
-}
-
-.md-typeset .toolkit-badges a {
-  text-decoration: none;
 }

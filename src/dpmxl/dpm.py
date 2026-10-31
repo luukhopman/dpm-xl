@@ -325,7 +325,8 @@ def _from_zip(path: Path) -> sqlite3.Connection:
     """Read the tables an export needs from the Access file in a ZIP file.
 
     The one ``.accdb`` or ``.mdb`` member (one with ``dpm`` in its name,
-    if there are several) is checked, unpacked to a fixed name in a
+    if there are several), leaving out macOS metadata (``__MACOSX/`` and
+    ``._`` members), is checked, unpacked to a fixed name in a
     temporary directory, read with ``mdb-export`` and deleted.
 
     Returns:
@@ -333,7 +334,8 @@ def _from_zip(path: Path) -> sqlite3.Connection:
 
     Raises:
         DpmError: If the ZIP file has no single Access file, the member is a
-            symbolic link, too large or too compressed, or cannot be read.
+            symbolic link, too large or too compressed, or cannot be read,
+            such as an encrypted member or one compressed with Deflate64.
     """
     _mdb_export(path)
     try:
@@ -346,6 +348,7 @@ def _from_zip(path: Path) -> sqlite3.Connection:
             for member in archive.infolist()
             if not member.is_dir()
             and member.filename.casefold().endswith((".accdb", ".mdb"))
+            and not _resource_fork(member.filename)
         ]
         named = [
             member
@@ -385,13 +388,29 @@ def _from_zip(path: Path) -> sqlite3.Connection:
                                 f"{where} is larger than {_ZIP_MAX_BYTES:,} bytes"
                             )
                         output.write(chunk)
-            except (OSError, zipfile.BadZipFile, zlib.error) as error:
+            except (
+                OSError,
+                zipfile.BadZipFile,
+                zlib.error,
+                RuntimeError,  # an encrypted member
+                NotImplementedError,  # a compression method zipfile lacks
+            ) as error:
                 raise DpmError(f"{where}: cannot unpack: {error}") from error
             return _from_access(target, path)
 
 
 def _member_name(filename: str) -> str:
     return filename.replace("\\", "/").rsplit("/", 1)[-1]
+
+
+def _resource_fork(filename: str) -> bool:
+    """Tell whether a member is macOS metadata.
+
+    Returns:
+        bool: Whether it is in ``__MACOSX/`` or its name starts with ``._``.
+    """
+    path = filename.replace("\\", "/")
+    return path.startswith("__MACOSX/") or _member_name(path).startswith("._")
 
 
 def _from_access(path: Path, source: Path | None = None) -> sqlite3.Connection:
@@ -1142,6 +1161,38 @@ class _Allowed:
     keys: dict[tuple[str, int], list[str]] = field(default_factory=dict)
 
 
+def _package_member(
+    path: Path, archive: zipfile.ZipFile, info: zipfile.ZipInfo
+) -> bytes:
+    """Read a taxonomy package file, at most ``_PACKAGE_MEMBER_BYTES`` of it.
+
+    The size is checked as it is read, not only as the header states it.
+
+    Returns:
+        bytes: The file's content.
+
+    Raises:
+        DpmError: If the file is too large or cannot be read.
+    """
+    limit = _PACKAGE_MEMBER_BYTES
+    if info.file_size > limit:
+        raise DpmError(f"{path}: {info.filename} is too large")
+    try:
+        with archive.open(info) as source:
+            data = source.read(limit + 1)
+    except (
+        OSError,
+        zipfile.BadZipFile,
+        zlib.error,
+        RuntimeError,
+        NotImplementedError,
+    ) as error:
+        raise DpmError(f"{path}: {info.filename}: cannot read: {error}") from error
+    if len(data) > limit:
+        raise DpmError(f"{path}: {info.filename} is too large")
+    return data
+
+
 class _Taxonomy:
     """The xBRL-CSV metadata of EBA taxonomy packages, read with ``zipfile``.
 
@@ -1164,9 +1215,10 @@ class _Taxonomy:
                         f"{path}: not a taxonomy package: {error}"
                     ) from error
                 self.archives[path] = archive
-                for name in archive.namelist():
-                    if name.casefold().endswith("meta-inf/catalog.xml"):
-                        self._catalog(path, name, archive.read(name))
+                for info in archive.infolist():
+                    if info.filename.casefold().endswith("meta-inf/catalog.xml"):
+                        text = _package_member(path, archive, info)
+                        self._catalog(path, info.filename, text)
         except BaseException:
             self.close()
             raise
@@ -1205,11 +1257,10 @@ class _Taxonomy:
                 info = archive.getinfo(name)
             except KeyError:
                 continue
-            if info.file_size > _PACKAGE_MEMBER_BYTES:
-                raise DpmError(f"{path}: {name} is too large")
+            text = _package_member(path, archive, info)
             try:
-                return json.loads(archive.read(info))
-            except (ValueError, zipfile.BadZipFile) as error:
+                return json.loads(text)
+            except ValueError as error:
                 raise DpmError(f"{path}: {name}: not JSON: {error}") from error
         return None
 

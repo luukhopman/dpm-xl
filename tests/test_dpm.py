@@ -324,6 +324,27 @@ def test_taxonomy_packages_give_the_allowed_items(
         export_module(db, "DEMO", taxonomy_packages=[tmp_path / "bad.zip"])
 
 
+def test_taxonomy_package_files_are_read_up_to_a_limit(
+    db: DpmRelease, tmp_path: Path, monkeypatch
+) -> None:
+    import dpmxl.dpm
+
+    monkeypatch.setattr(dpmxl.dpm, "_PACKAGE_MEMBER_BYTES", 100)
+    package = _taxonomy_package(tmp_path / "taxonomy.zip")
+    with pytest.raises(DpmError, match=r"META-INF/catalog\.xml is too large"):
+        export_module(db, "DEMO", taxonomy_packages=[package])
+    # a file whose header understates its size is an error, not read on
+    with zipfile.ZipFile(package) as archive:
+        info = archive.getinfo("demo/META-INF/catalog.xml")
+        offset = info.header_offset
+    data = bytearray(package.read_bytes())
+    for start in (offset + 22, data.find(b"PK\x01\x02") + 24):
+        data[start : start + 4] = (50).to_bytes(4, "little")
+    package.write_bytes(bytes(data))
+    with pytest.raises(DpmError, match=r"catalog\.xml: cannot read: Bad CRC-32"):
+        export_module(db, "DEMO", taxonomy_packages=[package])
+
+
 def test_open_release_rejects_what_it_cannot_read(tmp_path: Path) -> None:
     with pytest.raises(DpmError, match="no such file"):
         open_release(tmp_path / "missing.sqlite")
@@ -442,6 +463,51 @@ def test_a_zip_file_needs_one_access_file(
     monkeypatch.setattr(shutil, "which", lambda name: "/bin/false")
     with pytest.raises(DpmError, match=re.escape(message)):
         open_release(_zip(tmp_path / "dpm.zip", members))
+
+
+def test_mac_resource_forks_are_not_access_databases(
+    database: Path, tmp_path: Path, monkeypatch, temporary: Path
+) -> None:
+    _fake_mdb_export(database, tmp_path, monkeypatch)
+    members = {
+        "dpm.accdb": ACCESS,
+        "__MACOSX/._dpm.accdb": b"fork",
+        "._dpm.accdb": b"fork",
+    }
+    with open_release(_zip(tmp_path / "dpm.zip", members)) as db:
+        assert db.release().code == "2.0.1"
+
+
+def _patched(path: Path, *, flags: int = 0, method: int | None = None) -> Path:
+    # Rewrite the flags or compression method of the headers, as another
+    # tool would have written them.
+    data = bytearray(path.read_bytes())
+    for signature, offset in ((b"PK\x03\x04", 6), (b"PK\x01\x02", 8)):
+        start = data.find(signature) + offset
+        data[start] |= flags
+        if method is not None:
+            data[start + 2 : start + 4] = method.to_bytes(2, "little")
+    path.write_bytes(bytes(data))
+    return path
+
+
+def test_unreadable_zip_members_are_input_errors(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda name: "/bin/false")
+    encrypted = _patched(
+        _zip(tmp_path / "encrypted.zip", {"dpm.accdb": ACCESS}), flags=1
+    )
+    deflate64 = _zip(tmp_path / "deflate64.zip", {"dpm.accdb": ACCESS})
+    _patched(deflate64, method=9)
+    for package, reason in (
+        (encrypted, "encrypted"),
+        (deflate64, "compression method is not supported"),
+    ):
+        with pytest.raises(DpmError, match=f"dpm.accdb: cannot unpack: .*{reason}"):
+            open_release(package)
+        assert main(["list-modules", str(package)]) == 3
+        assert capsys.readouterr().err.startswith(f"error: {package}: dpm.accdb")
 
 
 def test_a_zip_member_that_is_a_symbolic_link_is_rejected(

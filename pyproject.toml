@@ -76,7 +76,7 @@ docs = [
     "mkdocstrings-python>=2.0.10,<3",
     "polars>=2.0,<3",
     "dpm-xbrl>=1.1,<2",
-    "dpm-synth>=1.0,<2",
+    "dpm-synth>=1.1,<2",
 ]
 dev = [
     { include-group = "test" },
@@ -90,9 +90,6 @@ default = true
 
 # dpm-synth 1.0.0 is not on PyPI yet; the docs group takes it from GitHub
 # until it is (see AGENTS.md).
-[tool.uv.sources]
-dpm-synth = { git = "https://github.com/luukhopman/dpm-synth", branch = "main" }
-
 [tool.ruff]
 target-version = "py311"
 line-length = 88

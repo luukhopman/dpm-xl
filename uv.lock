@@ -150,11 +150,15 @@ wheels = [
 
 [[package]]
 name = "dpm-synth"
-version = "1.0.0"
-source = { git = "https://github.com/luukhopman/dpm-synth?branch=main#a29b5225c986baab665782751c7b9fb2cf91636a" }
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dpm-xbrl" },
     { name = "dpm-xl" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/63/db/cb43a4590ea92a960f017b9c5ad0a819a23c58d914b3736632aa4399bd3f/dpm_synth-1.1.0.tar.gz", hash = "sha256:bf5b0de811a5b4e281e8cc290b475db426a7058880ca46bf75d7d679bd672a35", size = 41540, upload-time = "2026-10-31T15:40:07.594Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/08/ce/37aeace01fd99cfa79ae53704832e0fc2cc00a516fdb06ef6cd7d3f812e4/dpm_synth-1.1.0-py3-none-any.whl", hash = "sha256:ccb7a76b4dc432d2ee35b3c92fb6352a3a5c8dc4568ae3ae37892abe8df2e49e", size = 43461, upload-time = "2026-10-31T15:40:06.505Z" },
 ]
 
 [[package]]
@@ -216,7 +220,7 @@ provides-extras = ["columnar", "xbrl"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "dpm-synth", git = "https://github.com/luukhopman/dpm-synth?branch=main" },
+    { name = "dpm-synth", specifier = ">=1.1,<2" },
     { name = "dpm-xbrl", specifier = ">=1.1,<2" },
     { name = "mkdocstrings-python", specifier = ">=2.0.10,<3" },
     { name = "polars", specifier = ">=2.0,<3" },
@@ -227,7 +231,7 @@ dev = [
     { name = "zensical", specifier = ">=0.0.72,<0.1" },
 ]
 docs = [
-    { name = "dpm-synth", git = "https://github.com/luukhopman/dpm-synth?branch=main" },
+    { name = "dpm-synth", specifier = ">=1.1,<2" },
     { name = "dpm-xbrl", specifier = ">=1.1,<2" },
     { name = "mkdocstrings-python", specifier = ">=2.0.10,<3" },
     { name = "polars", specifier = ">=2.0,<3" },

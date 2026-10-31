@@ -44,10 +44,8 @@ uv run python -c "import json; from dpmxl.grammar import textmate_grammar; print
   belong in the `docs` dependency group.
 - To work against a local dpm-xbrl checkout, run
   `uv pip install --no-config -e ../dpm-xbrl` and then `uv run --no-sync`.
-- The `docs` group takes dpm-synth from its GitHub `main` branch through
-  `[tool.uv.sources]`, for the toolkit tour, because dpm-synth 1.0.0 is not
-  on PyPI yet. Once it is published, remove that source and run `uv lock`
-  so dpm-synth resolves from PyPI like dpm-xbrl.
+- The `docs` group installs dpm-synth and dpm-xbrl from PyPI for the
+  toolkit tour; raise their lower bounds when the tour needs a newer release.
 - Google-style docstrings for every public name, with `Examples:` doctests
   where they help; cross-references as `` [`Name`][dpmxl.module.Name] ``
   (the defining module), never Sphinx roles.

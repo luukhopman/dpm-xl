@@ -220,6 +220,8 @@ def _check_console(block: Block, where: str) -> None:
         if command == "echo $?":
             output = f"{status}\n"
         elif command.startswith("dpm-xl"):
+            if command.startswith("dpm-xl check-report"):
+                pytest.importorskip("dpmxbrl")  # the xbrl extra
             status, output = _run_cli(command)
         else:
             pytest.fail(f"{where}: only dpm-xl commands run in console blocks")

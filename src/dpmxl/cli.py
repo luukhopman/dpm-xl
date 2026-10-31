@@ -161,7 +161,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     export.add_argument("database", type=Path, help=_DATABASE_HELP)
     export.add_argument("module", help="module code, such as COREP_OF")
     export.add_argument(
-        "--release", help="release code, such as 4.3 (default: the latest)"
+        "--release",
+        help="release code, such as 4.3 (default: the latest, whatever its status)",
     )
     export.add_argument(
         "-o",

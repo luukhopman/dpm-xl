@@ -330,6 +330,7 @@ def test_every_glossary_term_is_defined_on_the_glossary_page() -> None:
 
 
 def test_markdown_copies_leave_out_presentation_markup() -> None:
+    pytest.importorskip("griffe")  # the docs build script needs the docs group
     spec = spec_from_file_location("build_docs", ROOT / "scripts" / "build_docs.py")
     assert spec and spec.loader
     build_docs = module_from_spec(spec)

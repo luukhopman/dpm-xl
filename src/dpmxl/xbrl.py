@@ -81,9 +81,13 @@ class ReportFinding:
 
     Attributes:
         code: ``unplacedFact`` for facts in no table of the module, or
-            without a value for an open key of their table, and
+            without a value for an open key of their table;
             ``invalidValue`` for values that do not read as their cell's
-            data type. No rule reads either.
+            data type; ``duplicateFact`` for facts with the cell and open
+            keys of an earlier fact, the keys written otherwise (such as
+            ``007`` and ``7`` for an integer key). No rule reads them.
+            ``otherEntryPoint`` for a ``previous`` report of another entry
+            point of the same module, such as an earlier taxonomy.
         severity: ``error`` for the report, ``warning`` for a ``previous``
             report.
         message: What is wrong, as a sentence.
@@ -189,7 +193,9 @@ class ReportProvider:
             ValueError: If the report is of another entry point than the
                 module, an XBRL-XML report comes without taxonomy packages,
                 or a previous report has no reference date, the same one as
-                another report, another entity or another entry point.
+                another report, another entity or another module. A previous
+                report of another entry point of the module, such as an
+                earlier taxonomy, is an ``otherEntryPoint`` warning.
             dpmxbrl.ReportError: If dpm-xbrl cannot convert an XBRL-XML
                 report with the taxonomy packages.
         """
@@ -227,6 +233,8 @@ class ReportProvider:
         self._facts: dict[Hashable, Fact] = {}
         unplaced: list[tuple[Fact, str]] = []
         invalid: list[tuple[Fact, str]] = []
+        duplicates: list[tuple[Fact, str]] = []
+        firsts: dict[tuple[str, str, _RowKey], tuple[Fact, Fact]] = {}
         for fact, source in pairs:
             placements = self._place(fact, key_prefixes)
             if isinstance(placements, str):
@@ -237,18 +245,29 @@ class ReportProvider:
             except _Invalid as error:
                 invalid.append((source, str(error)))
                 continue
+            respelled = None
             for table, cells, keys in placements:
                 row = self._rows.setdefault(table.code, {}).setdefault(keys, {})
+                slot = (table.code, cells[0].datapoint, keys)
                 if cells[0].datapoint in row:
-                    continue  # a duplicate: the first fact counts
+                    # A duplicate: the first fact counts. One with the same
+                    # keys written otherwise is no duplicate to dpm-xbrl.
+                    first, first_source = firsts[slot]
+                    if first.keys != fact.keys:
+                        respelled = first_source
+                    continue
+                firsts[slot] = (fact, source)
                 row[cells[0].datapoint] = value
                 for cell in cells:
                     self._facts[table.code, cell.id, keys] = source
+            if respelled is not None:
+                where = respelled.location or respelled.datapoint or respelled.concept
+                duplicates.append((source, f"the cell and keys of {where}"))
         unplaced.extend(skipped)
         self.unplaced: tuple[Fact, ...] = tuple(fact for fact, _ in unplaced)
         self.invalid: tuple[Fact, ...] = tuple(fact for fact, _ in invalid)
         self.findings: tuple[ReportFinding, ...] = _findings(
-            module, unplaced, invalid, "the report", "error"
+            module, unplaced, invalid, "the report", "error", duplicates
         )
         previous = tuple(previous)
         if previous:
@@ -273,17 +292,32 @@ class ReportProvider:
                     f"{name} is of entity {report.entity_id}, "
                     f"not {self.report.entity_id}"
                 )
-            if (
+            other = (
                 report.entry_point
                 and self.report.entry_point
                 and _entry(report.entry_point) != _entry(self.report.entry_point)
+            )
+            if other and _module_code(report.entry_point) != _module_code(
+                self.report.entry_point
             ):
                 raise ValueError(
-                    f"{name} is of entry point {report.entry_point}, "
-                    f"not {self.report.entry_point}"
+                    f"{name} is of module {_module_code(report.entry_point)}, "
+                    f"not {_module_code(self.report.entry_point)}"
                 )
-            provider = ReportProvider(self.module, report, taxonomy_packages=packages)
+            # Placed in this module's tables, whatever its taxonomy version.
+            module = replace(self.module, entry_point=None) if other else self.module
+            provider = ReportProvider(module, report, taxonomy_packages=packages)
             found[moment] = provider
+            if other:
+                self.findings += (
+                    ReportFinding(
+                        code="otherEntryPoint",
+                        severity="warning",
+                        message=f"{name[0].upper()}{name[1:]} is of entry point "
+                        f"{report.entry_point}, not {self.report.entry_point}; its "
+                        "facts are placed in this module's tables.",
+                    ),
+                )
             self.findings += tuple(
                 replace(
                     finding,
@@ -536,6 +570,11 @@ class ReportProvider:
         return self._parameters.get(folded)
 
 
+def _module_code(url: str | None) -> str:
+    """Return the module code of an entry point, its file name, case-folded."""
+    return _entry(url or "").rsplit("/", 1)[-1]
+
+
 def _entry(url: str) -> str:
     """Return an entry point without ``.json`` or ``.xsd``, for comparing."""
     folded = url.casefold()
@@ -687,14 +726,24 @@ def _findings(
     invalid: Sequence[tuple[Fact, str]],
     name: str,
     severity: Severity,
+    duplicates: Sequence[tuple[Fact, str]] = (),
 ) -> tuple[ReportFinding, ...]:
     found = []
-    for code, facts in (("unplacedFact", unplaced), ("invalidValue", invalid)):
+    for code, facts in (
+        ("unplacedFact", unplaced),
+        ("invalidValue", invalid),
+        ("duplicateFact", duplicates),
+    ):
         if not facts:
             continue
         count = len(facts)
         one = count == 1
-        if code == "unplacedFact":
+        if code == "duplicateFact":
+            problem = (
+                f"{'has' if one else 'have'} the cell and open keys of an earlier "
+                "fact, with the keys written otherwise"
+            )
+        elif code == "unplacedFact":
             problem = (
                 f"{'is' if one else 'are'} in no table of module {module.module}, "
                 f"or lack{'s' if one else ''} an open key of "

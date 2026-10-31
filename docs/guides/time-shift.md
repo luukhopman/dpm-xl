@@ -77,7 +77,9 @@ A report read with dpm-xbrl holds one period, so on real EBA modules
 [`ReportProvider`][dpmxl.xbrl.ReportProvider] takes them as `previous`, in
 any order, and picks by reference date: `time_shift(x, Q, 1)` on the report
 for 2026-03-31 reads the one for 2025-12-31, placed and typed by the same
-module.
+module. They must be of the same entity and module; one of another
+taxonomy version, such as `finrep/4.1` before `finrep/4.2`, is read all
+the same, with an `otherEntryPoint` warning.
 
 ```python
 from dpmxbrl import read_report

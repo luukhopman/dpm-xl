@@ -60,10 +60,13 @@ All notable changes to this project are documented here. The project follows
 - `dpm-xl check-report --previous REPORT` passes an earlier report.
 - `ReportProvider` and `check-report` place XBRL-XML facts through the
   report's taxonomy packages (`--taxonomy-package`), which they require.
+- A fact with the cell and open keys of an earlier one, the keys written
+  otherwise (such as `007` and `7`), is a `duplicateFact` finding.
 - Facts in no table of the module, or with a value that does not read as
   their data type, are findings that count towards `--fail-on`.
 - A report of another entry point than its module is an error, as is a
-  previous report of another entity or entry point.
+  previous report of another entity or module; a previous report of
+  another taxonomy version of the module is a warning.
 - A fact in a file named by a filing indicator, such as `f_19.00.dp.csv`,
   is placed in that filing indicator's tables by its datapoint.
 - Items in a report compare by namespace, so a domain declared under its

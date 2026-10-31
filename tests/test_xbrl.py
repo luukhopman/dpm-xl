@@ -380,6 +380,33 @@ def test_text_keys_are_stripped() -> None:
     (point,) = provider.select(CellQuery("C_07.00.a"))
     assert point.keys["qTXT"] == "LEI"
     assert point.value == Number.of(7, -3)  # the duplicate: the first counts
+    (finding,) = provider.findings
+    assert finding.code == "duplicateFact"
+
+
+def test_a_fact_whose_keys_differ_only_in_spelling_is_a_finding() -> None:
+    def row(number, value, location):
+        keys = {"CC": "eba_CU:EUR", "qNUM": number, "qDAT": "2026-01-31", "qTXT": "a"}
+        return fact("dpo", value, template="C_07.00.a", keys=keys, location=location)
+
+    first, second = row("007", "7", "c_07.00.a.csv:2"), row("7", "8", "c_07.00.a.csv:3")
+    provider = ReportProvider(MODULE, report([first, second]))
+    (point,) = provider.select(CellQuery("C_07.00.a"))
+    assert point.value == Number.of(7, -3)
+    (finding,) = provider.findings
+    assert (finding.code, finding.severity, finding.count) == (
+        "duplicateFact",
+        "error",
+        1,
+    )
+    assert finding.message == (
+        "1 fact of the report has the cell and open keys of an earlier fact, "
+        "with the keys written otherwise, so no rule reads it."
+    )
+    assert finding.examples == (
+        "c_07.00.a.csv:3: the cell and keys of c_07.00.a.csv:2",
+    )
+    assert check_report(MODULE, report([first, second])).failed()
 
 
 def test_a_duplicate_fact_keeps_the_first_value() -> None:
@@ -804,24 +831,37 @@ def test_previous_reports_need_distinct_reference_dates(
             "not LEI00000000000000000.CON",
         ),
         (
-            {"entry_point": "http://example.com/b.json"},
-            "previous report for 2026-09-30 is of entry point "
-            "http://example.com/b.json, not http://example.com/a.json",
+            {"entry_point": "http://example.com/4.2/mod/b.json"},
+            "previous report for 2026-09-30 is of module b, not a",
         ),
     ],
 )
-def test_previous_reports_are_of_the_same_entity_and_entry_point(
-    changes, message
-) -> None:
+def test_previous_reports_are_of_the_same_entity_and_module(changes, message) -> None:
     import dataclasses
 
-    current = report([], entry_point="http://example.com/a.json")
+    current = report([], entry_point="http://example.com/4.2/mod/a.json")
     earlier = dataclasses.replace(
         dated(date(2026, 9, 30), []),
         **{"entry_point": current.entry_point, **changes},
     )
     with pytest.raises(ValueError, match=message):
         ReportProvider(MODULE, current, previous=[earlier])
+
+
+def test_a_previous_report_of_another_taxonomy_is_a_warning() -> None:
+    import dataclasses
+
+    point = "http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/finrep/{}/mod/finrep9.json"
+    current = report([fact("dpm", "1000000")], entry_point=point.format("4.2"))
+    earlier = dataclasses.replace(SEPTEMBER, entry_point=point.format("4.1"))
+    provider = ReportProvider(MODULE, current, previous=[earlier])
+    (finding,) = provider.findings
+    assert (finding.code, finding.severity) == ("otherEntryPoint", "warning")
+    assert finding.message == (
+        f"The previous report for 2026-09-30 is of entry point {point.format('4.1')}, "
+        f"not {point.format('4.2')}; its facts are placed in this module's tables."
+    )
+    assert evaluate_rule(GROWTH, provider).status == "passed"
 
 
 def test_unplaced_facts_of_previous_reports_are_warnings() -> None:

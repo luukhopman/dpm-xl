@@ -302,10 +302,13 @@ is still read, by the EBA's datapoint convention. `--taxonomy-package`
 resolves it and adds the filing rules that need the taxonomy.
 
 The report must be of the module's `entry_point`; another is an input
-error (status 3). Facts in no table of the module, or whose value does not
-read as their cell's data type, are listed after the filing rules as
-`unplacedFact` and `invalidValue` findings of severity `error` (`warning`
-for a `--previous` report), with up to five examples:
+error (status 3). Facts in no table of the module, whose value does not
+read as their cell's data type, or that repeat an earlier fact's cell and
+open keys written otherwise (such as `007` and `7`), are listed after the
+filing rules as `unplacedFact`, `invalidValue` and `duplicateFact`
+findings of severity `error` (`warning` for a `--previous` report), with
+up to five examples. A `--previous` report of another taxonomy version of
+the module is an `otherEntryPoint` warning:
 
 ```text
 [error] unplacedFact: 1 fact of the report is in no table of module COREP_LR, or lacks an open key of its table, so no rule reads it.

@@ -107,13 +107,13 @@ modules of release 4.3: 57
 ## 4. Export a module
 
 ```bash
-dpm-xl export-module dpm-4.4.sqlite COREP_OF --release 4.3 -o corep_of.json
+dpm-xl export-module dpm-4.4.sqlite COREP_OF --release 4.3.0.1 -o corep_of.json
 ```
 
 ```text
 note: COREP_OF: left out 32 rules whose scope spans several modules: v0655_m, v0656_m, …, v6259_m
 note: COREP_OF: rule v7551_m: corrected 'trueendif' to 'true endif' (no space before endif)
-wrote corep_of.json: module COREP_OF, release 4.3: 81 tables, 21339 cells, 1418 rules
+wrote corep_of.json: module COREP_OF, release 4.3.0.1: 81 tables, 21339 cells, 1418 rules
 ```
 
 The notes name what the export corrected or left out of the EBA's data;
@@ -169,7 +169,7 @@ dpm-xl check-report corep_of.json report.zip
 ```
 
 ```text
-report: report.zip (xbrl-csv); module COREP_OF, release 4.3
+report: report.zip (xbrl-csv); module COREP_OF, release 4.3.0.1
 warning: reports/report.json: 1 extended metadata document could not be resolved offline (http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_of.json); tables without resolved metadata use the EBA datapoint/factValue convention
 filing rules broken: 0 errors, 1 warning
   - [warning] file-naming The file name does not follow ReportSubject_Country_FrameworkCodeModuleVersion_Module_ReferenceDate_CreationTimestamp, the structure for reports sent to the EBA.
@@ -207,10 +207,9 @@ mostly lists both, the binding that starts later first.
 The EBA deactivates rules in the database itself, in releases such as
 4.3.0.1, from a date: a rule is inactive in the releases dated on or after
 it, and still active in earlier ones. Export from the newest database to
-get the current state. The June 2026 database of 4.3 has 27
-COREP_OF rules active that the September deactivation release switched
-off; exported from the 4.4 database, COREP_OF 4.3 has 1,205 active rules
-and 213 inactive.
+get the current state, and choose the latest deactivation release: from
+the 4.4 database, COREP_OF has 1,236 active rules and 182 inactive in
+release 4.3, and 1,205 active and 213 inactive in release 4.3.0.1.
 
 ## What the export writes
 

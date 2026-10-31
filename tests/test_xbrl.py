@@ -864,6 +864,26 @@ def test_a_previous_report_of_another_taxonomy_is_a_warning() -> None:
     assert evaluate_rule(GROWTH, provider).status == "passed"
 
 
+def test_a_report_without_entry_point_compares_previous_ones_to_the_module() -> None:
+    import dataclasses
+
+    point = "http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/finrep/{}/mod/finrep9.json"
+    module = dataclasses.replace(MODULE, entry_point=point.format("4.2"))
+    current = report([fact("dpm", "1000000")])
+    earlier = dataclasses.replace(SEPTEMBER, entry_point=point.format("4.1"))
+    provider = ReportProvider(module, current, previous=[earlier])
+    (finding,) = provider.findings
+    assert (finding.code, finding.severity) == ("otherEntryPoint", "warning")
+    assert finding.message == (
+        f"The previous report for 2026-09-30 is of entry point {point.format('4.1')}, "
+        f"not {point.format('4.2')}; its facts are placed in this module's tables."
+    )
+    assert evaluate_rule(GROWTH, provider).status == "passed"
+    other = dataclasses.replace(SEPTEMBER, entry_point=point.format("4.1")[:-5] + "x")
+    with pytest.raises(ValueError, match="2026-09-30 is of module finrep9x, not fin"):
+        ReportProvider(module, current, previous=[other])
+
+
 def test_unplaced_facts_of_previous_reports_are_warnings() -> None:
     earlier = dated(date(2026, 9, 30), [fact("dpm", "1"), fact("dp404", "1")])
     provider = ReportProvider(MODULE, report([fact("dpm", "1")]), previous=[earlier])

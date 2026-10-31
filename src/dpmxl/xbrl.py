@@ -276,6 +276,8 @@ class ReportProvider:
 
     def _link(self, previous: Sequence[Report], packages: _Packages) -> None:
         current = self.report.reference_date
+        # A report without an entry point is of the module's, if it has one.
+        entry_point = self.report.entry_point or self.module.entry_point
         if current is None:
             raise ValueError("the report has no reference date to shift from")
         found: dict[date, ReportProvider] = {}
@@ -295,15 +297,13 @@ class ReportProvider:
                 )
             other = (
                 report.entry_point
-                and self.report.entry_point
-                and _entry(report.entry_point) != _entry(self.report.entry_point)
+                and entry_point
+                and _entry(report.entry_point) != _entry(entry_point)
             )
-            if other and _module_code(report.entry_point) != _module_code(
-                self.report.entry_point
-            ):
+            if other and _module_code(report.entry_point) != _module_code(entry_point):
                 raise ValueError(
                     f"{name} is of module {_module_code(report.entry_point)}, "
-                    f"not {_module_code(self.report.entry_point)}"
+                    f"not {_module_code(entry_point)}"
                 )
             # Placed in this module's tables, whatever its taxonomy version.
             module = replace(self.module, entry_point=None) if other else self.module
@@ -315,7 +315,7 @@ class ReportProvider:
                         code="otherEntryPoint",
                         severity="warning",
                         message=f"{name[0].upper()}{name[1:]} is of entry point "
-                        f"{report.entry_point}, not {self.report.entry_point}; its "
+                        f"{report.entry_point}, not {entry_point}; its "
                         "facts are placed in this module's tables.",
                     ),
                 )

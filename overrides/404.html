@@ -1,0 +1,16 @@
+{#-
+  The page for a missing address. The same file in dpm-xl, dpm-xbrl and
+  dpm-synth; tests/test_toolkit.py pins its hash.
+-#}
+{% extends "main.html" %}
+{% block extrahead %}
+  <meta name="robots" content="noindex">
+{% endblock %}
+{% block content %}
+  <h1>Page not found</h1>
+  <p>
+    There is no page at this address; it may have moved. Go to the
+    <a href="{{ config.site_url }}">{{ config.site_name }} home page</a>
+    or search the documentation.
+  </p>
+{% endblock %}

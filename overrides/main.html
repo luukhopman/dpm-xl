@@ -1,0 +1,42 @@
+{#-
+  Search and social metadata for every page. The same file in dpm-xl,
+  dpm-xbrl and dpm-synth; tests/test_toolkit.py pins its hash.
+-#}
+{% extends "base.html" %}
+{% block htmltitle %}
+  {% if page.is_homepage or page.url == "" %}
+    <title>{{ config.site_name }}: {{ config.site_description }}</title>
+  {% else %}
+    {{ super() }}
+  {% endif %}
+{% endblock %}
+{% block extrahead %}
+  {% if page.meta and page.meta.description %}
+    {% set description = page.meta.description %}
+  {% else %}
+    {% set description = config.site_description %}
+  {% endif %}
+  {% if page.is_homepage or page.url == "" %}
+    {% set title = config.site_name ~ ": " ~ config.site_description %}
+  {% else %}
+    {% set title = (page.title | striptags) ~ " - " ~ config.site_name %}
+  {% endif %}
+  {% set image = config.site_url ~ "assets/social-preview.png" %}
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ config.site_name }}">
+  <meta property="og:title" content="{{ title }}">
+  <meta property="og:description" content="{{ description }}">
+  {% if page.canonical_url %}
+    <meta property="og:url" content="{{ page.canonical_url }}">
+  {% endif %}
+  <meta property="og:image" content="{{ image }}">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="{{ config.site_name }} logo">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ title }}">
+  <meta name="twitter:description" content="{{ description }}">
+  <meta name="twitter:image" content="{{ image }}">
+  <meta name="twitter:image:alt" content="{{ config.site_name }} logo">
+{% endblock %}

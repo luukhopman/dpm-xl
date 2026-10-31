@@ -10,6 +10,9 @@ https://llmstxt.org:
   and docstrings;
 * ``llms.txt``: an index of the pages with one-line descriptions;
 * ``llms-full.txt``: every page's Markdown copy, concatenated in nav order.
+
+Last, ``seo.finish`` adds lastmod dates to ``sitemap.xml``, writes
+``robots.txt`` and adds a JSON-LD block to the home page.
 """
 
 from __future__ import annotations
@@ -292,6 +295,11 @@ def main() -> int:
     (SITE / "llms.txt").write_text("\n".join(index), encoding="utf-8")
     (SITE / "llms-full.txt").write_text("\n".join(full), encoding="utf-8")
     print(f"llms.txt, llms-full.txt and {len(full)} Markdown pages written to site/")
+    import seo  # next to this script, so on sys.path when it runs
+
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    seo.finish(ROOT, SITE, config, pyproject["project"])
+    print("sitemap.xml dates, robots.txt and the home page's JSON-LD written")
     return 0
 
 

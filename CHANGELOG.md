@@ -138,6 +138,8 @@ All notable changes to this project are documented here. The project follows
 - Unreadable input is reported as `error: PATH: reason`.
 - The end-to-end guide and the toolkit tour use `ReportProvider` instead of
   a hand-written provider.
+- The documentation site has sitemap dates, social preview tags and a 404
+  page that links home.
 
 ### Fixed
 

@@ -4,7 +4,7 @@
 
 [project]
 site_name = "dpm-xl"
-site_description = "Parser and evaluator for the EBA DPM-XL validation-rule language"
+site_description = "Parse and evaluate DPM-XL validation rules of the EBA Data Point Model (DPM 2.0) in Python"
 site_url = "https://luukhopman.github.io/dpm-xl/"
 site_author = "Luuk Hopman"
 repo_url = "https://github.com/luukhopman/dpm-xl"
@@ -97,6 +97,7 @@ nav = [
 ]
 
 [project.theme]
+custom_dir = "overrides"
 language = "en"
 logo = "assets/logo-header.svg"
 favicon = "assets/favicon.svg"

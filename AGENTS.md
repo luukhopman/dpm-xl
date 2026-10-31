@@ -16,7 +16,7 @@ affiliated with or endorsed by the European Banking Authority.
 | `src/dpmxl/` | The package. `parser.py` (tokenizer, recursive-descent parser), `grammar.py` (vocabulary, TextMate grammar), `ast.py` (frozen node classes), `values.py` (`Number` with interval tolerance), `recordset.py` (keyed records, joins), `evaluator.py` (reference evaluator), `explain.py`, `references.py` (static analysis), `provider.py` (`DataProvider`, `MemoryProvider`), `rules.py` (rule files), `module.py` (module files), `dpm.py` (module files from an EBA DPM 2.0 database), `xbrl.py` (report bridge, optional), `columnar.py` (polars evaluator, optional), `cli.py`. |
 | `tests/` | pytest suite. `test_columnar.py` checks both evaluators agree; `test_grammar_coverage.py` covers every grammar alternative; `test_docs.py` runs every docs example and docstring doctest and checks that the language reference covers `dpmxl.grammar`; `data/eba_expressions.txt` samples EBA rules and `data/eba_corpus.json.gz` holds all 14,174 EBA expressions of DPM 3.4–4.4 (source in `data/eba_corpus.md`), which `test_corpus.py` parses. |
 | `docs/` | Documentation site (Zensical + mkdocstrings), configured in `zensical.toml`. |
-| `scripts/build_docs.py` | Strict site build plus `llms.txt`, `llms-full.txt` and Markdown page copies. |
+| `scripts/build_docs.py` | Strict site build plus `llms.txt`, `llms-full.txt` and Markdown page copies; `scripts/seo.py` then adds sitemap dates, `robots.txt` and the home page's JSON-LD. |
 | `examples/` | Runnable examples and data used by the docs and tests; `language_report.py` is the report the language reference's examples run against. `dpm_demo.py` builds `dpm-demo.sqlite`, a small made-up DPM 2.0 database. |
 | `benchmarks/` | Comparison scripts; not run by the tests. |
 | `editors/dpm-xl.tmLanguage.json` | Generated from `dpmxl.grammar`. |
@@ -80,7 +80,11 @@ uv run python -c "import json; from dpmxl.grammar import textmate_grammar; print
   from DPM-XL stay in `docs/reference/language.md#where-dpm-xl-differs`.
 - The toolkit cards, the toolkit page, the glossary and
   `docs/stylesheets/toolkit.css` are the same in dpm-xl, dpm-xbrl and
-  dpm-synth; `tests/test_toolkit.py` pins their hashes.
+  dpm-synth; `tests/test_toolkit.py` pins their hashes. So are the
+  search and social metadata: `overrides/` (Open Graph and Twitter tags,
+  home page title, 404 page), `scripts/seo.py` (sitemap dates,
+  `robots.txt`, JSON-LD) and `tests/test_site.py`, which also checks that
+  every docs page has its own `description`.
 - `evaluate_rule` never raises for bad rules or data; it returns a status.
   Keep it that way.
 - Statuses, record keys, field names and the CLI JSON layout

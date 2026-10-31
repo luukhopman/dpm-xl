@@ -74,15 +74,17 @@ dpm-synth generate corep_of.json -o report.zip     # or use your own report
 dpm-xl check-report corep_of.json report.zip       # filing rules and validation rules
 ```
 
-`dpm-4.4.sqlite` is the EBA's DPM 2.0 database as SQLite and
-`corep_of.json` a module file, which dpm-xl and dpm-synth both read; see
+`dpm-4.4.sqlite` is the EBA's DPM 2.0 database as SQLite (the ZIP the EBA
+publishes works too, with mdbtools) and `corep_of.json` a module file,
+which dpm-xl and dpm-synth both read; see
 [Start from an EBA DPM release](https://luukhopman.github.io/dpm-xl/guides/from-a-dpm-release/).
 
 ## Features
 
 - Parses every construct of the DPM-XL grammar and all 14,174 distinct EBA
   validation rule and precondition expressions of DPM releases 3.4–4.4
-  except the two with typos in the EBA source, about 0.1 ms each; a
+  except the two with typos in the EBA source, about 0.1 ms each
+  (measured with 1.0.0); a
   [test](https://github.com/luukhopman/dpm-xl/blob/main/tests/test_corpus.py)
   parses every one.
 - Evaluates them with EBA's interval arithmetic, null logic and key joins, and

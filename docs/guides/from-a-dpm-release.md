@@ -139,10 +139,13 @@ Without `-o`, the module file is written to standard output.
 
 ## 5. Check the module file
 
-`dpm-xl check` checks every active rule against the module's tables: that
-it parses, that its functions exist and that the cells it selects do. It
-exits with status 1 when a rule has an error, and with `--strict` also on
-a warning:
+`dpm-xl check` checks every active rule against the module, without data:
+that it parses and its functions exist, that the tables, rows, columns and
+sheets it selects exist, that the keys in its `where` clauses are keys of
+those tables, and that operands have the right data types, such as no
+arithmetic on a text cell. It does not check items against a key's or
+cell's allowed `items`. It exits with status 1 when a rule has an error,
+and with `--strict` also on a warning:
 
 ```bash
 dpm-xl check corep_of.json

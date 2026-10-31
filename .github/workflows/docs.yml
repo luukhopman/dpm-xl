@@ -23,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # Full history, so the sitemap gives each page its last change date.
+          fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen --all-extras --group docs

@@ -506,7 +506,10 @@ class TableLayout:
 
     When a table has been split into several, as when ``C_02.00`` became
     ``C_02.00.a`` and ``C_02.00.b``, rules may still select the original,
-    abstract code; describe it with the union of its parts' coordinates.
+    abstract code. Give each part the abstract code as its ``template``: a
+    selected code that is no table's code but the ``template`` of some
+    reads the cells of those tables together (see
+    [`MemoryProvider`][dpmxl.provider.MemoryProvider]).
 
     Attributes:
         code: The table code, such as ``C_01.00``.
@@ -603,6 +606,12 @@ class MemoryProvider:
     and parameter codes match exactly, else ignoring case when only one code
     does (DPM-XL 2.4.1).
 
+    A selected code that is no table's code but the ``template`` of one or
+    more tables, such as an abstract table ``C_02.00`` with the parts
+    ``C_02.00.a`` and ``C_02.00.b``, selects the cells of those tables
+    together: each point keeps its own table and the keys its table has,
+    and ``open_keys`` lists the keys of every part.
+
     A ``MemoryProvider`` is safe to read from several threads at once.
 
     Examples:
@@ -675,9 +684,12 @@ class MemoryProvider:
         Raises:
             LookupError: If the table is unknown.
         """
-        layout = _lookup(self.tables, query.table)
-        if layout is None:
+        layouts = table_parts(self.tables, query.table)
+        if not layouts:
             raise LookupError(f"unknown table {query.table}")
+        return [point for layout in layouts for point in self._select(layout, query)]
+
+    def _select(self, layout: TableLayout, query: CellQuery) -> list[DataPoint]:
         positions = [
             position
             for position in layout.coordinates()
@@ -710,8 +722,9 @@ class MemoryProvider:
         Returns:
             tuple[str, ...]: Key names; empty for closed or unknown tables.
         """
-        layout = _lookup(self.tables, table)
-        return layout.open_keys if layout is not None else ()
+        return _merged_keys(
+            layout.open_keys for layout in table_parts(self.tables, table)
+        )
 
     def table_reported(self, table: str) -> bool | None:
         """Return whether a table or its template was reported.
@@ -795,6 +808,101 @@ class MemoryProvider:
             str | None: The expression, or ``None`` for an unknown operation.
         """
         return _lookup(self.operations, code)
+
+
+def table_parts(
+    tables: Mapping[str, TableLayout], code: str
+) -> tuple[TableLayout, ...]:
+    """Return the tables a selected table code reads.
+
+    It is the table of that code (matched exactly, else ignoring case when
+    only one table does); for a code that is no table's code, the tables
+    whose ``template`` it is, ignoring case, such as ``C_02.00.a`` and
+    ``C_02.00.b`` for an abstract table ``C_02.00``.
+
+    Args:
+        tables: Layouts by table code.
+        code: The selected code.
+
+    Returns:
+        tuple[TableLayout, ...]: The tables, in the order of ``tables``;
+        empty for an unknown code.
+
+    Examples:
+        >>> a = TableLayout("C_02.00.a", rows=("0010",), template="C_02.00")
+        >>> b = TableLayout("C_02.00.b", rows=("0035",), template="C_02.00")
+        >>> tables = {layout.code: layout for layout in (a, b)}
+        >>> [layout.code for layout in table_parts(tables, "C_02.00")]
+        ['C_02.00.a', 'C_02.00.b']
+        >>> [layout.code for layout in table_parts(tables, "c_02.00.b")]
+        ['C_02.00.b']
+    """
+    found = _lookup(tables, code)
+    if found is not None:
+        return (found,)
+    folded = code.casefold()
+    if any(key.casefold() == folded for key in tables):
+        return ()  # several tables match ignoring case
+    return tuple(
+        layout
+        for layout in tables.values()
+        if layout.template is not None and layout.template.casefold() == folded
+    )
+
+
+def combined_layout(code: str, parts: Sequence[TableLayout]) -> TableLayout:
+    """Return one layout for the cells of several tables, under ``code``.
+
+    Rows, columns, sheets, open keys and data types are those of every part,
+    in order; an axis is open when it is open in every part. This is the
+    layout [`diagnose`][dpmxl.diagnostics.diagnose] checks a selection of
+    an abstract table against.
+
+    Args:
+        code: The code the tables are selected by, such as ``C_02.00``.
+        parts: The tables, such as [`table_parts`][dpmxl.provider.table_parts]
+            returns.
+
+    Returns:
+        TableLayout: The combined layout; a single part's own layout.
+
+    Examples:
+        >>> a = TableLayout("C_02.00.a", rows=("0010",), columns=("0010",))
+        >>> b = TableLayout("C_02.00.b", rows=("0035",), columns=("0010",))
+        >>> layout = combined_layout("C_02.00", [a, b])
+        >>> layout.rows, layout.columns
+        (('0010', '0035'), ('0010',))
+    """
+    if len(parts) == 1:
+        return parts[0]
+    axes: dict[str, list[str]] = {axis: [] for axis in _AXES}
+    for part in parts:
+        for axis in _AXES:
+            codes = axes[axis]
+            codes.extend(found for found in getattr(part, axis) if found not in codes)
+    data_types: dict[tuple[str | None, str | None, str | None], str] = {}
+    for part in parts:
+        data_types.update(part.data_types)
+    return TableLayout(
+        code=code,
+        rows=tuple(axes["rows"]),
+        columns=tuple(axes["columns"]),
+        sheets=tuple(axes["sheets"]),
+        open_keys=_merged_keys(part.open_keys for part in parts),
+        open_axes=tuple(
+            axis
+            for axis in _AXES
+            if not axes[axis] and all(axis in part.open_axes for part in parts)
+        ),
+        data_types=data_types,
+    )
+
+
+def _merged_keys(keys: Iterable[Sequence[str]]) -> tuple[str, ...]:
+    merged: list[str] = []
+    for names in keys:
+        merged.extend(name for name in names if name not in merged)
+    return tuple(merged)
 
 
 def load_memory_provider(document: dict[str, Any]) -> MemoryProvider:
@@ -943,8 +1051,10 @@ __all__ = [
     "VariableSource",
     "axis_matcher",
     "axis_matches",
+    "combined_layout",
     "is_template_code",
     "load_memory_provider",
     "normalize_code",
     "read_variable",
+    "table_parts",
 ]

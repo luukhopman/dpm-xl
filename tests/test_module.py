@@ -2,6 +2,7 @@ import copy
 import json
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -275,3 +276,125 @@ def test_an_invalid_module_is_invalid_input(tmp_path, capsys) -> None:
     path.write_text(json.dumps(_broken(lambda d: d.pop("tables"))), encoding="utf-8")
     assert main(["check", str(path)]) == 3
     assert capsys.readouterr().err == f"error: {path}: tables: required\n"
+
+
+SPLIT: dict[str, Any] = {
+    "format": "dpm-module/1",
+    "release": "4.0",
+    "module": "SPLIT",
+    "tables": [
+        {
+            "code": "C_02.00.a",
+            "filing_indicator": "C_02.00",
+            "cells": [
+                {
+                    "id": "a1",
+                    "row": "0010",
+                    "column": "0010",
+                    "datapoint": "a1",
+                    "data_type": "m",
+                },
+                {
+                    "id": "a2",
+                    "row": "0020",
+                    "column": "0010",
+                    "datapoint": "a2",
+                    "data_type": "m",
+                },
+            ],
+        },
+        {
+            "code": "C_02.00.b",
+            "filing_indicator": "C_02.00",
+            "open_keys": [{"code": "qKEY"}],
+            "cells": [
+                {
+                    "id": "b1",
+                    "row": "0035",
+                    "column": "0010",
+                    "sheet": "*",
+                    "datapoint": "b1",
+                    "data_type": "m",
+                },
+            ],
+        },
+        {
+            "code": "C_03.00",
+            "cells": [
+                {"id": "c1", "row": "0010", "column": "0010", "datapoint": "c1"},
+            ],
+        },
+    ],
+    "rules": [
+        {"code": "v1", "expression": "with {tC_02.00, c0010}: {r0010} >= {r0020}"},
+    ],
+}
+
+
+def test_a_filing_indicator_that_is_no_table_stands_for_its_tables() -> None:
+    module = load_module(SPLIT)
+    assert module.abstract_tables() == {"C_02.00": ("C_02.00.a", "C_02.00.b")}
+    assert module.parts("c_02.00") == ("C_02.00.a", "C_02.00.b")
+    assert module.parts("C_02.00.a") == ("C_02.00.a",)
+    assert module.parts("C_03.00") == ("C_03.00",)
+    assert module.parts("C_04.00") == ()
+    layout = module.layout("C_02.00")
+    assert layout is not None
+    assert (layout.code, layout.rows, layout.columns) == (
+        "C_02.00",
+        ("0010", "0020", "0035"),
+        ("0010",),
+    )
+    assert layout.open_keys == ("qKEY",)
+    assert layout.data_types["0035", "0010", None] == "number"
+    part = module.table("C_02.00.b")
+    assert part is not None
+    assert module.layout("C_02.00.b") == part.layout()
+    assert module.layout("C_04.00") is None
+
+
+def test_a_table_code_is_not_also_a_group_of_tables() -> None:
+    document = copy.deepcopy(SPLIT)
+    document["tables"][2]["filing_indicator"] = "C_02.00.a"
+    module = load_module(document)
+    assert module.parts("C_02.00.a") == ("C_02.00.a",)
+    assert module.abstract_tables() == {"C_02.00": ("C_02.00.a", "C_02.00.b")}
+
+
+def test_check_reads_a_group_of_tables_as_one(tmp_path, capsys) -> None:
+    document = copy.deepcopy(SPLIT)
+    document["rules"].append(
+        {"code": "v2", "expression": "{tC_02.00, r0040, c0010} > 0"}
+    )
+    path = tmp_path / "module.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    assert main(["check", str(path)]) == 1
+    captured = capsys.readouterr()
+    assert "v1:" not in captured.err
+    assert "row 0040 is not in table C_02.00" in captured.err
+
+
+def test_providers_select_the_tables_of_a_filing_indicator_together() -> None:
+    from dpmxl import CellQuery, MemoryProvider, Number, evaluate_rule
+
+    module = load_module(SPLIT)
+    provider = MemoryProvider(
+        module.layouts(),
+        {
+            ("C_02.00.a", "0010", "0010", None, ()): Number.of(5, 0),
+            ("C_02.00.a", "0020", "0010", None, ()): Number.of(3, 0),
+            ("C_02.00.b", "0035", "0010", None, (("qKEY", "k"),)): Number.of(1, 0),
+        },
+    )
+    points = provider.select(CellQuery("C_02.00", columns=None))
+    assert [(p.table, p.row, dict(p.keys)) for p in points] == [
+        ("C_02.00.a", "0010", {}),
+        ("C_02.00.a", "0020", {}),
+        ("C_02.00.b", "0035", {"qKEY": "k"}),
+    ]
+    assert provider.open_keys("C_02.00") == ("qKEY",)
+    assert evaluate_rule(module.rules[0].expression, provider).status == "passed"
+    result = evaluate_rule("sum({tC_02.00, c0010}) = 9", provider)
+    assert result.status == "passed"
+    with pytest.raises(LookupError, match=r"unknown table C_04\.00"):
+        provider.select(CellQuery("C_04.00"))

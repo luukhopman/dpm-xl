@@ -653,6 +653,82 @@ def parts(a_keys: tuple[str, ...], b_keys: tuple[str, ...]) -> MemoryProvider:
     return MemoryProvider(tables, values)
 
 
+def split() -> MemoryProvider:
+    # C_02.00 stands for its parts C_02.00.a (closed) and C_02.00.b (open).
+    tables = [
+        TableLayout(
+            "C_02.00.a", rows=("0010", "0020"), columns=("0010",), template="C_02.00"
+        ),
+        TableLayout(
+            "C_02.00.b",
+            rows=("0035",),
+            columns=("0010",),
+            open_keys=("qKEY",),
+            template="C_02.00",
+        ),
+    ]
+    values: dict[CellKey, Value] = {
+        ("C_02.00.a", "0010", "0010", None, ()): Number.of(10, 0),
+        ("C_02.00.a", "0020", "0010", None, ()): Number.of(4, 0),
+        ("C_02.00.b", "0035", "0010", None, (("qKEY", "x"),)): Number.of(1, 0),
+        ("C_02.00.b", "0035", "0010", None, (("qKEY", "y"),)): Number.of(5, 0),
+    }
+    return MemoryProvider(tables, values)
+
+
+SPLIT = [
+    "with {tC_02.00, c0010, default: 0}: {r0010} >= {r0020}",
+    # The parts' keys differ (none, qKEY): no records match.
+    "with {tC_02.00, c0010}: {r0010} >= {r0035}",
+    "sum({tC_02.00, c0010}) = 20",
+    "count({tC_02.00}) = 4",
+    "{tC_02.00} > 4",
+    "{tC_02.00, r0035, c0010} >= {tC_02.00.a, r0020, c0010}",
+]
+
+
+def test_tables_of_a_filing_indicator_with_the_same_cell_are_an_error() -> None:
+    tables = [
+        TableLayout("A.a", rows=("0010",), columns=("0010",), template="A"),
+        TableLayout("A.b", rows=("0010", "0020"), columns=("0010",), template="A"),
+    ]
+    provider = MemoryProvider(
+        tables, {("A.a", "0010", "0010", None, ()): Number.of(1, 0)}
+    )
+    expression = "{tA, r0010, c0010} > 0"
+    result = evaluate_rule(expression, provider)
+    assert result.status == "error"
+    assert result.message == (
+        "tables A.a and A.b of A have the same cell {tA.b, r0010, c0010}"
+    )
+    with pytest.raises(ColumnarUnsupported):
+        evaluate_rule_columnar(expression, PointsFrameProvider(provider))
+    # Without the shared row the tables' cells are apart.
+    result = evaluate_rule('{tA, r0010-0020, c0010} [where r = "0020"] > 0', provider)
+    assert result.status == "error"
+    assert evaluate_rule("{tA, r0020, c0010} > 0", provider).status == "not_applicable"
+
+
+@pytest.mark.parametrize("expression", SPLIT)
+def test_a_filing_indicator_selects_its_tables_in_both_engines(
+    expression: str,
+) -> None:
+    provider = split()
+    reference = evaluate_rule(expression, provider)
+    assert reference.status in {"passed", "failed", "not_applicable"}
+    columnar = evaluate_rule_columnar(
+        expression, PointsFrameProvider(provider), max_failing_keys=10_000
+    )
+    assert columnar.status == reference.status
+    assert columnar.passed == reference.counts["passed"]
+    assert columnar.failed == reference.counts["failed"]
+    expected = sorted(
+        str(sorted(canonical_key(o.key).items())) for o in reference.failures
+    )
+    actual = sorted(str(sorted(key.items())) for key in columnar.failing_keys or [])
+    assert actual == expected
+
+
 DEFAULTED = [
     "with {default: null}: if not isnull({tB, c0010}) then "
     "not isnull({tA, c0010}) and not isnull({tB, c0010}) endif",

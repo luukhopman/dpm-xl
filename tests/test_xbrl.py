@@ -436,6 +436,59 @@ def test_a_file_named_by_its_filing_indicator_places_facts_by_datapoint() -> Non
     )
 
 
+def test_a_filing_indicator_that_is_no_table_selects_its_tables() -> None:
+    facts = [
+        fact("dpa", "1", template="f_19.00.a.dp"),
+        fact("dpd", "2", template="f_19.00.d.dp"),
+    ]
+    provider = ReportProvider(
+        FILED, report(facts, filing_indicators={"F_19.00.dp": True})
+    )
+    points = provider.select(CellQuery("f_19.00.dp"))
+    assert [(p.table, p.row, p.value) for p in points] == [
+        ("F_19.00.a.dp", "0010", Number.of(1, -3)),
+        ("F_19.00.a.dp", "0020", None),
+        ("F_19.00.d.dp", "0010", Number.of(2, -3)),
+        ("F_19.00.d.dp", "0020", None),
+    ]
+    assert provider.open_keys("F_19.00.dp") == ()
+    # Both tables have r0010, c0010: one record cannot hold both cells.
+    result = evaluate_rule("sum({tF_19.00.dp, r0010, c0010}) = 3", provider)
+    assert result.status == "error"
+    assert result.message == (
+        "tables F_19.00.a.dp and F_19.00.d.dp of F_19.00.dp have the same cell "
+        "{tF_19.00.d.dp, r0010, c0010}"
+    )
+    split = load_module(
+        {
+            "format": "dpm-module/1",
+            "release": "4.0",
+            "module": "SPLIT",
+            "tables": [
+                {
+                    "code": "C_02.00.a",
+                    "filing_indicator": "C_02.00",
+                    "cells": [cell("a", "dpa", "m"), cell("b", "dpb", "m", "0020")],
+                },
+                {
+                    "code": "C_02.00.b",
+                    "filing_indicator": "C_02.00",
+                    "cells": [cell("c", "dpc", "m", "0035")],
+                },
+            ],
+        }
+    )
+    facts = [
+        fact("dpa", "10", template="c_02.00.a"),
+        fact("dpb", "4", template="c_02.00.a"),
+        fact("dpc", "6", template="c_02.00.b"),
+    ]
+    provider = ReportProvider(split, report(facts, filing_indicators={"C_02.00": True}))
+    rule = "with {tC_02.00, c0010}: {r0010} = {r0020} + {r0035}"
+    result = evaluate_rule(rule, provider)
+    assert result.status == "passed", result.message
+
+
 def test_template_ids_of_the_eba_metadata_name_their_table() -> None:
     provider = ReportProvider(MODULE, report([fact("dp9", "1", template="C_09-00")]))
     assert values(provider, "C_09.00") == {"0010": Number.of(1, -3)}

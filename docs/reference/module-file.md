@@ -75,9 +75,29 @@ describes the tables of the [example data file](data-formats.md#data-files):
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `code` | string | yes | The table code, such as `"C_07.00.a"`, as rules name it. Unique, ignoring case. |
-| `filing_indicator` | string or null | no | The filing indicator the table is reported under, such as `"C_07.00"`. Default: the code. |
+| `filing_indicator` | string or null | no | The filing indicator the table is reported under, such as `"C_07.00"`. Default: the code. A filing indicator that is no table's code stands for its tables in rules ([groups of tables](#groups-of-tables)). |
 | `open_keys` | array | no | The keys of an open table: `code` (as rules name it, such as `"qCPI"`), `column` (its column in the xBRL-CSV file; default the code, unique in the table), `data_type` (of a typed key: `i` and `o` integers, `d` and `dt` dates, other codes text) and `items` (the item qnames of an enumerated key; `[]` allows none). |
 | `cells` | array | yes | At least one [cell](#cells). |
+
+### Groups of tables
+
+A selected table code that is not the `code` of a table, ignoring case,
+selects every table whose `filing_indicator` equals it, ignoring case. This
+is how a module file describes an abstract table of the DPM
+(`TableVersion.AbstractTableID`): in DPM 4.0, `C_02.00` is the abstract
+table of `C_02.00.a` and `C_02.00.b`, the export writes
+`"filing_indicator": "C_02.00"` on both, and a rule that selects
+`{tC_02.00, …}` reads the cells of both. The module file has no other field
+for it; a table's own code always wins.
+
+Rows, columns and sheets are selected as written, in each table that has
+them; each cell keeps its own table and the open keys its table has, so a
+cell of a table without a key has no value for it. Two cells of different
+tables with the same keys in the selection, such as `r0010` and `c0010` in
+both, cannot be told apart, and the rule is an error.
+DPM-XL v0.11 (operators §3.1.2) defines `table` as the code of a DPM Report
+table and says nothing about abstract tables; dpm-xl reads one as the
+tables it groups.
 
 ## Cells
 
@@ -154,7 +174,10 @@ v0005 error False 0
 ```
 
 An axis whose every cell is `"*"` is open, and a table whose filing
-indicator differs from its code answers `{v_…}` for that template. With the
+indicator differs from its code answers `{v_…}` for that template.
+[`Module.layout`][dpmxl.module.Module.layout] looks a code up the way
+rules select it: a table, or the tables of a filing indicator
+([`Module.abstract_tables`][dpmxl.module.Module.abstract_tables]). With the
 `xbrl` extra, [`ReportProvider`][dpmxl.xbrl.ReportProvider] evaluates the
 rules on a report read with dpm-xbrl.
 

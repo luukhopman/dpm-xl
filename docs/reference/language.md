@@ -536,7 +536,9 @@ holding a [`SelectionSpec`][dpmxl.ast.SelectionSpec].
 `tCode` names a table, such as `tC_01.00`. A `_` after `t` is cosmetic
 (`t_C_01.00` is `tC_01.00`), and backticks escape other codes:
 `` t`C 01.00` ``. An unknown table is the evaluation error `unknown table
-…`. The sources `g` and `o` select from a [table group](#table-group) or
+…`. A code that is no table's code but the template (filing indicator) of
+some, such as an abstract table, selects the cells of those tables together
+([groups of tables](module-file.md#groups-of-tables)). The sources `g` and `o` select from a [table group](#table-group) or
 an [operation](#operation).
 
 ### Rows, columns and sheets `r c s` {#axes}

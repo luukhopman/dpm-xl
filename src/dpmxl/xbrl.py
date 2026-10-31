@@ -385,7 +385,10 @@ class ReportProvider:
         """Return the selected cells, one per reported key combination.
 
         A closed table gives every selected cell, with ``value=None`` where
-        nothing was reported. A selector on an axis the cell lacks, or on an
+        nothing was reported. A code that is no table of the module but the
+        filing indicator of some, such as abstract table ``C_02.00`` of
+        ``C_02.00.a`` and ``C_02.00.b``, selects the cells of those tables
+        together. A selector on an axis the cell lacks, or on an
         open axis (``*``), is ignored, as by a
         [`MemoryProvider`][dpmxl.provider.MemoryProvider].
 
@@ -395,9 +398,18 @@ class ReportProvider:
         Raises:
             LookupError: If the module has no such table.
         """
-        table = self._tables.get(query.table.casefold())
-        if table is None:
+        tables = self._parts(query.table)
+        if not tables:
             raise LookupError(f"unknown table {query.table}")
+        return [point for table in tables for point in self._select(table, query)]
+
+    def _parts(self, code: str) -> Sequence[Table]:
+        """Return the table of a code, or the tables it is the filing indicator of."""
+        folded = code.casefold()
+        table = self._tables.get(folded)
+        return [table] if table is not None else self._filed.get(folded, [])
+
+    def _select(self, table: Table, query: CellQuery) -> list[DataPoint]:
         matchers = [axis_matcher(query.rows), axis_matcher(query.columns)]
         matchers.append(axis_matcher(query.sheets))
         selected = [
@@ -456,10 +468,13 @@ class ReportProvider:
         """Return the open key codes of a table.
 
         Returns:
-            tuple[str, ...]: Key codes; empty for a closed or unknown table.
+            tuple[str, ...]: Key codes, of every table a filing indicator
+            selects; empty for a closed or unknown table.
         """
-        found = self._tables.get(table.casefold())
-        return tuple(key.code for key in found.open_keys) if found else ()
+        codes: list[str] = []
+        for found in self._parts(table):
+            codes.extend(key.code for key in found.open_keys if key.code not in codes)
+        return tuple(codes)
 
     def is_template(self, code: str) -> bool:
         """Return whether a code is a table or template of the module or report.

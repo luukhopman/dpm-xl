@@ -128,6 +128,7 @@ from .ast import (
 from .evaluator import (
     AGGREGATES,
     _check_call,
+    _check_parts_apart,
     _check_rename,
     _context_condition,
     _contextual,
@@ -506,11 +507,24 @@ class PointsFrameProvider:
 
         Returns:
             pl.DataFrame: The selection.
+
+        Raises:
+            ColumnarUnsupported: When the tables a code selects together
+                have a cell with the same keys, which the reference
+                evaluator reports as an error.
         """
-        return frame_from_points(
-            list(self.provider.select(query)),
-            declared_open_keys(self.provider, query.table),
-        )
+        points = list(self.provider.select(query))
+        open_keys = declared_open_keys(self.provider, query.table)
+        if len({point.table for point in points}) > 1:
+            keys = list(open_keys)
+            for point in points:
+                keys.extend(name for name in point.keys if name not in keys)
+            try:
+                _check_parts_apart(query.table, points, keys)
+            except EvaluationError as error:
+                # The reference evaluator reports the rule as an error.
+                raise ColumnarUnsupported(str(error)) from None
+        return frame_from_points(points, open_keys)
 
     def is_template(self, code: str) -> bool:
         """Delegate to the wrapped provider's optional ``is_template``.

@@ -606,6 +606,8 @@ class Evaluator:
                     if name not in open_keys:
                         open_keys.append(name)
         keys = (*axis_keys, *open_keys)
+        if len({point.table for point in points}) > 1:
+            _check_parts_apart(spec.table, points, open_keys)
         if isinstance(spec.default, SetLiteral):
             raise EvaluationError("a set default applies only to set parameters")
         default = (
@@ -2396,6 +2398,40 @@ def parse_cached(expression: str) -> Node:
 @lru_cache(maxsize=4_096)
 def _parse_program_cached(source: str) -> Program:
     return parse_program(source)
+
+
+def _check_parts_apart(
+    code: str, points: Sequence[DataPoint], open_keys: Sequence[str]
+) -> None:
+    """Raise when two tables selected by one code give a record the same key.
+
+    A code that stands for several tables, such as an abstract table, reads
+    their cells together; a record cannot hold a cell of each. The keys are
+    the selection's: ``r``, ``c`` and ``s`` where more than one code is
+    present (DPM-XL 3.1.6), and the open keys.
+
+    Raises:
+        EvaluationError: Naming both tables and the second cell.
+    """
+    coordinates = []
+    for get in _COORDINATES.values():
+        codes = {get(point) for point in points}
+        codes.discard("*")
+        codes.discard(None)
+        if len(codes) > 1:
+            coordinates.append(get)
+    seen: dict[tuple[Hashable, ...], str] = {}
+    for point in points:
+        key = (
+            *[normalize_code(coordinate(point) or "") for coordinate in coordinates],
+            *[_key_value(point.keys.get(name)) for name in open_keys],
+        )
+        table = seen.setdefault(key, point.table)
+        if table != point.table:
+            raise EvaluationError(
+                f"tables {table} and {point.table} of {code} have the same cell "
+                f"{point.label()}"
+            )
 
 
 def _parse_cached(expression: str) -> Node:

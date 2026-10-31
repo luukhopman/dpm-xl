@@ -46,7 +46,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from .provider import TableLayout
+from .provider import TableLayout, combined_layout
 from .rules import Rule, RuleFileError, rules_from
 
 MODULE_FORMAT = "dpm-module/1"
@@ -264,6 +264,63 @@ class Module:
         return next(
             (table for table in self.tables if table.code.casefold() == folded), None
         )
+
+    def abstract_tables(self) -> dict[str, tuple[str, ...]]:
+        """Return the codes that stand for several tables, with their tables.
+
+        A filing indicator that is no table's code, ignoring case, stands
+        for the tables reported under it, as an abstract table of the DPM
+        (``TableVersion.AbstractTableID``) stands for its parts: a rule that
+        selects ``C_02.00`` reads the cells of ``C_02.00.a`` and
+        ``C_02.00.b``.
+
+        Returns:
+            dict[str, tuple[str, ...]]: Table codes by filing indicator, in
+            the order of ``tables``.
+        """
+        codes = {table.code.casefold() for table in self.tables}
+        found: dict[str, list[str]] = {}
+        for table in self.tables:
+            if table.filing_indicator.casefold() not in codes:
+                found.setdefault(table.filing_indicator, []).append(table.code)
+        return {code: tuple(tables) for code, tables in found.items()}
+
+    def parts(self, code: str) -> tuple[str, ...]:
+        """Return the codes of the tables a selection of ``code`` reads.
+
+        That is the table of the code, ignoring case, or else the tables
+        whose filing indicator it is; see
+        [`abstract_tables`][dpmxl.module.Module.abstract_tables].
+
+        Returns:
+            tuple[str, ...]: The table codes; empty for an unknown code.
+        """
+        table = self.table(code)
+        if table is not None:
+            return (table.code,)
+        folded = code.casefold()
+        return tuple(
+            table.code
+            for table in self.tables
+            if table.filing_indicator.casefold() == folded
+        )
+
+    def layout(self, code: str) -> TableLayout | None:
+        """Return the layout a selection of ``code`` is checked against.
+
+        It is the table's [`layout`][dpmxl.module.Table.layout], or for a
+        filing indicator that stands for several tables their
+        [`combined_layout`][dpmxl.provider.combined_layout]. It looks up
+        a table as [`diagnose`][dpmxl.diagnostics.diagnose] needs.
+
+        Returns:
+            TableLayout | None: The layout, or ``None`` for an unknown code.
+        """
+        parts = [self.table(found) for found in self.parts(code)]
+        layouts = [table.layout() for table in parts if table is not None]
+        if not layouts:
+            return None
+        return combined_layout(code if len(layouts) > 1 else layouts[0].code, layouts)
 
     def layouts(self) -> tuple[TableLayout, ...]:
         """Return the layouts of the tables, for dpm-xl.

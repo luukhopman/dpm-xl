@@ -25,7 +25,14 @@ from .evaluator import RuleResult
 from .explain import explain
 from .module import FORMATS, MODULE_FORMAT, Module, load_module
 from .parser import parse_program
-from .provider import DataProvider, _table_layout, load_memory_provider
+from .provider import (
+    DataProvider,
+    TableLayout,
+    _table_layout,
+    combined_layout,
+    load_memory_provider,
+    table_parts,
+)
 from .references import references
 from .rules import Rule, RuleRun, evaluate_rules, load_rules, rules_from
 
@@ -371,8 +378,11 @@ def _check(
         print(_problem(layouts, error), file=sys.stderr)
         return EXIT_INPUT
     if module is not None and layouts is None:
-        by_code = {layout.code: layout for layout in module.layouts()}
-        lookup, tables = by_code.get, tuple(by_code)
+        lookup = module.layout
+        tables = (
+            *(table.code for table in module.tables),
+            *module.abstract_tables(),
+        )
     total = 0
     unparsed = 0
     errors: list[dict[str, Any]] = []
@@ -470,7 +480,17 @@ def _layouts(
         parameters = tuple(document.get("parameters", {}))
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError(f"malformed data document ({error!r})") from error
-    return layouts.get, tuple(layouts), parameters
+
+    def lookup(code: str) -> TableLayout | None:
+        parts = table_parts(layouts, code)
+        return combined_layout(code, parts) if parts else None
+
+    templates = [
+        layout.template
+        for layout in layouts.values()
+        if layout.template is not None and layout.template not in layouts
+    ]
+    return lookup, (*layouts, *dict.fromkeys(templates)), parameters
 
 
 EXIT_OK = 0

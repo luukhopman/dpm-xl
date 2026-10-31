@@ -237,7 +237,7 @@ release 4.3, and 1,205 active and 213 inactive in release 4.3.0.1.
 | `reference_date` | The module version's first reference date. |
 | `decimals` | `m` 0, `p` 4, `i` 0, `r` 2, within EBA filing rule 2.18; change them if your reports use others. |
 | `filing_indicators` | The module's parameters, one per template. |
-| `tables` | The module version's concrete tables. An abstract table is not exported; its code is the `filing_indicator` of the tables it groups, such as `C_07.00` for `C_07.00.a`. |
+| `tables` | The module version's concrete tables. An abstract table is not exported; its code is the `filing_indicator` of the tables it groups, such as `C_07.00` for `C_07.00.a`, and a rule that selects it reads those tables ([groups of tables](../reference/module-file.md#groups-of-tables)). |
 | `open_keys` | The key headers of an open table: the property code, and the items of an enumerated property (restricted by the header's subcategory, if it has one) or the data type of a typed one. |
 | `cells` | Every cell that is neither excluded nor void: its row, column and sheet codes (`*` on an open axis), `dp` and the variable ID as the datapoint, the data type of the variable's property (its DPM code, such as `m` or `es`), and the items of an enumerated (`e`) cell: those of the subcategory that its row, column or sheet header sets for the property, else of the variable, else every active item of the property's category. |
 | `rules` | The rules whose scope is this module alone: expression, precondition, severity, `active: false` for a rule the EBA deactivated, and as `modules` every module with such a scope for the rule. |

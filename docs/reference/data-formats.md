@@ -65,7 +65,7 @@ Every field is optional.
 
 | Field | Type | Content |
 | --- | --- | --- |
-| `tables` | list | Table layouts: `code`; `rows`, `columns` and `sheets` (lists of codes); `open_keys` (key names of an open table); `template` (a template code whose filing indicator `{v_…}` this table answers); `open_axes` (which of `rows`, `columns` and `sheets` are open, identified by the open keys); `data_types` (cells' data types, each `row`, `column`, `sheet` and `type`: `number`, `integer`, `string`, `date`, `boolean` or `item`). The last two are optional and used only by [`dpm-xl check --layouts`](cli.md#dpm-xl-check). |
+| `tables` | list | Table layouts: `code`; `rows`, `columns` and `sheets` (lists of codes); `open_keys` (key names of an open table); `template` (a template code whose filing indicator `{v_…}` this table answers; a selection of a template code that is no table's code reads its tables together); `open_axes` (which of `rows`, `columns` and `sheets` are open, identified by the open keys); `data_types` (cells' data types, each `row`, `column`, `sheet` and `type`: `number`, `integer`, `string`, `date`, `boolean` or `item`). The last two are optional and used only by [`dpm-xl check --layouts`](cli.md#dpm-xl-check). |
 | `facts` | list | Reported values, below. |
 | `reported` | list | Table or template codes with a positive filing indicator. Defaults to every table with a fact. |
 | `parameters` | object | Report parameters by name, typed like fact values; a list is a set. |

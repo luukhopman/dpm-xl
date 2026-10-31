@@ -1,5 +1,5 @@
 ---
-description: Get a module file for a real EBA module, such as COREP_OF, from the EBA's DPM 2.0 database in a few commands - get the database as SQLite, list its modules, export one, check it and generate a test report.
+description: Get a module file for a real EBA module, such as COREP_OF, from the EBA's DPM 2.0 database in a few commands - get the database (the EBA's ZIP or SQLite), list its modules, export one, check it and generate a test report.
 icon: lucide/database
 ---
 
@@ -167,13 +167,14 @@ as it can, from the same module file:
 dpm-synth generate corep_of.json -o report.zip --seed 7
 ```
 
+On the module file of step 4 (release 4.3.0.1 from the 4.4 database),
 dpm-synth prints:
 
 ```text
-rules: 1418, passed: 1146, failed: 5, not applicable: 54, skipped: 213
-rounds: 14 (failing rules per round: 69, 32, 22, 14, 14, 14, 14, 14, 14, 14, 7, 11, 10, 10)
-still failing: e4891_n (warning), v4810_m (warning), v6050_m (warning), v6052_m (warning), v6290_m
-wrote report.zip (25486 facts)
+rules: 1418, passed: 1150, failed: 1, not applicable: 54, skipped: 213
+rounds: 14 (failing rules per round: 69, 33, 22, 11, 11, 11, 11, 11, 11, 11, 1, 2, 2, 2)
+still failing: v4810_m (warning)
+wrote report.zip (25483 facts)
 ```
 
 [Limits of the loop](https://luukhopman.github.io/dpm-synth/concepts/limits/)
@@ -193,15 +194,14 @@ report: report.zip (xbrl-csv); module COREP_OF, release 4.3.0.1
 warning: reports/report.json: 1 extended metadata document could not be resolved offline (http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_of.json); tables without resolved metadata use the EBA datapoint/factValue convention
 filing rules broken: 0 errors, 1 warning
   - [warning] file-naming The file name does not follow ReportSubject_Country_FrameworkCodeModuleVersion_Module_ReferenceDate_CreationTimestamp, the structure for reports sent to the EBA.
-e4891_n: failed (warning)
-…
-v6290_m: failed
-  records: 0 passed, 1 failed, 0 null
-  - scalar: 208,290,245 should equal 807,250,548 (37,194,687 + 76,800,000 + 609,992,861 + 4,377,000 + max(541,000, 78,886,000)): difference 598,960,303, at least 598,960,300 given the reported precision
-1418 rules: 213 skipped, 1146 passed, 5 failed, 54 not_applicable (1413 not listed; --all lists every rule)
+v4810_m: failed (warning)
+  records: 22 passed, 1 failed, 0 null
+  - c=0410: 246,627,000 should equal 251,695,000: difference 5,068,000, at least 5,067,998.5 given the reported precision
+1418 rules: 213 skipped, 1150 passed, 54 not_applicable, 1 failed (1417 not listed; --all lists every rule)
 ```
 
-The counts are dpm-synth's, and only the five failing rules are listed.
+The counts are dpm-synth's, and only the one failing rule, a warning, is
+listed, so the run exits 0.
 The first warning means the EBA taxonomy was not available offline; the
 report is still read, and
 [`--taxonomy-package`](../reference/cli.md#dpm-xl-check-report) resolves

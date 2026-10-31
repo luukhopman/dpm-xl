@@ -16,7 +16,7 @@ shown (the test suite executes them).
 
     ---
 
-    Get the EBA's database as SQLite, export a real module, such as
+    Get the EBA's database (its ZIP as published, or as SQLite), export a real module, such as
     COREP_OF, as a module file, generate a test report and check it.
 
 -   :lucide-file-check:{ .lg .middle } [**Check an XBRL report**](end-to-end.md)

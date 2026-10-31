@@ -431,7 +431,7 @@ note: OTHER: rule v7551_m: corrected 'trueendif' to 'true endif' (no space befor
  "rules": [
   {
    "code": "v7551_m",
-   "expression": "if {tT_02.00, c0010} > 0 then true else true endif",
+   "expression": "if {v_O_01.00} then true else true endif",
    "severity": "warning",
    "active": true,
    "modules": [

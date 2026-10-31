@@ -116,6 +116,8 @@ All notable changes to this project are documented here. The project follows
   modules, which cannot be exported.
 - A selection of a filing indicator that is no table's code, such as
   abstract table `C_02.00`, reads the cells of its tables together.
+- The export leaves out, with a note, a rule that selects a table the
+  module does not have.
 
 ### Changed
 

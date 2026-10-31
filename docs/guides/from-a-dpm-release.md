@@ -240,7 +240,7 @@ release 4.3, and 1,205 active and 213 inactive in release 4.3.0.1.
 | `tables` | The module version's concrete tables. An abstract table is not exported; its code is the `filing_indicator` of the tables it groups, such as `C_07.00` for `C_07.00.a`, and a rule that selects it reads those tables ([groups of tables](../reference/module-file.md#groups-of-tables)). |
 | `open_keys` | The key headers of an open table: the property code, and the items of an enumerated property (restricted by the header's subcategory, if it has one) or the data type of a typed one. |
 | `cells` | Every cell that is neither excluded nor void: its row, column and sheet codes (`*` on an open axis), `dp` and the variable ID as the datapoint, the data type of the variable's property (its DPM code, such as `m` or `es`), and the items of an enumerated (`e`) cell: those of the subcategory that its row, column or sheet header sets for the property, else of the variable, else every active item of the property's category. |
-| `rules` | The rules whose scope is this module alone: expression, precondition, severity, `active: false` for a rule the EBA deactivated, and as `modules` every module with such a scope for the rule. |
+| `rules` | The rules whose scope is this module alone: expression, precondition, severity, `active: false` for a rule the EBA deactivated, and as `modules` every module with such a scope for the rule. A rule that selects a table that is neither a table nor a filing indicator of the module is left out, with a note. |
 
 A monetary cell whose variable's context sets property `qAEA` to
 `qCA:qx2000` (the currency of denomination) has `unit: true`: it is
@@ -330,7 +330,7 @@ print([(rule.code, rule.active) for rule in module.rules])
 ['DEMO', 'DOCS', 'OTHER']
 2.0 ['T_01.00.a', 'T_02.00']
 {'code': 'qKEY', 'column': 'qKEY', 'items': ['eba_CA:x2', 'eba_CA:x1', 'eba_CA:x4']}
-[('v1', True), ('v6', True), ('v7551_m', True)]
+[('v1', True), ('v6', True), ('v7', True), ('v7551_m', True)]
 ```
 
 Write it with `json.dump(document, file)`. The notes go to the `dpmxl.dpm`

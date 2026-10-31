@@ -221,12 +221,14 @@ ROWS: dict[str, list[tuple]] = {
         (4, "v4"),
         (5, "p1"),
         (6, "v6"),
+        (7, "v7"),
+        (8, "v8"),
     ],
     "OperationVersion": [
         # OperationVID, OperationID, PreconditionOperationVID, Expression, S, E
         (801, 1, None, "{tT_01.00.a, r0010, c0010} > 0", 1, 1),
         (802, 1, 850, "{tT_01.00.a, r0010, c0010} >= 0", 2, None),
-        (803, 2, None, "if {tT_02.00, c0010} > 0 then true else trueendif", 1, None),
+        (803, 2, None, "if {v_O_01.00} then true else trueendif", 1, None),
         (
             804,
             3,
@@ -238,6 +240,15 @@ ROWS: dict[str, list[tuple]] = {
         (805, 4, None, "{tT_02.00, c0010} >= 0", 1, None),
         (806, 6, None, "{tT_01.00.a, r0020, c0010} in {[eba_CA:x1]}", 2, None),
         (850, 5, None, "{v_T_01.00}", 1, None),
+        (
+            807,
+            7,
+            None,
+            "{tT_01.00, r0020, c0010} = {tT_01.00.a, r0020, c0010}",
+            2,
+            None,
+        ),
+        (808, 8, None, "{tX_09.00, r0010, c0010} >= 0", 2, None),
     ],
     "OperationScope": [  # ID, OperationVID, IsActive, Severity, FromSubmissionDate
         (1, 801, 1, "error", "2025-03-31"),
@@ -247,6 +258,8 @@ ROWS: dict[str, list[tuple]] = {
         (5, 804, 1, "error", "2025-03-31"),
         (6, 805, 1, "error", "2025-03-31"),
         (7, 806, 0, "warning", "2026-04-15"),  # deactivated from release 2.0.1
+        (8, 807, 1, "error", "2026-03-31"),  # selects abstract table T_01.00
+        (9, 808, 1, "error", "2026-03-31"),  # selects a table DEMO lacks
     ],
     "OperationScopeComposition": [  # OperationScopeID, ModuleVID
         (1, 100),
@@ -257,6 +270,8 @@ ROWS: dict[str, list[tuple]] = {
         (5, 110),  # one scope for two modules: left out
         (6, 100),
         (7, 101),
+        (8, 101),
+        (9, 101),
     ],
 }
 

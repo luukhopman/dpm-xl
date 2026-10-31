@@ -201,7 +201,12 @@ def test_rules_carry_precondition_severity_activity_and_modules(
 ) -> None:
     with caplog.at_level(logging.WARNING, "dpmxl.dpm"):
         document = export_module(db, "DEMO")
-    assert [rule["code"] for rule in document["rules"]] == ["v1", "v6", "v7551_m"]
+    assert [rule["code"] for rule in document["rules"]] == [
+        "v1",
+        "v6",
+        "v7",
+        "v7551_m",
+    ]
     assert _rule(document, "v1") == {
         "code": "v1",
         "expression": "{tT_01.00.a, r0010, c0010} >= 0",
@@ -221,6 +226,13 @@ def test_rules_carry_precondition_severity_activity_and_modules(
     # v3's one scope spans DEMO and OTHER: no single report can satisfy it
     assert "DEMO: left out 1 rule whose scope spans several modules: v3" in (
         caplog.messages
+    )
+    # v7 selects abstract table T_01.00, the filing indicator of T_01.00.a;
+    # v8 a table that DEMO does not have
+    assert _rule(document, "v7")["expression"].startswith("{tT_01.00, r0020")
+    assert (
+        "DEMO: left out 1 rule that selects a table not in the module: v8 (X_09.00)"
+        in caplog.messages
     )
 
 
@@ -515,7 +527,7 @@ def test_cli_exports_a_module(database: Path, tmp_path: Path, capsys) -> None:
     assert captured.out == ""
     assert "note: DEMO: left out 1 rule whose scope spans" in captured.err
     assert captured.err.endswith(
-        f"wrote {target}: module DEMO, release 2.0.1: 2 tables, 8 cells, 3 rules\n"
+        f"wrote {target}: module DEMO, release 2.0.1: 2 tables, 8 cells, 4 rules\n"
     )
     assert load_module(target).module == "DEMO"
     assert main(["check", str(target)]) == 0

@@ -53,6 +53,8 @@ from pathlib import Path
 from typing import Any, Self
 
 from .module import FORMATS, MODULE_FORMAT
+from .parser import DpmXlSyntaxError, parse_program
+from .references import tables as selected_tables
 
 logger = logging.getLogger(__name__)
 
@@ -1060,7 +1062,10 @@ def export_module(
     first reference date, [`DEFAULT_DECIMALS`][dpmxl.dpm.DEFAULT_DECIMALS],
     and the rules whose scope is this module alone, with their precondition,
     severity and whether the EBA deactivated them. A rule whose scope spans
-    several modules is left out: one module's report cannot satisfy it.
+    several modules is left out: one module's report cannot satisfy it; so
+    is a rule that selects a code that is neither a table nor a filing
+    indicator (an abstract table's code) of the document. Each is noted
+    on the ``dpmxl.dpm`` logger.
 
     Args:
         db: The database, from [`open_release`][dpmxl.dpm.open_release].
@@ -1303,7 +1308,7 @@ class _Export:
             "decimals": dict(DEFAULT_DECIMALS),
             "filing_indicators": filing_indicators,
             "tables": tables,
-            "rules": self.rules(),
+            "rules": self.selectable(self.rules(), tables),
         }
         return document
 
@@ -1650,6 +1655,55 @@ class _Export:
                 )
             rules[code] = rule
         return [rules[code] for code in sorted(rules)]
+
+    def selectable(
+        self, rules: list[dict[str, Any]], tables: Sequence[Mapping[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Leave out the rules that select a table the module file lacks.
+
+        A rule may select a table of the module or the code of an abstract
+        table, which is the ``filing_indicator`` of its parts.
+
+        Returns:
+            list[dict[str, Any]]: The other rules.
+        """
+        known = {table["code"].casefold() for table in tables}
+        known.update(
+            table["filing_indicator"].casefold()
+            for table in tables
+            if "filing_indicator" in table
+        )
+        kept, left_out = [], []
+        for rule in rules:
+            missing: list[str] = []
+            for text in (rule.get("precondition"), rule["expression"]):
+                if text is None:
+                    continue
+                try:
+                    found = selected_tables(parse_program(text))
+                except DpmXlSyntaxError:
+                    continue
+                missing.extend(
+                    code
+                    for code in found
+                    if code.casefold() not in known and code not in missing
+                )
+            if missing:
+                left_out.append(f"{rule['code']} ({', '.join(missing)})")
+            else:
+                kept.append(rule)
+        if left_out:
+            logger.warning(
+                "%s: left out %s: %s",
+                self.code,
+                _count(
+                    len(left_out),
+                    "rule that selects a table not in the module",
+                    "rules that select tables not in the module",
+                ),
+                ", ".join(left_out),
+            )
+        return kept
 
     def active(self, scope: Sequence[Any]) -> bool:
         """Tell whether a rule's scope is active in the release.

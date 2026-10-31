@@ -42,10 +42,7 @@ uv run python -c "import json; from dpmxl.grammar import textmate_grammar; print
 - No new runtime dependencies; polars stays optional (`columnar` extra) and
   dpm-xbrl too (`xbrl` extra); their tests skip without them. Docs tools
   belong in the `docs` dependency group.
-- The `xbrl` extra needs dpm-xbrl 1.1, which is not on PyPI yet, so
-  `[tool.uv] override-dependencies` lets the lock take dpm-xbrl 1.0. Once
-  1.1 is published, remove the override and run `uv lock`. To work against
-  a local dpm-xbrl checkout, run
+- To work against a local dpm-xbrl checkout, run
   `uv pip install --no-config -e ../dpm-xbrl` and then `uv run --no-sync`.
 - The `docs` group takes dpm-synth from its GitHub `main` branch through
   `[tool.uv.sources]`, for the toolkit tour, because dpm-synth 1.0.0 is not

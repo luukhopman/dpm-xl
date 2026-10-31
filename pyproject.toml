@@ -75,7 +75,7 @@ docs = [
     "zensical>=0.0.72,<0.1",
     "mkdocstrings-python>=2.0.10,<3",
     "polars>=2.0,<3",
-    "dpm-xbrl>=1.0,<2",
+    "dpm-xbrl>=1.1,<2",
     "dpm-synth>=1.0,<2",
 ]
 dev = [
@@ -87,11 +87,6 @@ dev = [
 [[tool.uv.index]]
 url = "https://pypi.org/simple"
 default = true
-
-# dpm-xbrl 1.1, which the xbrl extra needs, is not on PyPI yet; until it is,
-# the lock takes the latest dpm-xbrl 1.x (see AGENTS.md).
-[tool.uv]
-override-dependencies = ["dpm-xbrl>=1.0,<2"]
 
 # dpm-synth 1.0.0 is not on PyPI yet; the docs group takes it from GitHub
 # until it is (see AGENTS.md).

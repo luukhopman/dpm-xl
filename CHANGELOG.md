@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The project follows
 [semantic versioning](https://semver.org).
 
-## 1.3.0 - 2026-10-30
+## 1.3.0 - 2026-10-31
 
 ### Breaking
 
@@ -203,7 +203,6 @@ All notable changes to this project are documented here. The project follows
 
 - Reading the EBA's Access database needs `mdb-export` of mdbtools; on
   Windows there is no ODBC route, so use WSL or a SQLite copy.
-- The `xbrl` extra needs dpm-xbrl 1.1, which is not on PyPI yet.
 - A selection of an abstract table is an error where two of its parts
   have a cell with the same keys; 16 of the 147 abstract tables of DPM 4.3
   have parts with the same rows, columns and sheets, such as `K_27.02`.

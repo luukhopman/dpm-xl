@@ -116,7 +116,9 @@ TABLES: Mapping[str, tuple[str, ...]] = {
         "Code",
         "StartReleaseID",
         "EndReleaseID",
+        "ContextID",
     ),
+    "ContextComposition": ("ContextID", "PropertyID", "ItemID"),
     "Property": ("PropertyID", "DataTypeID"),
     "DataType": ("DataTypeID", "Code", "Name"),
     "PropertyCategory": ("PropertyID", "CategoryID", "StartReleaseID", "EndReleaseID"),
@@ -686,6 +688,35 @@ class DpmRelease:
             return None
         row = self._bindings(release).get(properties, {}).get(prop)
         return row[2] if row else self._ended_binding(properties, prop, release)
+
+    def _unit_contexts(self) -> set[Any]:
+        """Return the contexts of values in their currency of denomination.
+
+        They set property ``qAEA`` to item ``qx2000`` of category ``qCA``,
+        found by these codes.
+
+        Returns:
+            set: The ``ContextID`` values.
+        """
+
+        def build() -> set[Any]:
+            codes = {row[0]: row[1] for row in self._rows("Category")}
+            bound = {
+                (codes.get(row[1]), row[2]): row[0]
+                for row in self._rows("ItemCategory")
+                if row[2]
+            }
+            prop = bound.get(("_PR", "qAEA"))
+            item = bound.get(("qCA", "qx2000"))
+            if prop is None or item is None:
+                return set()
+            return {
+                row[0]
+                for row in self._rows("ContextComposition")
+                if row[1] == prop and row[2] == item
+            }
+
+        return self._memo("unit contexts", build)
 
     def _data_type(self, prop: int | None) -> str | None:
         types = self._memo(
@@ -1311,6 +1342,12 @@ class _Export:
             cell: dict[str, Any] = {"id": identity, **place}
             cell["datapoint"] = f"dp{variable[1]}"
             cell["data_type"] = data_type
+            if (
+                data_type == "m"
+                and variable[7] is not None
+                and (variable[7] in db._unit_contexts())
+            ):
+                cell["unit"] = True
             if data_type == "e" and variable[2] is not None:
                 restriction = self.cell_restriction(row[1], variable[2], table_vid)
                 items = db._items(

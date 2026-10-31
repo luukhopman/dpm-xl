@@ -115,24 +115,33 @@ ROWS: dict[str, list[tuple]] = {
         (568, 68, 1006, 705, None, 1, None),
     ],
     "VariableVersion": [
-        # VariableVID, VariableID, PropertyID, SubCategoryVID, Code, Start, End
-        (501, 501, 1001, None, None, 1, None),
-        (502, 502, 1002, None, None, 1, None),
-        (504, 504, 1001, None, None, 1, None),
-        (505, 505, 1005, None, None, 1, None),
-        (506, 506, 1002, None, None, 1, None),
-        (507, 507, 1002, None, None, 1, None),
-        (508, 508, 1006, None, None, 1, None),
-        (510, 510, 1001, None, None, 1, None),
-        (511, 511, 1006, None, None, 1, None),
-        (520, 520, 1001, None, None, 1, None),
-        (600, 600, 1003, None, None, 1, None),
-        (601, 601, 1004, None, None, 1, None),
-        (900, 900, 1009, None, "T_01.00", 1, None),  # filing indicators
-        (901, 901, 1009, None, "T_02.00", 1, None),
-        (902, 902, 1009, None, "O_01.00", 1, None),
+        # VariableVID, VariableID, PropertyID, SubCategoryVID, Code, Start, End,
+        # ContextID
+        (501, 501, 1001, None, None, 1, None, 1),  # in the currency of denomination
+        (502, 502, 1002, None, None, 1, None, None),
+        (504, 504, 1001, None, None, 1, None, None),
+        (505, 505, 1005, None, None, 1, None, None),
+        (506, 506, 1002, None, None, 1, None, None),
+        (507, 507, 1002, None, None, 1, None, None),
+        (508, 508, 1006, None, None, 1, None, None),
+        (510, 510, 1001, None, None, 1, None, 2),  # qAEA qx2001: not
+        (511, 511, 1006, None, None, 1, None, None),
+        (520, 520, 1001, None, None, 1, None, None),
+        (600, 600, 1003, None, None, 1, None, None),
+        (601, 601, 1004, None, None, 1, None, None),
+        (900, 900, 1009, None, "T_01.00", 1, None, None),  # filing indicators
+        (901, 901, 1009, None, "T_02.00", 1, None, None),
+        (902, 902, 1009, None, "O_01.00", 1, None, None),
     ],
-    "Property": [(1001, M), (1002, EN), (1003, EN), (1004, S), (1005, ES), (1006, EN)],
+    "Property": [
+        (1001, M),
+        (1002, EN),
+        (1003, EN),
+        (1004, S),
+        (1005, ES),
+        (1006, EN),
+        (1007, EN),
+    ],
     "DataType": [
         (M, "m", "monetary"),
         (EN, "e", "enumeration"),
@@ -152,10 +161,12 @@ ROWS: dict[str, list[tuple]] = {
         (22, "CC", E, 1),
         (23, "CN", E, 0),
         (24, "CD", E, 1),
+        (25, "qCA", E, 1),
     ],
     "Item": [  # ItemID, IsActive; properties are items too
-        *[(item, 1) for item in (1001, 1002, 1003, 1004, 1005, 1006)],
+        *[(item, 1) for item in (1001, 1002, 1003, 1004, 1005, 1006, 1007)],
         *[(2001, 1), (2002, 1), (2003, 0), (2004, 1), (2010, 1), (2011, 1)],
+        *[(2020, 1), (2021, 1)],
     ],
     "ItemCategory": [  # ItemID, CategoryID, Code, Start, End
         (1001, PR, "pM", 1, None),
@@ -164,6 +175,7 @@ ROWS: dict[str, list[tuple]] = {
         (1004, PR, "qTXT", 1, None),
         (1005, PR, "pES", 1, None),
         (1006, PR, "pF", 1, None),
+        (1007, PR, "qAEA", 1, None),  # the currency of the value
         (2001, 20, "x1", 1, None),
         (2002, 20, "x2", 1, None),
         (2003, 20, "x3", 1, None),  # inactive item
@@ -171,7 +183,10 @@ ROWS: dict[str, list[tuple]] = {
         (2010, 22, "y1", 1, None),
         (2011, 22, "y2", 1, 2),  # moves from CC to CD in release 2.0
         (2011, 24, "z2", 2, None),
+        (2020, 25, "qx2000", 1, None),  # the currency of denomination
+        (2021, 25, "qx2001", 1, None),
     ],
+    "ContextComposition": [(1, 1007, 2020), (2, 1007, 2021)],  # Context, Prop, Item
     "SuperCategoryComposition": [(21, 22, 1, None), (21, 24, 1, None)],
     "SubCategory": [
         (70, 20),

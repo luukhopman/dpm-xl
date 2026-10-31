@@ -78,6 +78,8 @@ All notable changes to this project are documented here. The project follows
   qname first.
 - `export_module(..., taxonomy_packages=...)` and `dpm-xl export-module
   --taxonomy-package ZIP` take enumerated items from the EBA taxonomy.
+- The export writes `unit: true` on monetary cells reported in their
+  currency of denomination.
 
 ### Changed
 

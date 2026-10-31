@@ -225,8 +225,11 @@ and 213 inactive.
 | `cells` | Every cell that is neither excluded nor void: its row, column and sheet codes (`*` on an open axis), `dp` and the variable ID as the datapoint, the data type of the variable's property (its DPM code, such as `m` or `es`), and the items of an enumerated (`e`) cell: those of the subcategory that its row, column or sheet header sets for the property, else of the variable, else every active item of the property's category. |
 | `rules` | The rules whose scope is this module alone: expression, precondition, severity, `active: false` for a rule the EBA deactivated, and as `modules` every module with such a scope for the rule. |
 
-The cell `unit` field is not exported: the database does not say which
-monetary datapoints are reported in their currency of denomination.
+A monetary cell whose variable's context sets property `qAEA` to
+`qCA:qx2000` (the currency of denomination) has `unit: true`: it is
+reported in its own currency, in the table's `unit` column. In release 4.3
+these are 10,183 cells, and they match the datapoints whose unit is `$unit`
+in the EBA's 4.2 to 4.4 taxonomy packages, with none differing.
 
 ## EBA data the export corrects or leaves out
 

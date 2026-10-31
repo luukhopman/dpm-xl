@@ -120,6 +120,7 @@ def test_cells_leave_out_excluded_and_void_ones(db: DpmRelease, caplog) -> None:
         "sheet": None,
         "datapoint": "dp501",
         "data_type": "m",
+        "unit": True,
     }
     # es, text that may be empty, is written as it is, without items
     assert cells[2]["data_type"] == "es"
@@ -128,6 +129,16 @@ def test_cells_leave_out_excluded_and_void_ones(db: DpmRelease, caplog) -> None:
     # an explicitly empty subcategory allows no item; a missing one, any
     assert cells[3]["items"] == []
     assert load_module(export_module(db, "DEMO")).tables[0].cells[3].items == ()
+
+
+def test_monetary_cells_in_the_currency_of_denomination_have_a_unit(
+    db: DpmRelease,
+) -> None:
+    document = export_module(db, "DEMO")
+    # dp501's context has qAEA = qCA:qx2000; dp510's has qx2001
+    assert _table(document, "T_01.00.a")["cells"][0]["unit"] is True
+    assert "unit" not in _table(document, "T_02.00")["cells"][0]
+    assert load_module(document).tables[0].cells[0].unit
 
 
 def test_a_header_restricts_the_items_of_a_cell(db: DpmRelease) -> None:

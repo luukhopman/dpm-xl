@@ -146,7 +146,8 @@ class ReportProvider:
     a template reported when one of its tables has facts. Report
     parameters answer the other variables, by name and ignoring case:
     ``refPeriod`` (the reference date), ``entityID``, ``baseCurrency``
-    (an item such as ``iso4217:EUR``), the ``decimals…`` parameters
+    (an item of the DPM's currency domain, such as ``eba_CU:EUR``; the
+    report's ``iso4217:EUR`` reads as one), the ``decimals…`` parameters
     (``INF`` is null), ``ReportingLevel`` (``con`` or ``ind``, from the
     entity identifier's suffix) and every other parameter of the report.
 

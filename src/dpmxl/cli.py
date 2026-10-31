@@ -182,8 +182,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--format",
         choices=FORMATS,
         default=MODULE_FORMAT,
-        help="the file's format (default: %(default)s); dpm-synth 1.0 reads "
-        "only dpm-synth-template/1, which dpm-xl reads too",
+        help="the file's format (default: %(default)s); dpm-xl and dpm-synth "
+        "read both, dpm-synth 1.0 only dpm-synth-template/1",
     )
     export.add_argument(
         "--taxonomy-package",

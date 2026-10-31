@@ -1,12 +1,19 @@
 <p align="center">
-  <a href="https://luukhopman.github.io/dpm-xl/"><img src="https://luukhopman.github.io/dpm-xl/assets/logo.svg" alt="dpm-xl" width="240"></a>
+  <a href="https://luukhopman.github.io/dpm-xl/"><img src="https://luukhopman.github.io/dpm-xl/assets/logo.svg" alt="dpm-xl logo" width="240"></a>
 </p>
 
 <p align="center"><em>Parse and evaluate EBA DPM-XL validation rules in Python.</em></p>
 
-A Python parser and evaluator for **DPM-XL**, the expression language of EBA
-validation rules and similar checks. Give it a rule and your report data; it
-tells you which records fail and explains each failure in plain numbers.
+dpm-xl is a Python parser and evaluator for DPM-XL, the language in which
+the European Banking Authority (EBA) writes the validation rules of its Data
+Point Model (DPM 2.0). Give it a rule and your report data, such as a COREP
+or FINREP report in xBRL-CSV or XBRL-XML; it tells you which records fail
+and explains each failure in plain numbers. It is for teams that check
+supervisory reports before they are filed, build validation into a
+reporting platform, or write and analyse DPM-XL rules. It works with two
+sibling packages: [dpm-xbrl](https://pypi.org/project/dpm-xbrl/) reads and
+writes XBRL reports, and [dpm-synth](https://pypi.org/project/dpm-synth/)
+generates test reports.
 
 dpm-xl is an independent project, not affiliated with or endorsed by the
 European Banking Authority.

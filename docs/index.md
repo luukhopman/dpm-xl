@@ -1,12 +1,14 @@
 ---
-description: What dpm-xl is, a 30-second example in Python and on the command line, installation, four commands from an EBA DPM release to explained failures, and where to start as an analyst, a developer or a rule author.
+description: Parse and evaluate DPM-XL, the validation rules of the EBA Data Point Model (DPM 2.0), in Python - a 30-second example, installation and where to start.
 ---
 
-# dpm-xl
+# dpm-xl: DPM-XL validation rules in Python
 
-A Python parser and evaluator for **DPM-XL**, the expression language of EBA
-validation rules and similar checks. Give it a rule and your report data; it
-tells you which records fail and explains each failure in plain numbers.
+dpm-xl is a Python parser and evaluator for **DPM-XL**, the language in
+which the European Banking Authority (EBA) writes the validation rules of
+its Data Point Model (DPM 2.0). Give it a rule and your report data, such as
+a COREP or FINREP report in xBRL-CSV or XBRL-XML; it tells you which
+records fail and explains each failure in plain numbers.
 
 dpm-xl is an independent project, not affiliated with or endorsed by the
 European Banking Authority.

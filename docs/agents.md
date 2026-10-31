@@ -52,7 +52,7 @@ from dpmxl import (
 | `dpmxl.diagnostics.diagnose(expression, layout=None, *, tables=None, parameters=None, program=False)` | `Diagnostic`s with `severity`, `code` (such as `syntax`, `unknown-table`, `non-portable`), `message`, `start`, `end`, `suggestion` | |
 | `dpmxl.rules.load_rules(path)` / `evaluate_rules(rules, provider, *, module=None, cache=None)` | `Rule`s (`code`, `expression`, `precondition`, `severity`, `active`, `modules`) / one `RuleRun` per rule with `status` (`skipped` for an inactive rule), `message`, `result` | `RuleFileError` naming the JSON path |
 | `dpmxl.module.load_module(path)` | `Module` with `tables`, `rules` (`Rule`s), `layouts()`; reads `dpm-module/1` and `dpm-synth-template/1` | `ModuleError` naming the JSON path |
-| `dpmxl.dpm.open_release(path)` / `export_module(db, module_code, release=None, *, format="dpm-module/1")` | An open EBA DPM 2.0 database (`releases()`, `modules(release)`) / the module file as a `dict` | `DpmError` |
+| `dpmxl.dpm.open_release(path)` / `export_module(db, module_code, release=None, *, format="dpm-module/1", taxonomy_packages=())` | An open EBA DPM 2.0 database (`releases()`, `modules(release)`) / the module file as a `dict` | `DpmError` |
 | `dpmxl.xbrl.ReportProvider(module, report, *, previous=(), taxonomy_packages=())` / `check_report(module, report, *, previous=(), taxonomy_packages=())` | A provider over a dpm-xbrl `Report` / `ReportCheck` with `filing`, `rules`, `unplaced`, `findings`, `failed(fail_on)` | `dpmxbrl.ReportError` for an unreadable report; `ValueError` for a report of another entry point or XBRL-XML without taxonomy packages; needs the `xbrl` extra |
 
 Statuses: `passed`, `failed`, `not_applicable`, `error`, `unsupported`,
@@ -104,15 +104,16 @@ v1 failed
 ```text
 dpm-xl check SOURCE [--strict] [--json]          # diagnose every expression; exit 1 on an error
 dpm-xl eval RULES DATA [--format text|json|junit] [--fail-on error|warning] [--all]
-dpm-xl check-report MODULE REPORT [--previous REPORT] [--format text|json|junit] [--fail-on error|warning]
+dpm-xl check-report MODULE REPORT [--taxonomy-package ZIP] [--previous REPORT] [--format text|json|junit] [--fail-on error|warning] [--all]
 dpm-xl list-modules DATABASE [--release R] [--json]
-dpm-xl export-module DATABASE MODULE [--release R] [-o FILE]
+dpm-xl export-module DATABASE MODULE [--release R] [-o FILE] [--format FORMAT] [--taxonomy-package ZIP]
 ```
 
 - `SOURCE` and `RULES` are a JSON rule file, a module file, a text file of
   expressions or one expression; `MODULE` is a
   [module file](reference/module-file.md); `DATABASE` an EBA DPM 2.0
-  database as SQLite ([how to get one](guides/from-a-dpm-release.md)).
+  database: SQLite, or the Access file or the EBA's ZIP of it with mdbtools
+  on `PATH` ([how to get one](guides/from-a-dpm-release.md)).
 - `check` exits 1 when an expression has an error, and with `--strict`
   also on a warning; `eval` and `check-report` exit 1 when a rule at or
   above `--fail-on` failed or is `error`. All

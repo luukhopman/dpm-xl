@@ -113,11 +113,12 @@ tables it groups.
 A report's values are written as in xBRL-CSV, and
 [`ReportProvider`][dpmxl.xbrl.ReportProvider] reads them by the cell's data
 type: `m`, `p`, `i` and `r` as numbers with their decimals; `o` as an exact
-whole number, such as `3`; `e` as an item, such as `eba_CU:EUR`; `b` and
-`t` as Booleans, `true` or `false` (`t` is always `true`); `d` and `dt`
-as dates, `2026-12-31`, without a time or time zone
-(`2026-12-31T12:00:00` and `2026-12-31Z` read as 2026-12-31); `s`, `es`
-and `u` as text. A value that does not read as its type, such as `NaN` for
+whole number, such as `3`; `e` as an item, such as `eba_CU:EUR`; `b` as a
+Boolean, `true` or `false`, and `t` as `true` only (`false` is an
+`invalidValue`); `d` as a date, `2026-12-31`, and `dt` as a date or date
+and time read as its date; a time zone is dropped (`2026-12-31Z` reads as
+2026-12-31, and `2026-12-31T12:00:00` as 2026-12-31 in a `dt` cell); `s`,
+`es` and `u` as text. A value that does not read as its type, such as `NaN` for
 a number, is an `invalidValue` finding, and no rule reads it. An `es`
 value may be the empty string, which is a value, not null; EBA filing
 rule 2.19 forbids reporting it (`#empty` in xBRL-CSV). No module of DPM
@@ -136,7 +137,7 @@ Module files use the DPM's own codes, as the EBA database has them. The
 | `e` | `item` | item |
 | `b`, `t` | `boolean` | Boolean |
 | `d` | `date` | date |
-| `dt` | none (not checked) | date, or text when it has a time |
+| `dt` | none (not checked) | date (a time is dropped) |
 | `s`, `es`, `u`, other codes | `string` | text |
 
 ## Rules

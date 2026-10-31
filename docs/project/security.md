@@ -12,9 +12,11 @@ not in a public issue.
 
 ## Threat model
 
-dpm-xl parses and evaluates expressions; it reads no files, opens no network
-connections and never executes rule text as Python. What it does with
-untrusted input:
+dpm-xl's evaluator reads no files, opens no network connections and never
+executes rule text as Python. `dpmxl.dpm` reads a DPM database (SQLite,
+Access, or the EBA's ZIP of it) and taxonomy package ZIPs, and runs
+`mdb-export` from `PATH` without a shell; treat databases and packages from
+untrusted sources accordingly. What dpm-xl does with untrusted input:
 
 | Input | Treatment |
 | --- | --- |
@@ -22,6 +24,7 @@ untrusted input:
 | Report data | Values are typed data (`Number`, `str`, dates, items, sets); nothing is evaluated. Joins that would produce more than 2,000,000 records are an error instead of a memory spike. |
 | `decimals` | `Number.of` rejects decimals beyond the decimal128 range, which would otherwise make tolerances overflow. |
 | CLI input files | Read as JSON or text; malformed input is reported with exit status 3, without a traceback. |
+| DPM database ZIP | The one `.accdb`/`.mdb` member is unpacked to a temporary file and deleted; members larger than 2 GiB or compressed more than 100:1 (from 1 MiB), encrypted or Deflate64 members are input errors. |
 
 What it does not protect against:
 

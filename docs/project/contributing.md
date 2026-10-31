@@ -42,8 +42,8 @@ write.
   `tests/test_grammar_coverage.py` has an example for every alternative of
   the DPM-XL grammar, and `tests/data/eba_expressions.txt` samples about 300
   EBA rule expressions; every line must parse.
-- **No new runtime dependencies.** The package has none; polars is the only
-  optional one.
+- **No new runtime dependencies.** The package has none; the optional
+  extras are `columnar` (polars) and `xbrl` (dpm-xbrl).
 - **Google-style docstrings** for every public name, with an `Examples:`
   section where it helps. They feed the API reference and are run as
   doctests.
@@ -51,7 +51,9 @@ write.
   module's `__all__`, gets a docstring, and appears in the guide or concept
   page it belongs to.
 - **Docs examples run.** Every `python` and `console` block in `docs/` is
-  executed by `tests/test_docs.py`, and a `text` block right after a
+  executed by `tests/test_docs.py`, except those marked
+  `<!-- docs: skip -->` (the toolkit tour); `bash` blocks and their output
+  are not run, and a `text` block right after a
   `python` block must match its output exactly, except the version in
   JSON and JUnit output, which the tests ignore. Every `dpm-xl` block must
   parse, and every row of an `| Expression | Result |` table is evaluated

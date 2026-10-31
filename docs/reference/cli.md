@@ -12,7 +12,8 @@ dpm-xl check-report [--format text|json|junit] [--json] [--fail-on error|warning
                     [--all] [--taxonomy-package ZIP] [--previous REPORT]
                     MODULE REPORT
 dpm-xl list-modules [--release R] [--json] DATABASE
-dpm-xl export-module [--release R] [-o FILE] [--format FORMAT] DATABASE MODULE
+dpm-xl export-module [--release R] [-o FILE] [--format FORMAT]
+                     [--taxonomy-package ZIP] DATABASE MODULE
 dpm-xl --version
 dpm-xl [COMMAND] --help
 ```
@@ -221,7 +222,7 @@ $ dpm-xl eval "{tC_27.00, c0010} > 0" examples/data.json --json
 | `results[].active` | Boolean | Whether the rule is active. |
 | `results[].modules` | list | The module codes the rule applies to; empty for every module. |
 | `results[].status` | string | One of the [statuses](../concepts/results.md): `passed`, `failed`, `not_applicable`, `error`, `unsupported` or `skipped`. |
-| `results[].message` | string or null | Why the status is `error`, `unsupported`, `not_applicable` or `skipped`. |
+| `results[].message` | string or null | Why the status is `error`, `unsupported` or `skipped`, or `precondition not met` for a `not_applicable` rule; null otherwise. |
 | `results[].counts` | object | `passed`, `failed` and `null` (not evaluated) record counts, as the text output's `records:` line. |
 | `results[].failures` | list | Per failing record: `key` (key name to value, as text), `summary` (the explanation sentence) and `cells` (each cell used, as DPM-XL text). |
 
@@ -461,7 +462,7 @@ statuses.
 | 0 | No expression has an error; with `--strict`, none has a warning either. | No rule (or filing rule or fact finding) at or above `--fail-on` failed. |
 | 1 | An expression or precondition has an error, such as a syntax error or an unknown function; with `--strict`, also a warning. | A rule (or filing rule or fact finding) at or above `--fail-on` failed, or such a rule is `error`. An `unsupported` rule does not count. |
 | 2 | Usage error (unknown command or option). | Usage error, or `check-report` without the `xbrl` extra. |
-| 3 | The rule file cannot be read or is malformed. | An input file cannot be read or is malformed, the report is of another module, or an XBRL-XML report comes without `--taxonomy-package`. |
+| 3 | The rule file cannot be read or is malformed. | An input file cannot be read or is malformed, the report is of another entry point than the module file's, a `--previous` report is of another entity or module (or has no or a repeated reference date), or an XBRL-XML report comes without `--taxonomy-package`. |
 
 `list-modules` and `export-module` exit with 0 when done, 2 for a usage
 error and 3 for a database, release or module they cannot read.

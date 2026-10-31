@@ -95,7 +95,8 @@ needs was not reported and has no `default` ([Null logic](null.md)).
 A rule whose every record is null is `not_applicable`, just like one whose
 precondition is not met. In an empty or incomplete report, a rule can
 therefore show `not_applicable` because the data it checks is missing;
-`message` tells the two apart.
+`message` tells the two apart: `precondition not met` for the first, none
+for the second.
 
 ## Severity
 

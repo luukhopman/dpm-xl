@@ -6,7 +6,8 @@ description: dpm-xl compared with pydpm-xl and dpmcore on capabilities, licence,
 
 Three Python packages parse DPM-XL. pydpm-xl and dpmcore validate rules
 against a DPM database; dpm-xl evaluates rules against report data and
-explains failures. The table shows where they overlap and where they differ.
+explains failures, and checks rules against an exported module file. The
+table shows where they overlap and where they differ.
 
 ## Capabilities
 
@@ -22,18 +23,20 @@ explains failures. The table shows where they overlap and where they differ.
 | CLI to evaluate rules on a data file | yes | no | no |
 | Tokenizer and editor grammar | yes | no | no |
 | *Outside dpm-xl's scope:* | | | |
-| Semantic validation against a DPM release | no | yes | yes |
+| Semantic validation against a DPM release | partly: tables, coordinates, keys and types, through an exported module file | yes | yes |
 | DPM database migration, REST API | no | migration | yes |
 | Reads report files | via [dpm-xbrl](https://luukhopman.github.io/dpm-xbrl/) | no | no |
 
-Use pydpm-xl or dpmcore to check that a rule fits a DPM release; use dpm-xl
-to check that a report satisfies the rules, and why not. The two combine.
+Use pydpm-xl or dpmcore for full semantic validation against a DPM
+release; use dpm-xl to check that a report satisfies the rules, and why
+not. The two combine.
 
 ## Results
 
 The corpus holds the 14,174 distinct rule and precondition expressions of
 EBA DPM releases 3.4 to 4.4. All three packages reject the same two, which
-contain typos in the EBA source.
+contain typos in the EBA source. The figures were measured with dpm-xl
+1.0.0.
 
 --8<-- "benchmarks/results.md"
 

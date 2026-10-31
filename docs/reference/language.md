@@ -1730,8 +1730,9 @@ which are reported as syntax errors.
 - `exp`, `ln`, `sqrt`, `power` and `log` compute in binary floating point
   and drop the tolerance ([`exp`](#exp)).
 - A coordinate a table lacks selects nothing rather than raising an error;
-  [`diagnose`][dpmxl.diagnostics.diagnose] with table layouts warns about
-  it.
+  [`diagnose`][dpmxl.diagnostics.diagnose] with table layouts reports it,
+  as an error when nothing on that axis matches and as a warning when some
+  codes do.
 - `time_shift` across reports, `{o_…}` and `{g_…}` need optional provider
   methods; without them a rule is unsupported
   ([Connect your data](../guides/provider.md)).

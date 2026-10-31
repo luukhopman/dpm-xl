@@ -138,10 +138,16 @@ rules it checks.
   [`examples/language_report.py`](https://github.com/luukhopman/dpm-xl/blob/main/examples/language_report.py)
   and must show the actual result, and its [index](language.md#index)
   must list exactly the names in [`dpmxl.grammar`](api/grammar.md).
-- **Documentation examples.** Every Python and command-line example on
-  these pages runs in the test suite and must print what the page shows.
+- **Documentation examples.** Every Python and `console` example on these
+  pages runs in the test suite and must print what the page shows, except
+  the toolkit tour, which needs dpm-synth, and the commands on the EBA's
+  own database in
+  [Start from an EBA DPM release](../guides/from-a-dpm-release.md), whose
+  output was recorded by hand.
 - **Two evaluators.** The columnar evaluator must agree with the reference
-  evaluator on hand-written and on seeded random rules
-  ([`tests/test_columnar.py`](https://github.com/luukhopman/dpm-xl/blob/main/tests/test_columnar.py)).
+  evaluator on hand-written
+  ([`tests/test_columnar.py`](https://github.com/luukhopman/dpm-xl/blob/main/tests/test_columnar.py))
+  and on seeded random rules
+  ([`tests/test_columnar_random.py`](https://github.com/luukhopman/dpm-xl/blob/main/tests/test_columnar_random.py)).
 - **Not run.** The specification's repository holds no conformance tests,
   and results are not compared with another implementation's.

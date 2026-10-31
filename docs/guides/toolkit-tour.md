@@ -24,7 +24,6 @@ rules. Run the code from a checkout of the repository.
 
 ## 1. Generate a report with dpm-synth
 
-<!-- docs: skip -->
 ```python
 from dpmsynth import generate, load_template
 
@@ -35,7 +34,6 @@ for fact in generated.report.facts:
     print(fact.datapoint, dict(fact.keys), fact.value)
 ```
 
-<!-- docs: skip -->
 ```text
 4 of 4 rules pass
 dp101 {} 9253000
@@ -54,7 +52,6 @@ A synthetic report is for testing a pipeline. Change one value, as a faulty
 upstream system might, and write the report as an xBRL-CSV package with
 dpm-xbrl:
 
-<!-- docs: skip -->
 ```python
 import io
 from dataclasses import replace
@@ -73,7 +70,6 @@ Row 0020 now says 290,000 instead of 283,000.
 
 ## 3. Read it with dpm-xbrl
 
-<!-- docs: skip -->
 ```python
 from dpmxbrl import read_report
 
@@ -83,7 +79,6 @@ print(report.decimals_parameters, report.filing_indicators)
 print(report.filing)
 ```
 
-<!-- docs: skip -->
 ```text
 xbrl-csv SYNTHETICDPMXL000002.CON 2026-12-31
 {'decimalsMonetary': -3} {'T_01.00': True, 'T_02.00': True}
@@ -105,7 +100,6 @@ from the facts dpm-xbrl read. It types each value by the cell's data type
 and keeps the reported precision: 290,000 reported in thousands stands for
 290,000 ± 500.
 
-<!-- docs: skip -->
 ```python
 from dpmxl import evaluate_rule, explain
 from dpmxl.module import load_module
@@ -120,7 +114,6 @@ for rule in module.rules:
         print("   ", explain(result.evaluation, rule.expression, outcome.key).summary)
 ```
 
-<!-- docs: skip -->
 ```text
 v1 failed
     9,253,000 should equal 9,260,000 (290,000 + 8,970,000): difference 7,000, at least 5,500 given the reported precision

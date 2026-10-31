@@ -366,15 +366,15 @@ is published in when `mdb-export` (mdbtools) is on `PATH`; see
 
 | Option | Effect |
 | --- | --- |
-| `--release R` | The release whose modules to list, such as `4.3`. Default: the latest release of the database. |
-| `--json` | Print one JSON document: `releases` (`id`, `code`, `date`, `type`), `release` and `modules` (`code`, `name`, `version`, `framework`, `release` that introduced the version, `from_date`, `to_date`). |
+| `--release R` | The release whose modules to list, such as `4.3`. Default: the latest release of the database, whatever its status, as a database is published for its own release while the EBA may still mark it `validation`. |
+| `--json` | Print one JSON document: `releases` (`id`, `code`, `date`, `type`, `status`), `release` and `modules` (`code`, `name`, `version`, `framework`, `release` that introduced the version, `from_date`, `to_date`, and `document`, true for a document module, which cannot be exported). |
 
 ```console
 $ dpm-xl list-modules examples/dpm-demo.sqlite --release 1.0
-releases: 1.0, 2.0, 2.0.1
+releases: 1.0 (released), 2.0 (released), 2.0.1 (validation)
 modules of release 1.0: 3
   DEMO   1.0.0    Demo module
-  DOCS   1.0.0    Documents
+  DOCS   1.0.0    Documents (document module, not exportable)
   OTHER  1.0.0    Other module
 ```
 

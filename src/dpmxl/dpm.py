@@ -65,10 +65,10 @@ ENTRY_POINT = "http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/{framework}/{release}
 module codes in lower case and the release that introduced the version."""
 
 TABLES: Mapping[str, tuple[str, ...]] = {
-    "Release": ("ReleaseID", "Code", "Date", "Type"),
+    "Release": ("ReleaseID", "Code", "Date", "Type", "Status"),
     "Organisation": ("OrgID", "Acronym"),
     "Framework": ("FrameworkID", "Code"),
-    "Module": ("ModuleID", "FrameworkID"),
+    "Module": ("ModuleID", "FrameworkID", "isDocumentModule"),
     "ModuleVersion": (
         "ModuleVID",
         "ModuleID",
@@ -203,12 +203,16 @@ class Release:
         type: ``module`` for a release of modules, ``deactivation`` for one
             that only deactivates rules; ``None`` when the database does not
             say.
+        status: ``released``, or ``validation`` for the release a database
+            is published for while the EBA validates it; ``None`` when the
+            database does not say.
     """
 
     id: int
     code: str
     date: str | None = None
     type: str | None = None
+    status: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,6 +227,8 @@ class ModuleInfo:
         release: The code of the release that introduced this version.
         from_date: The first reference date of the version, ``YYYY-MM-DD``.
         to_date: The last reference date of the version, or ``None``.
+        document: Whether it is a document module, such as
+            ``P3_DIS_DOCS``, which has no tables and cannot be exported.
     """
 
     code: str
@@ -232,6 +238,7 @@ class ModuleInfo:
     release: str | None
     from_date: str | None
     to_date: str | None
+    document: bool = False
 
 
 def open_release(path: str | Path) -> DpmRelease:
@@ -433,6 +440,10 @@ def _from_access(path: Path, source: Path | None = None) -> sqlite3.Connection:
     return connection
 
 
+def _is_true(value: object) -> bool:
+    return str(value).strip().casefold() in {"1", "true", "-1"}
+
+
 def _is_integer_column(name: str) -> bool:
     return name.endswith("ID") or name.startswith(("Is", "Has")) or name == "Order"
 
@@ -578,7 +589,9 @@ class DpmRelease:
             tuple[Release, ...]: The releases, ordered by ``ReleaseID``.
         """
         return tuple(
-            Release(int(row[0]), str(row[1]), _date(row[2]), row[3] or None)
+            Release(
+                int(row[0]), str(row[1]), _date(row[2]), row[3] or None, row[4] or None
+            )
             for row in sorted(self._rows("Release"), key=lambda row: row[0])
             if row[0] is not None and row[1]
         )
@@ -588,7 +601,9 @@ class DpmRelease:
 
         Args:
             code: The release code, such as ``4.3``; ``None`` for the latest
-                release of the database.
+                release of the database, whatever its status: a database is
+                published for its own release, which it can still mark as
+                ``validation``.
 
         Returns:
             Release: The release.
@@ -622,7 +637,8 @@ class DpmRelease:
         """
         chosen = self.release(release)
         frameworks = dict(self._rows("Framework"))
-        module_frameworks = dict(self._rows("Module"))
+        module_frameworks = {row[0]: row[1] for row in self._rows("Module")}
+        documents = {row[0] for row in self._rows("Module") if _is_true(row[2])}
         codes = {row[0]: row[1] for row in self._rows("Release")}
         return tuple(
             sorted(
@@ -635,6 +651,7 @@ class DpmRelease:
                         release=codes.get(row[5]),
                         from_date=_date(row[7]),
                         to_date=_date(row[8]),
+                        document=row[1] in documents,
                     )
                     for row in self._module_versions(chosen.id).values()
                     if row[2]
@@ -1253,7 +1270,7 @@ class _Export:
     def document(self) -> dict[str, Any]:
         db, version = self.db, self.version
         frameworks = dict(db._rows("Framework"))
-        module_frameworks = dict(db._rows("Module"))
+        module_frameworks = {row[0]: row[1] for row in db._rows("Module")}
         framework = frameworks.get(module_frameworks.get(version[1]))
         introduced = {row[0]: row[1] for row in db._rows("Release")}.get(version[5])
         point = (
@@ -1268,6 +1285,14 @@ class _Export:
             raise DpmError(
                 f"module {self.code} has no tables with reportable cells in "
                 f"release {self.release.code}"
+                + (
+                    ": it is a document module"
+                    if any(
+                        row[0] == version[1] and _is_true(row[2])
+                        for row in db._rows("Module")
+                    )
+                    else ""
+                )
             )
         document: dict[str, Any] = {
             "format": MODULE_FORMAT,

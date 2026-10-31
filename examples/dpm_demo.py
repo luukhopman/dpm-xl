@@ -20,14 +20,14 @@ E, PR = 1012, 19  # the EBA's organisation, the _PR category of properties
 M, EN, S, ES = 1, 2, 3, 4  # data types: monetary, enumeration, text, es
 
 ROWS: dict[str, list[tuple]] = {
-    "Release": [  # ReleaseID, Code, Date, Type
-        (1, "1.0", "2025-01-15", "module"),
-        (2, "2.0", "2026-01-15", "module"),
-        (3, "2.0.1", "2026-04-15", "deactivation"),
+    "Release": [  # ReleaseID, Code, Date, Type, Status
+        (1, "1.0", "2025-01-15", "module", "released"),
+        (2, "2.0", "2026-01-15", "module", "released"),
+        (3, "2.0.1", "2026-04-15", "deactivation", "validation"),
     ],
     "Organisation": [(E, "EBA")],
     "Framework": [(1, "DEMO")],
-    "Module": [(10, 1), (11, 1), (12, 1)],
+    "Module": [(10, 1, 0), (11, 1, 0), (12, 1, 1)],  # DOCS is a document module
     "ModuleVersion": [
         # ModuleVID, ModuleID, Code, Name, VersionNumber, Start, End, From, To
         (100, 10, "DEMO", "Demo module", "1.0.0", 1, 2, "2025-03-31", "2026-03-30"),

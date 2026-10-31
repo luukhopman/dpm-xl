@@ -84,6 +84,8 @@ All notable changes to this project are documented here. The project follows
   dated before it.
 - `open_release`, `export-module` and `list-modules` read the ZIP file the
   EBA publishes its database in.
+- `dpm-xl list-modules` shows each release's status and marks document
+  modules, which cannot be exported.
 
 ### Changed
 

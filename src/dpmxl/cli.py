@@ -147,7 +147,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     listing.add_argument("database", type=Path, help=_DATABASE_HELP)
     listing.add_argument(
-        "--release", help="release code, such as 4.3 (default: the latest)"
+        "--release",
+        help="release code, such as 4.3 (default: the latest, whatever its status)",
     )
     listing.add_argument("--json", action="store_true", help="print JSON")
     export = commands.add_parser(
@@ -892,13 +893,22 @@ def _list_modules(database: Path, release: str | None, *, as_json: bool) -> int:
         }
         print(json.dumps(document, indent=2))
         return EXIT_OK
-    print("releases: " + ", ".join(found.code for found in releases))
+    print(
+        "releases: "
+        + ", ".join(
+            f"{found.code} ({found.status})" if found.status else found.code
+            for found in releases
+        )
+    )
     print(f"modules of release {chosen.code}: {len(modules)}")
     width = max((len(module.code) for module in modules), default=0)
     for module in modules:
         print(
-            f"  {module.code:<{width}}  {module.version or '-':<7}  "
-            f"{module.name or ''}".rstrip()
+            (
+                f"  {module.code:<{width}}  {module.version or '-':<7}  "
+                f"{module.name or ''}"
+                + (" (document module, not exportable)" if module.document else "")
+            ).rstrip()
         )
     return EXIT_OK
 

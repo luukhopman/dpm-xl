@@ -58,7 +58,11 @@ def test_the_committed_demo_database_is_up_to_date(tmp_path: Path) -> None:
 
 def test_releases_modules_and_the_latest_release(db: DpmRelease) -> None:
     assert [release.code for release in db.releases()] == ["1.0", "2.0", "2.0.1"]
-    assert db.release() == Release(3, "2.0.1", "2026-04-15", "deactivation")
+    # the latest release, though it is still in validation
+    assert db.release() == Release(
+        3, "2.0.1", "2026-04-15", "deactivation", "validation"
+    )
+    assert db.release("2.0").status == "released"
     assert db.release("1.0").id == 1
     modules = {module.code: module for module in db.modules("2.0")}
     assert sorted(modules) == ["DEMO", "DOCS", "OTHER"]
@@ -66,6 +70,7 @@ def test_releases_modules_and_the_latest_release(db: DpmRelease) -> None:
     assert modules["DEMO"].release == "2.0"
     assert modules["DEMO"].framework == "DEMO"
     assert modules["DEMO"].from_date == "2026-03-31"
+    assert (modules["DEMO"].document, modules["DOCS"].document) == (False, True)
     assert db.modules("1.0")[0].version == "1.0.0"
 
 
@@ -74,7 +79,7 @@ def test_unknown_releases_and_modules_are_errors(db: DpmRelease) -> None:
         export_module(db, "DEMO", "9.9")
     with pytest.raises(DpmError, match=r"no module 'NOPE' in release 2\.0\.1"):
         export_module(db, "NOPE")
-    with pytest.raises(DpmError, match="DOCS has no tables"):
+    with pytest.raises(DpmError, match=r"DOCS has no tables.*a document module"):
         export_module(db, "DOCS")
     with pytest.raises(DpmError, match="format: expected one of"):
         export_module(db, "DEMO", format="csv")
@@ -484,10 +489,10 @@ def test_windows_is_told_to_use_wsl_or_sqlite(tmp_path: Path, monkeypatch) -> No
 def test_cli_lists_modules(database: Path, capsys) -> None:
     assert main(["list-modules", str(database), "--release", "2.0"]) == 0
     assert capsys.readouterr().out == (
-        "releases: 1.0, 2.0, 2.0.1\n"
+        "releases: 1.0 (released), 2.0 (released), 2.0.1 (validation)\n"
         "modules of release 2.0: 3\n"
         "  DEMO   2.0.0    Demo module\n"
-        "  DOCS   1.0.0    Documents\n"
+        "  DOCS   1.0.0    Documents (document module, not exportable)\n"
         "  OTHER  1.0.0    Other module\n"
     )
     assert main(["list-modules", str(database), "--json"]) == 0
@@ -498,6 +503,7 @@ def test_cli_lists_modules(database: Path, capsys) -> None:
         "code": "1.0",
         "date": "2025-01-15",
         "type": "module",
+        "status": "released",
     }
     assert document["modules"][0]["code"] == "DEMO"
 

@@ -89,17 +89,19 @@ export 4.3 too.
 
 ## 3. List the releases and modules
 
-`dpm-xl list-modules` prints the releases of the database and the modules
-of the latest one, or of `--release`. On the
+`dpm-xl list-modules` prints the releases of the database with their
+status and the modules of the latest one, or of `--release`. The latest is
+the database's own release even while the EBA marks it `validation`, as it
+does in the database it publishes for that release. On the
 [small made-up database](https://github.com/luukhopman/dpm-xl/blob/main/examples/dpm-demo.sqlite)
 that the examples here use:
 
 ```console
 $ dpm-xl list-modules examples/dpm-demo.sqlite
-releases: 1.0, 2.0, 2.0.1
+releases: 1.0 (released), 2.0 (released), 2.0.1 (validation)
 modules of release 2.0.1: 3
   DEMO   2.0.0    Demo module
-  DOCS   1.0.0    Documents
+  DOCS   1.0.0    Documents (document module, not exportable)
   OTHER  1.0.0    Other module
 ```
 
@@ -110,7 +112,7 @@ dpm-xl list-modules dpm-4.4.sqlite --release 4.3
 ```
 
 ```text
-releases: 3.4, 3.5, 4.0, 4.1, 4.2, 4.2.1, 4.2.1.1, 4.2.1.2, 4.3, 4.3.0.1, 4.4
+releases: 3.4 (released), 3.5 (released), 4.0 (released), 4.1 (released), 4.2 (released), 4.2.1 (released), 4.2.1.1 (released), 4.2.1.2 (released), 4.3 (released), 4.3.0.1 (released), 4.4 (validation)
 modules of release 4.3: 57
   AE                      1.4.0    Asset Encumbrance
   AML_RA                  1.0.0    Risk assessment methodologies

@@ -8,7 +8,8 @@ dpm-xl, dpm-xbrl and dpm-synth carry this file unchanged. It checks:
 * the shared docs files: the toolkit cards (``docs/.snippets/toolkit-cards.md``,
   which the docs home page and the toolkit page include), the toolkit page,
   the glossary and the stylesheet are the same in the three repositories
-  (``SHARED_SHA256``);
+  (``SHARED_SHA256``), and so are the search and social metadata: the
+  templates in ``overrides/``, ``scripts/seo.py`` and ``tests/test_site.py``;
 * the README skeleton: the same sections in the same order;
 * the independence statement, directly under the pitch of the README and of
   the docs home page;
@@ -60,6 +61,18 @@ SHARED_SHA256 = {
     ),
     "docs/stylesheets/toolkit.css": (
         "3f231d0fc3d385f888c2dd44cf00266c37126322bf78d0acef79654d4dce39cf"
+    ),
+    "overrides/main.html": (
+        "32e5ef1b97e59aefbdad89ff7e4901b4aa05773b93b845e17c994e2c3bda19cb"
+    ),
+    "overrides/404.html": (
+        "6151f609299109ac9f7fe059314356da4d3e84369f5f3e0291314687a97ec8a0"
+    ),
+    "scripts/seo.py": (
+        "693443665f04467979718920c8bb25565a40f1d83033c65b7162b73c22f6295d"
+    ),
+    "tests/test_site.py": (
+        "7494215e5b1034373aa6df457574f41659eba191704c542d437afbd307bf426e"
     ),
 }
 SECTIONS = [

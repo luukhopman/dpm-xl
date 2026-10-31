@@ -104,6 +104,18 @@ def test_the_export_is_a_module_file(db: DpmRelease) -> None:
     assert load_module(synth).module == "DEMO"
 
 
+def test_entry_points_are_in_the_taxonomy_folder_of_the_release() -> None:
+    # The EBA publishes a module version of release 4.2.1, such as
+    # FINREP9DP's, in the 4.2 taxonomy: the folder is major.minor.
+    assert entry_point("FINREP", "4.2.1", "FINREP9DP") == (
+        "http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/finrep/4.2/mod/finrep9dp.json"
+    )
+    assert entry_point("COREP", "4.3.0.1", "COREP_OF").endswith(
+        "/corep/4.3/mod/corep_of.json"
+    )
+    assert entry_point("RES", "4.4", "RESOL1").endswith("/res/4.4/mod/resol1.json")
+
+
 def test_abstract_tables_give_filing_indicators(db: DpmRelease) -> None:
     document = export_module(db, "DEMO")
     assert _table(document, "T_01.00.a")["filing_indicator"] == "T_01.00"

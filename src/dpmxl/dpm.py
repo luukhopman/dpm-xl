@@ -64,7 +64,8 @@ decimal 2; within the least accuracy of EBA filing rule 2.18."""
 
 ENTRY_POINT = "http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/{framework}/{release}/mod/{module}.json"
 """The EBA's xBRL-CSV entry point of a module version: the framework and
-module codes in lower case and the release that introduced the version."""
+module codes in lower case and the taxonomy folder, the major and minor
+number of the release that introduced the version."""
 
 TABLES: Mapping[str, tuple[str, ...]] = {
     "Release": ("ReleaseID", "Code", "Date", "Type", "Status"),
@@ -1029,6 +1030,10 @@ def _coordinates(cell_code: str) -> dict[str, str | None]:
 def entry_point(framework: str, release: str, module: str) -> str:
     """Return the EBA's xBRL-CSV entry point of a module version.
 
+    The EBA publishes a version in the taxonomy of its release's major and
+    minor number: FINREP9DP's version of release 4.2.1 is in the 4.2
+    taxonomy, at ``.../fws/finrep/4.2/mod/finrep9dp.json``.
+
     Args:
         framework: The framework code, such as ``COREP``.
         release: The code of the release that introduced the version.
@@ -1040,9 +1045,12 @@ def entry_point(framework: str, release: str, module: str) -> str:
     Examples:
         >>> entry_point("COREP", "4.2", "COREP_OF")
         'http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_of.json'
+        >>> entry_point("FINREP", "4.2.1", "FINREP9DP")
+        'http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/finrep/4.2/mod/finrep9dp.json'
     """
+    folder = ".".join(release.split(".")[:2])
     return ENTRY_POINT.format(
-        framework=framework.lower(), release=release, module=module.lower()
+        framework=framework.lower(), release=folder, module=module.lower()
     )
 
 

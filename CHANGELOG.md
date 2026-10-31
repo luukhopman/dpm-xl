@@ -118,6 +118,9 @@ All notable changes to this project are documented here. The project follows
   abstract table `C_02.00`, reads the cells of its tables together.
 - The export leaves out, with a note, a rule that selects a table the
   module does not have.
+- The export's entry point is in the taxonomy folder of the release's
+  major and minor number, as the EBA publishes it: `finrep/4.2` for
+  FINREP9DP of release 4.2.1.
 
 ### Changed
 

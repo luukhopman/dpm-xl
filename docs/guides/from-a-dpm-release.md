@@ -233,7 +233,7 @@ release 4.3, and 1,205 active and 213 inactive in release 4.3.0.1.
 | Field | From the DPM database |
 | --- | --- |
 | `release`, `module` | The release code and the module code. |
-| `entry_point` | Built from the framework code, the release that introduced the module version and the module code, as the EBA names its entry points: `http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_of.json`. This matches the entry points of every module in the EBA's 4.2, 4.3 and 4.4 taxonomy packages. |
+| `entry_point` | Built from the framework code, the major and minor number of the release that introduced the module version (the EBA publishes a 4.2.1 version in the 4.2 taxonomy) and the module code, as the EBA names its entry points: `http://www.eba.europa.eu/eu/fr/xbrl/crr/fws/corep/4.2/mod/corep_of.json`. This matches the entry points of every module in the EBA's 4.2, 4.3 and 4.4 taxonomy packages. |
 | `reference_date` | The module version's first reference date. |
 | `decimals` | `m` 0, `p` 4, `i` 0, `r` 2, within EBA filing rule 2.18; change them if your reports use others. |
 | `filing_indicators` | The module's parameters, one per template. |

@@ -41,8 +41,11 @@ import re
 import shutil
 import sqlite3
 import subprocess  # ruff: ignore[suspicious-subprocess-import] - runs mdb-export, found on PATH, without a shell
+import sys
+import tempfile
 import urllib.parse
 import zipfile
+import zlib
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -239,7 +242,9 @@ def open_release(path: str | Path) -> DpmRelease:
             database, such as one converted with mdbtools or downloaded from
             dpm-toolkit; or the Access file (``.accdb``) itself, which needs
             ``mdb-export`` of mdbtools on ``PATH`` and is read into memory,
-            which takes about ten seconds.
+            which takes about ten seconds; or the ZIP file the EBA publishes
+            it in, whose one Access file is unpacked to a temporary file,
+            read the same way and deleted.
 
     Returns:
         DpmRelease: The database, open read-only; close it, or use it in a
@@ -258,8 +263,10 @@ def open_release(path: str | Path) -> DpmRelease:
         raise DpmError(f"{path}: cannot read: {error.strerror or error}") from error
     if header[4:19] in {b"Standard ACE DB", b"Standard Jet DB"}:
         return DpmRelease(_from_access(path), path)
+    if header.startswith((b"PK\x03\x04", b"PK\x05\x06")):
+        return DpmRelease(_from_zip(path), path)
     if not header.startswith(b"SQLite format 3\0"):
-        raise DpmError(f"{path}: not a SQLite or Access database")
+        raise DpmError(f"{path}: not a SQLite, Access or ZIP file")
     connection = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
     try:
         return DpmRelease(connection, path)
@@ -268,8 +275,122 @@ def open_release(path: str | Path) -> DpmRelease:
         raise
 
 
-def _from_access(path: Path) -> sqlite3.Connection:
+_ZIP_MAX_BYTES = 2 * 1024**3
+"""The largest Access file unpacked from a ZIP file."""
+
+_ZIP_MAX_RATIO = 100.0
+"""The highest compression ratio of an Access file in a ZIP file."""
+
+_ZIP_RATIO_FROM = 1024**2
+"""The size from which the compression ratio is checked."""
+
+
+def _mdb_export(path: Path) -> str:
+    """Return the path of ``mdb-export``.
+
+    Returns:
+        str: The program.
+
+    Raises:
+        DpmError: If it is not on ``PATH``.
+    """
+    program = shutil.which("mdb-export")
+    if program is not None:
+        return program
+    if sys.platform == "win32":
+        raise DpmError(
+            f"{path}: reading an Access database needs mdb-export (mdbtools), "
+            "which does not run on Windows; run dpm-xl in WSL with mdbtools "
+            "installed, or convert the database to SQLite first, as "
+            "https://luukhopman.github.io/dpm-xl/guides/from-a-dpm-release/ "
+            "describes"
+        )
+    raise DpmError(
+        f"{path}: reading an Access database needs mdb-export (mdbtools) on "
+        "PATH; install mdbtools, or convert the database to SQLite first"
+    )
+
+
+def _from_zip(path: Path) -> sqlite3.Connection:
+    """Read the tables an export needs from the Access file in a ZIP file.
+
+    The one ``.accdb`` or ``.mdb`` member (one with ``dpm`` in its name,
+    if there are several) is checked, unpacked to a fixed name in a
+    temporary directory, read with ``mdb-export`` and deleted.
+
+    Returns:
+        sqlite3.Connection: An in-memory database of those tables.
+
+    Raises:
+        DpmError: If the ZIP file has no single Access file, the member is a
+            symbolic link, too large or too compressed, or cannot be read.
+    """
+    _mdb_export(path)
+    try:
+        archive = zipfile.ZipFile(path)
+    except (OSError, zipfile.BadZipFile) as error:
+        raise DpmError(f"{path}: not a readable ZIP file: {error}") from error
+    with archive:
+        members = [
+            member
+            for member in archive.infolist()
+            if not member.is_dir()
+            and member.filename.casefold().endswith((".accdb", ".mdb"))
+        ]
+        named = [
+            member
+            for member in members
+            if "dpm" in _member_name(member.filename).casefold()
+        ]
+        if len(named) == 1:
+            member = named[0]
+        elif len(members) == 1:
+            member = members[0]
+        elif not members:
+            raise DpmError(f"{path}: the ZIP file has no .accdb or .mdb database")
+        else:
+            names = ", ".join(sorted(member.filename for member in members))
+            raise DpmError(
+                f"{path}: the ZIP file has several Access databases: {names}"
+            )
+        where = f"{path}: {member.filename}"
+        if (member.external_attr >> 16) & 0o170000 == 0o120000:
+            raise DpmError(f"{where} is a symbolic link")
+        if member.file_size > _ZIP_MAX_BYTES:
+            raise DpmError(f"{where} is larger than {_ZIP_MAX_BYTES:,} bytes")
+        if member.file_size >= _ZIP_RATIO_FROM and (
+            member.file_size / max(member.compress_size, 1) > _ZIP_MAX_RATIO
+        ):
+            raise DpmError(f"{where} is compressed more than {_ZIP_MAX_RATIO:g} to 1")
+        suffix = Path(_member_name(member.filename)).suffix.casefold()
+        with tempfile.TemporaryDirectory(prefix="dpmxl-") as directory:
+            target = Path(directory) / f"database{suffix}"
+            try:
+                with archive.open(member) as source, target.open("wb") as output:
+                    size = 0
+                    while chunk := source.read(1024**2):
+                        size += len(chunk)
+                        if size > _ZIP_MAX_BYTES:
+                            raise DpmError(
+                                f"{where} is larger than {_ZIP_MAX_BYTES:,} bytes"
+                            )
+                        output.write(chunk)
+            except (OSError, zipfile.BadZipFile, zlib.error) as error:
+                raise DpmError(f"{where}: cannot unpack: {error}") from error
+            return _from_access(target, path)
+
+
+def _member_name(filename: str) -> str:
+    return filename.replace("\\", "/").rsplit("/", 1)[-1]
+
+
+def _from_access(path: Path, source: Path | None = None) -> sqlite3.Connection:
     """Read the tables an export needs from an Access file into memory.
+
+    Args:
+        path: The Access file.
+        source: The file to name in errors, such as the ZIP file that
+            ``path`` was unpacked from; ``path`` by default.
 
     Returns:
         sqlite3.Connection: An in-memory database of those tables, committed,
@@ -278,12 +399,7 @@ def _from_access(path: Path) -> sqlite3.Connection:
     Raises:
         DpmError: If ``mdb-export`` is not on ``PATH`` or fails.
     """
-    program = shutil.which("mdb-export")
-    if program is None:
-        raise DpmError(
-            f"{path}: reading an Access database needs mdb-export (mdbtools) on "
-            "PATH; install mdbtools, or convert the database to SQLite first"
-        )
+    program = _mdb_export(source or path)
     connection = sqlite3.connect(":memory:")
     for table in TABLES:
         result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed arguments, no shell
@@ -294,7 +410,7 @@ def _from_access(path: Path) -> sqlite3.Connection:
         if result.returncode != 0:
             message = result.stderr.decode("utf-8", "replace").strip()
             connection.close()
-            raise DpmError(f"{path}: mdb-export {table} failed: {message}")
+            raise DpmError(f"{source or path}: mdb-export {table} failed: {message}")
         rows = csv.reader(io.StringIO(result.stdout.decode("utf-8"), newline=""))
         columns = next(rows, None)
         if not columns:

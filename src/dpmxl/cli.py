@@ -30,7 +30,8 @@ from .references import references
 from .rules import Rule, RuleRun, evaluate_rules, load_rules, rules_from
 
 _DATABASE_HELP = (
-    "EBA DPM 2.0 database: SQLite, or the Access file with mdbtools on PATH"
+    "EBA DPM 2.0 database: SQLite, or the Access file or the EBA's ZIP of it "
+    "with mdbtools on PATH"
 )
 
 JSON_SCHEMA_VERSION = 2

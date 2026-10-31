@@ -82,6 +82,8 @@ All notable changes to this project are documented here. The project follows
   currency of denomination.
 - A rule the EBA deactivated from a date is exported as active in releases
   dated before it.
+- `open_release`, `export-module` and `list-modules` read the ZIP file the
+  EBA publishes its database in.
 
 ### Changed
 

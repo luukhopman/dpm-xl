@@ -2,14 +2,17 @@ import importlib.util
 import json
 import logging
 import os
+import re
 import shutil
 import sqlite3
+import sys
+import tempfile
 import zipfile
 from pathlib import Path
 
 import pytest
 
-from dpmxl import parse_program
+from dpmxl import dpm, parse_program
 from dpmxl.cli import main
 from dpmxl.dpm import (
     DpmError,
@@ -297,7 +300,7 @@ def test_open_release_rejects_what_it_cannot_read(tmp_path: Path) -> None:
         open_release(tmp_path / "missing.sqlite")
     text = tmp_path / "notes.txt"
     text.write_text("not a database", encoding="utf-8")
-    with pytest.raises(DpmError, match="not a SQLite or Access database"):
+    with pytest.raises(DpmError, match="not a SQLite, Access or ZIP file"):
         open_release(text)
     empty = tmp_path / "empty.sqlite"
     sqlite3.connect(empty).execute(
@@ -315,9 +318,7 @@ def test_an_access_file_needs_mdb_export(tmp_path: Path, monkeypatch) -> None:
         open_release(access)
 
 
-def test_an_access_file_is_read_with_mdb_export(
-    database: Path, tmp_path: Path, monkeypatch
-) -> None:
+def _fake_mdb_export(database: Path, tmp_path: Path, monkeypatch) -> None:
     # A stand-in for mdb-export that prints the demo database's tables as CSV,
     # as mdb-export prints an Access file's tables.
     program = tmp_path / "mdb-export"
@@ -332,14 +333,152 @@ def test_an_access_file_is_read_with_mdb_export(
         encoding="utf-8",
     )
     program.chmod(0o755)
-    access = tmp_path / "dpm.accdb"
-    access.write_bytes(b"\0\1\0\0Standard ACE DB\0" + bytes(64))
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+
+
+ACCESS = b"\0\1\0\0Standard ACE DB\0" + bytes(64)
+
+
+def test_an_access_file_is_read_with_mdb_export(
+    database: Path, tmp_path: Path, monkeypatch
+) -> None:
+    _fake_mdb_export(database, tmp_path, monkeypatch)
+    access = tmp_path / "dpm.accdb"
+    access.write_bytes(ACCESS)
     with open_release(access) as from_access, open_release(database) as from_sqlite:
         assert export_module(from_access, "DEMO") == export_module(from_sqlite, "DEMO")
         # the tables are committed, so the database can be copied or saved
         assert not from_access._connection.in_transaction
         from_access._connection.execute("VACUUM INTO ?", (str(tmp_path / "copy.db"),))
+
+
+def _zip(path: Path, members: dict[str, bytes], **options) -> Path:
+    with zipfile.ZipFile(path, "w", **options) as archive:
+        for name, data in members.items():
+            archive.writestr(name, data)
+    return path
+
+
+@pytest.fixture
+def temporary(tmp_path: Path, monkeypatch) -> Path:
+    # the directory the ZIP member is unpacked in, to check that it is emptied
+    directory = tmp_path / "temporary"
+    directory.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(directory))
+    return directory
+
+
+def test_the_eba_zip_file_is_read_and_its_member_deleted(
+    database: Path, tmp_path: Path, monkeypatch, temporary: Path
+) -> None:
+    _fake_mdb_export(database, tmp_path, monkeypatch)
+    members = {"readme.txt": b"x", "DPM2 Database_v 2_0.accdb": ACCESS, "o.mdb": ACCESS}
+    package = _zip(tmp_path / "DPM2 Database_v 2_0.zip", members)
+    with open_release(package) as from_zip, open_release(database) as from_sqlite:
+        assert export_module(from_zip, "DEMO") == export_module(from_sqlite, "DEMO")
+    assert list(temporary.iterdir()) == []
+    assert main(["list-modules", str(package)]) == 0
+
+
+def test_the_unpacked_member_is_deleted_on_an_error(
+    tmp_path: Path, monkeypatch, temporary: Path
+) -> None:
+    program = tmp_path / "mdb-export"
+    program.write_text("#!/bin/sh\necho broken >&2\nexit 1\n", encoding="utf-8")
+    program.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    package = _zip(tmp_path / "dpm.zip", {"dpm.accdb": ACCESS})
+    with pytest.raises(DpmError, match=r"dpm\.zip: mdb-export Release failed: broken"):
+        open_release(package)
+    assert list(temporary.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("members", "message"),
+    [
+        ({"readme.txt": b"x"}, "the ZIP file has no .accdb or .mdb database"),
+        (
+            {"a.accdb": ACCESS, "b.accdb": ACCESS},
+            "the ZIP file has several Access databases: a.accdb, b.accdb",
+        ),
+        (
+            {"dpm-1.accdb": ACCESS, "dpm-2.accdb": ACCESS},
+            "several Access databases: dpm-1.accdb, dpm-2.accdb",
+        ),
+    ],
+)
+def test_a_zip_file_needs_one_access_file(
+    tmp_path: Path, monkeypatch, members, message
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda name: "/bin/false")
+    with pytest.raises(DpmError, match=re.escape(message)):
+        open_release(_zip(tmp_path / "dpm.zip", members))
+
+
+def test_a_zip_member_that_is_a_symbolic_link_is_rejected(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda name: "/bin/false")
+    link = zipfile.ZipInfo("dpm.accdb")
+    link.external_attr = 0o120777 << 16
+    with zipfile.ZipFile(tmp_path / "dpm.zip", "w") as archive:
+        archive.writestr(link, "/etc/passwd")
+    with pytest.raises(DpmError, match=r"dpm\.accdb is a symbolic link"):
+        open_release(tmp_path / "dpm.zip")
+
+
+def test_a_zip_member_too_large_or_too_compressed_is_rejected(
+    tmp_path: Path, monkeypatch, temporary: Path
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda name: "/bin/false")
+    package = _zip(
+        tmp_path / "dpm.zip",
+        {"dpm.accdb": ACCESS + bytes(100_000)},
+        compression=zipfile.ZIP_DEFLATED,
+    )
+    monkeypatch.setattr(dpm, "_ZIP_RATIO_FROM", 1000)
+    with pytest.raises(DpmError, match="compressed more than 100 to 1"):
+        open_release(package)
+    monkeypatch.setattr(dpm, "_ZIP_MAX_BYTES", 1000)
+    with pytest.raises(DpmError, match="larger than 1,000 bytes"):
+        open_release(package)
+    assert list(temporary.iterdir()) == []
+
+
+def test_a_zip_member_larger_than_it_says_is_rejected(
+    tmp_path: Path, monkeypatch, temporary: Path
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda name: "/bin/false")
+    package = _zip(tmp_path / "dpm.zip", {"dpm.accdb": ACCESS + bytes(3 * 1024**2)})
+    # the member says it is small: unpacking stops there, and its check fails
+    real = zipfile.ZipFile.infolist
+
+    def infolist(self):
+        found = real(self)
+        for member in found:
+            member.file_size = 10
+        return found
+
+    monkeypatch.setattr(zipfile.ZipFile, "infolist", infolist)
+    with pytest.raises(DpmError, match=r"dpm\.accdb: cannot unpack: Bad CRC-32"):
+        open_release(package)
+    assert list(temporary.iterdir()) == []
+
+
+def test_a_broken_zip_file_is_rejected(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(shutil, "which", lambda name: "/bin/false")
+    broken = tmp_path / "dpm.zip"
+    broken.write_bytes(b"PK\x03\x04" + bytes(40))
+    with pytest.raises(DpmError, match="not a readable ZIP file"):
+        open_release(broken)
+
+
+def test_windows_is_told_to_use_wsl_or_sqlite(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    monkeypatch.setattr(sys, "platform", "win32")
+    package = _zip(tmp_path / "dpm.zip", {"dpm.accdb": ACCESS})
+    with pytest.raises(DpmError, match="does not run on Windows; run dpm-xl in WSL"):
+        open_release(package)
 
 
 def test_cli_lists_modules(database: Path, capsys) -> None:
@@ -393,7 +532,9 @@ def test_cli_reports_bad_input_with_status_3(database: Path, capsys) -> None:
 REAL = os.environ.get("DPMXL_DPM_DATABASE")
 
 
-@pytest.mark.skipif(not REAL, reason="set DPMXL_DPM_DATABASE to an EBA DPM database")
+@pytest.mark.skipif(
+    not REAL, reason="set DPMXL_DPM_DATABASE to an EBA DPM database or its ZIP file"
+)
 def test_a_real_release_exports_every_module() -> None:
     assert REAL is not None
     with open_release(REAL) as real:

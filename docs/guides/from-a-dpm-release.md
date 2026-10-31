@@ -22,10 +22,25 @@ pip install dpm-xl
 The export uses only the standard library. Steps 6 and 7 also need
 `pip install "dpm-xl[xbrl]" dpm-synth`.
 
-## 2. Get the database as SQLite
+## 2. Get the database
 
-`dpm-xl` reads the database as a SQLite file with the EBA's table and
-column names. Choose one of these ways to get one.
+**Straight from the EBA's ZIP file**: download the release's database
+(such as `DPM2 Database_v 4_4.zip`) from the
+[DPM data dictionary page](https://www.eba.europa.eu/risk-and-data-analysis/reporting-frameworks/dpm-data-dictionary)
+and give the ZIP file to the commands below as it is:
+
+```bash
+dpm-xl export-module "DPM2 Database_v 4_4.zip" COREP_OF -o corep_of.json
+```
+
+This needs `mdb-export` of [mdbtools](https://github.com/mdbtools/mdbtools)
+on `PATH` (`sudo apt install mdbtools`, or `brew install mdbtools`; on
+Windows, in WSL). Each command unpacks the Access file to a temporary file,
+reads the tables it needs into memory and deletes it, in about half a
+minute for 4.4.
+
+`dpm-xl` also reads the database as a SQLite file with the EBA's table and
+column names, which opens at once. Choose one of these ways to get one.
 
 **Convert the EBA's Access file** (any release, as soon as the EBA
 publishes it). Install [mdbtools](https://github.com/mdbtools/mdbtools)

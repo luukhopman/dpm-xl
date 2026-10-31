@@ -360,9 +360,9 @@ In JUnit XML each broken filing rule is a test case (class
 
 Lists the releases of an EBA DPM 2.0 database and the modules of one
 release: code, version and name. The database is a SQLite file with the
-EBA's table and column names, or the EBA's Access file when `mdb-export`
-(mdbtools) is on `PATH`; see
-[Start from an EBA DPM release](../guides/from-a-dpm-release.md#2-get-the-database-as-sqlite).
+EBA's table and column names, or the EBA's Access file or the ZIP file it
+is published in when `mdb-export` (mdbtools) is on `PATH`; see
+[Start from an EBA DPM release](../guides/from-a-dpm-release.md#2-get-the-database).
 
 | Option | Effect |
 | --- | --- |

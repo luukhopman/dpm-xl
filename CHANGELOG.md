@@ -7,27 +7,25 @@ All notable changes to this project are documented here. The project follows
 
 ### Breaking
 
-- `dpm-xl check` exits with status 1 for any error, such as
-  an unknown function, not only a syntax error; `--strict` also fails on
-  warnings.
-- `eval` exits with status 1, not 3, for a rule that is an
-  error, and an `unsupported` rule no longer affects the exit status.
-- `{v_X}` and `{vX}` are the same variable (DPM-XL v0.11
-  §3.1.1): a template's filing indicator when `X` is a template code, else
-  report parameter `X`.
-- both parse to `Variable`, which replaces the
+- `dpm-xl check` exits with status 1 for any error, such as an unknown
+  function, not only a syntax error; `--strict` also fails on warnings.
+- `eval` exits with status 1, not 3, for a rule that is an error, and an
+  `unsupported` rule no longer affects the exit status.
+- `{v_X}` and `{vX}` are the same variable (DPM-XL v0.11 §3.1.1): a
+  template's filing indicator when `X` is a template code, else report
+  parameter `X`.
+- `{v_X}` and `{vX}` both parse to `Variable`, which replaces the
   `TableReported` and `Parameter` nodes.
-- the `--json` output opens with `tool`, `version` and a
-  `summary` of counts (`schema_version` 2).
-- `load_memory_provider` moved from `dpmxl.cli` to
-  `dpmxl.provider`.
+- The `--json` output opens with `tool`, `version` and a `summary` of
+  counts (`schema_version` 2).
+- `load_memory_provider` moved from `dpmxl.cli` to `dpmxl.provider`.
 - `dpmxl.cli.INVALID_INPUT` is now `EXIT_INPUT`.
-- a `default` applies to any keyed operand with no records,
-  not only one a `where` filtered to nothing, as an XBRL fact variable
-  falls back to its fallback value.
-- an `if` without `else` inside arithmetic leaves records
-  out, so combining it with an operand that has more records is a
-  standard-key mismatch error, as the specification says; 1.2.3 passed.
+- A `default` applies to any keyed operand with no records, not only one a
+  `where` filtered to nothing, as an XBRL fact variable falls back to its
+  fallback value.
+- An `if` without `else` inside arithmetic leaves records out, so
+  combining it with an operand that has more records is a standard-key
+  mismatch error, as the specification says; 1.2.3 passed.
 - Rule verdicts change where dpm-xl now follows DPM-XL v0.11 (counting
   sets, set equality, analytic windows, `if` without `else`, `with`
   clauses, math domains, invalid dates); each change is listed under
@@ -191,6 +189,15 @@ All notable changes to this project are documented here. The project follows
   was an `incompatible keys` error.
 - The columnar engine leaves a `where` on a report parameter, such as
   `[where Level = "con"]`, to the reference engine instead of failing.
+
+### Known issues
+
+- Reading the EBA's Access database needs `mdb-export` of mdbtools; on
+  Windows there is no ODBC route, so use WSL or a SQLite copy.
+- The `xbrl` extra needs dpm-xbrl 1.1, which is not on PyPI yet.
+- A selection of an abstract table is an error where two of its parts
+  have a cell with the same keys; 16 of the 147 abstract tables of DPM 4.3
+  have parts with the same rows, columns and sheets, such as `K_27.02`.
 
 ## 1.2.3 - 2026-10-26
 
